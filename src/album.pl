@@ -4,11 +4,13 @@ my $RCS_Id = '$Id$ ';
 # Author          : Johan Vromans
 # Created On      : Tue Sep 15 15:59:04 2002
 # Last Modified By: Johan Vromans
-# Last Modified On: Fri Jul  9 21:16:45 2004
-# Update Count    : 1828
+# Last Modified On: Fri Jul  9 21:47:22 2004
+# Update Count    : 1829
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
+
+$VERSION = 0.03;
 
 use strict;
 
