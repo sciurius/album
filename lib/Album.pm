@@ -40,6 +40,41 @@ shows.
 
 For a description how to use the program, see L<Album::Tutorial>.
 
+=head1 DEPENDENCIES
+
+B<Album> requires the following Perl modules, all available on CPAN:
+
+=over 4
+
+=item *
+
+Image::Info
+
+=item *
+
+Image::Magick (PerlMagick). Of course, this requires an ImageMagick
+install as well.
+
+=back
+
+The following tools / packages will be used if available:
+
+=over 4
+
+=item *
+
+jpegtrans, a tool for lossless JPEG rotation
+
+=item *
+
+mplayer, to manipulate MPEG movies and VOICE images
+
+=item *
+
+mencoder, to manipulate MPEG movies
+
+=back
+
 =head1 AUTHOR AND CREDITS
 
 Johan Vromans (jvromans@squirrel.nl) wrote this module.
