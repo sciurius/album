@@ -4,8 +4,8 @@ my $RCS_Id = '$Id$ ';
 # Author          : Johan Vromans
 # Created On      : Tue Sep 15 15:59:04 2002
 # Last Modified By: Johan Vromans
-# Last Modified On: Fri Jul  9 15:31:38 2004
-# Update Count    : 1807
+# Last Modified On: Fri Jul  9 15:54:58 2004
+# Update Count    : 1808
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -696,12 +696,12 @@ sub prepare_images {
 	}
 
 	printf STDERR ($fmt, $tdot) if $ddot;
-	$tdot++;
 	$ddot = 0;
 
 	if ( $msgfile ) {
 	    print STDERR ("$msgfile: ");
 	    $msgfile = "";
+	    $tdot++;
 	}
 
 	print STDERR (@_);
