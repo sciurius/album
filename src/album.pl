@@ -4,8 +4,8 @@ my $RCS_Id = '$Id$ ';
 # Author          : Johan Vromans
 # Created On      : Tue Sep 15 15:59:04 2002
 # Last Modified By: Johan Vromans
-# Last Modified On: Wed May 26 23:01:19 2004
-# Update Count    : 686
+# Last Modified On: Fri May 28 00:33:30 2004
+# Update Count    : 761
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -80,8 +80,8 @@ td    { font-size: 80%; $fontfam; }
 p.hd  { font-size: 140%; font-weight: bold; $fontfam; }
 p.ft  { font-size: 80%; $fontfam; }
 EOD
-my $bodyatts = "text=\"#000000\" link=\"#000000\" vlink=\"#000000\"".
-               " alink=\"#FF0000\" bgcolor=\"$DGREY\"";
+my $bodyatts = "text='#000000' link='#000000' vlink='#000000'".
+               " alink='#FF0000' bgcolor='$DGREY'";
 my $suffixpat = qr{\.(?:jpe?g|png|gif)}i;
 
 my %capfun = ('c' => \&c_caption,
@@ -90,6 +90,7 @@ my %capfun = ('c' => \&c_caption,
 	      't' => \&t_caption,
 	     );
 
+my $br = br();
 
 ################ The Process ################
 
@@ -250,6 +251,9 @@ sub load_image_info {
 	    elsif ( /^mediumsize\s*(\d+)/ ) {
 		$medium = $1;
 	    }
+	    elsif ( /^medium\s*(\d+)?/ ) {
+		$medium = $1 || 915;
+	    }
 	    elsif ( /^tag\s*(.*)/ ) {
 		$tag = $1;
 	    }
@@ -355,13 +359,13 @@ sub prepare_images {
 
 	my $neednl = 0;
 	if ( $medium && ($clobber  || ! -s $i_medium) ) {
-	    my @t = ( $medium );
-	    $t[1] = int(0.67 * $t[0]);
-	    system("convert ".
-		   ($verbose ? "-verbose" : "") ." -geometry ".
-		   (( $ii->width > $ii->height )
-		    ? "$t[0]x$t[1]" : "$t[1]x$t[0]") .
-		   " $i_large $i_medium");
+	    system("convert",
+		   $verbose ? "-verbose" : (),
+		   # Read the docs.
+		   "-size", "${medium}x$medium", "-resize", "${medium}x$medium",
+		   # Remove unneccessary stuff.
+		   "+profile", "*",
+		   $i_large, $i_medium);
 	    die("Aborted\n") if $? == 2;
 	    die(sprintf("convert error: 0x%02x%02x\n", $? >> 8, $? & 0xff))
 	      if $?;
@@ -389,7 +393,8 @@ sub prepare_images {
 
 	    system("convert",
 		   $verbose ? "-verbose" : (),
-		   "-geometry", "$t[0]x$t[1]",
+		   "-size", "${thumb}x$thumb", "-resize", "${thumb}x$thumb",
+		   "+profile", "*",
 		   $i_large, $i_small);
 	    die("Aborted\n") if $? == 2;
 	    die(sprintf("convert error: 0x%02x%02x\n", $? >> 8, $? & 0xff))
@@ -407,198 +412,183 @@ sub prepare_images {
 
 sub button($$;$$);
 
+sub ixname($);
+
 sub write_image_page {
     my ($i, $dir) = @_;
-
     my $file = $filelist[$i];
-    my $it = html($description{$file});
+
     my $tt = "$album_title: Image " . ($i+1);
     $tt .= " of " . $num_entries if $num_entries > 1;
     $tt = html($tt);
-    $it ||= $tt;
+    my $it = html($description{$file}) || $tt;
 
-    my $b;
-    if ( $dir eq "large" && $medium ) {
-	$b = "<a href=\"../medium/".$htmllist[$i]."\">" .
-	  "<img align=\"top\" src=\"../images/up.png\" " .
-	  "border=\"0\" alt=\"[Medium size]\"></a><br>\n";
-    }
-    else {
-	$b = "<a href=\"../index" .
-	  (($i >= $entries_per_page) ? int($i / $entries_per_page) : "") .
-	  ".html\">" .
-	  "<img align=\"top\" src=\"../images/index.png\" " .
-	  "border=\"0\" alt=\"[Index]\"></a><br>\n";
-    }
-    # Link to first/prev image.
-    $b .= button("first", $htmllist[0],    1, $i > 0) . "<br>\n";
-    $b .= button("prev",  $htmllist[$i-1], 1, $i > 0) . "<br>\n";
-
-    # Link to next/last image.
-    $b .= button("next", $htmllist[$i+1], 1, $i < $num_entries-1) . "<br>\n";
-    $b .= button("last", $htmllist[-1],   1, $i < $num_entries-1) . "<br>\n";
+    my $b = join("$br\n",
+		 ($dir eq "large" && $medium) ?
+		 button("medium", "../medium/".$htmllist[$i],              1, 1) :
+		 button("index",  "../".ixname(int($i/$entries_per_page)), 1, 1),
+		 button("first",  $htmllist[0],                            1, $i > 0),
+		 button("prev",   $htmllist[$i-1],                         1, $i > 0),
+		 button("next",   $htmllist[$i+1],                         1, $i < $num_entries-1),
+		 button("last",   $htmllist[-1],                           1, $i < $num_entries-1));
 
     my $imglink;
     if ( $dir eq "medium" ) {
-	$imglink = "<a href=\"../large/".$htmllist[$i]."\">" .
-	  "<img src=\"$file\" alt=\"[Click for bigger image]\"></a>";
+	$imglink = "<a href='../large/".$htmllist[$i]."'>" .
+	  img($file, alt => "[Click for bigger image]") . "</a>";
     }
     else {
-	$imglink = "<img src=\"$file\">";
+	$imglink = img($file, alt => "[Image]");
     }
 
     my $auxright = html($file . " (" . size_info($file) . ")");
     my $auxleft  = html($tag{$file} || "");
 
-    my $new = <<EOD;
+    update_if_needed("$dest_dir/$dir/".$htmllist[$i], <<EOD);
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
 <html>
-<head>
-<title>$it</title>
-<style type="text/css">
-<!--
-$css
--->
-</style>
-</head>
-<body $bodyatts>
-  <table>
-    <tr>
-      <td></td>
-      <td align="left" valign="top">
-        <p class="hd">$it</p>
-      </td>
-      <td align="right" valign="top">
-        <p class="hd">$tt</p>
-      </td>
-    </tr>
-    <tr>
-      <td valign="top">
-	$b
-      </td>
-      <td align="center" valign="top" colspan="2">
-	$imglink
-      </td>
-    </tr>
-    <tr>
-      <td></td>
-      <td align="left" valign="top">
-        <p class="ft">$auxleft</p>
-      </td>
-      <td align="right" valign="top">
-        <p class="ft">$auxright</p>
-      </td>
-    </tr>
-  </table>
-</body>
+  <head>
+    <title>$it</title>
+    <style type='text/css'>
+      <!--
+      @{[indent($css, 6)]}
+      -->
+    </style>
+  </head>
+  <body $bodyatts>
+    <table>
+      <tr>
+	<td></td>
+	<td align='left' valign='top'>
+	  <p class='hd'>$it</p>
+	</td>
+	<td align='right' valign='top'>
+	  <p class='hd'>$tt</p>
+	</td>
+      </tr>
+      <tr>
+	<td valign='top'>
+	  @{[indent($b, 10)]}
+	</td>
+	<td align='center' valign='top' colspan='2'>
+	  @{[indent($imglink, 10)]}
+	</td>
+      </tr>
+      <tr>
+	<td></td>
+	<td align='left' valign='top'>
+	  <p class='ft'>$auxleft</p>
+	</td>
+	<td align='right' valign='top'>
+	  <p class='ft'>$auxright</p>
+	</td>
+      </tr>
+    </table>
+  </body>
 </html>
 EOD
-
-    update_if_needed("$dest_dir/$dir/".$htmllist[$i], $new);
 }
 
 sub write_index_page {
     my ($x) = @_;
 
-    my $tt = $album_title.": Index";
+    my $tt = $album_title.": Index"; # left title
+    my $t = "";			# right (index select)
+    my $b = "";			# buttons (vertical)
 
-    my $t = "";
-    my $b = "";
+    # Construct buttons and index selector.
     if ( $num_indexes > 1) {
-	$b .= button("first", "index.html", 0, $x > 0) . "<br>\n";
-	$b .= button("prev", "index.html", 0, 0) . "<br>\n"
-	  unless $x;
-	$b .= button("prev", "index.html", 0, 1) . "<br>\n"
-	  if $x == 1;
-	$b .= button("prev", "index".($x-1).".html", 0, 1) . "<br>\n"
-	  if $x > 1;
-	$b .= button("next", "index.html", 0, 0) . "<br>\n"
-	  if $x == $num_indexes-1;
-	$b .= button("next", "index".($x+1).".html", 0, 1) . "<br>\n"
-	  if $x < $num_indexes-1;
-	$b .= button("last", "index".($num_indexes-1).".html", 0,
-		     $x < $num_indexes - 1) . "<br>\n";
+	$b = join("$br\n",
+		  button("first", ixname(0),              0, $x > 0             ),
+		  button("prev",  ixname($x-1),           0, $x > 0             ),
+		  button("next",  ixname($x+1),           0, $x < $num_indexes-1),
+		  button("last",  ixname($num_indexes-1), 0, $x < $num_indexes-1));
 	$tt .= " " . ($x+1) . " of $num_indexes";
 	foreach ( 0..$num_indexes-1 ) {
 	    if ( $_ == $x ) {
-		$t .= " " . ($x+1);
+		$t .= ($x+1) . "\n";
 	    }
 	    else {
-		$t .= " <a href=\"index".
-		  ($_ ? $_ : ""). ".html\">".($_+1)."</a>";
+		$t .= "<a href='" . ixname($_) . "'>" . ($_+1) . "</a>\n";
 	    }
 	}
     }
 
-    my $new = <<EOD;
-<html>
-<head>
-<style type="text/css">
-<!--
-$css,
--->
-</style>
-<title>$tt</title>
-</head>
-<body $bodyatts>
-<table>
-<tr>
-  <td></td>
-  <td align="left">
-    <p class="hd">$tt</p>
-  </td>
-  <td align="right">
-    <p class="hd">$t</p>
-  </td>
-</tr>
-<tr>
-  <td valign="top">$b</td>
-  <td valign="top" colspan="2">
-EOD
-
-    $new .= qq(<table border="2" cellpadding="3" cellspacing="3") .
-            qq( bgcolor="$MGREY">\n);
+    # Construct the actual index part.
+    my $cc = "<table border='2' cellpadding='3' cellspacing='3'" .
+             " bgcolor='$MGREY'>\n";
 
     my $first_in_row = $x * $entries_per_page;
 
     for ( my $i = 0; $i < $index_rows; $i++, $first_in_row += $index_columns ) {
 	if ( $first_in_row < $num_entries ) {
-	    $new .= qq(  <tr bgcolor="$LGREY">\n);
+	    $cc .= "  <tr bgcolor='$LGREY'>\n";
 	    for ( my $j = 0; $j < $index_columns; $j++ ) {
 		my $this = $first_in_row + $j;
 		if ( $this < $num_entries ) {
 		    my $file = $filelist[$this];
 		    my $base = $medium ? "medium/" : "large/";
 		    $base .= $htmllist[$this];
-		    $new .= "    <td align=\"center\" valign=\"bottom\">\n".
-			  "      <table border=\"0\" cellpadding=\"0\" cellspacing=\"0\" bgcolor=\"$LGREY\">\n".
+		    $cc .= "    <td align='center' valign='bottom'>\n".
+			  "      <table border='0' cellpadding='0' cellspacing='0' bgcolor='$LGREY'>\n".
 			  "        <tr>\n".
-			  "          <td align=\"center\">".
-			  "<a href=\"$base\"><img src=\"thumbnails/$file\" alt=\"[Click for bigger image]\" border=\"0\"></a>".
-			  "</td>\n".
+			  "          <td align='center'>\n".
+			  "            <a href='$base'>".img("thumbnails/$file", alt => "[Click for bigger image]", border => 0)."</a>\n".
+			  "          </td>\n".
 			  "        </tr>\n".
 			  "        <tr>\n".
-			  "          <td align=\"center\">\n".
-			  "            <p class=\"ft\">".
-			  join("", (map { $capfun{$_}->($file), "<br>\n" }
-			     split(//, $caption))).
-			  "</p>\n".
+			  "          <td align='center'>\n".
+			  "            <p class='ft'>" . join($br, map { $capfun{$_}->($file) } split(//, $caption)) . "</p>\n".
 			  "          </td>\n".
 			  "        </tr>\n".
 			  "      </table>\n".
 			  "    </td>\n";
 		}
 		else {
-		    $new .= "    <td width=\"$thumb\" bgcolor=\"$DGREY\">&nbsp</td>\n";
+		    $cc .= "    <td width='$thumb' bgcolor='$DGREY'>&nbsp</td>\n";
 		}
 	    }
-	    $new .= "  </tr>\n";
+	    $cc .= "  </tr>\n";
 	}
     }
-    $new .= "</table>\n";
+    $cc .= "</table>\n";
 
-    $new .= "</td>\n" . "</tr></table></body></html>\n";
-
-    update_if_needed("$dest_dir/index".($x > 0 ? $x : ""). ".html", $new);
+    update_if_needed("$dest_dir/".ixname($x), <<EOD);
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html>
+  <head>
+    <style type='text/css'>
+      <!--
+      @{[indent($css, 6)]}
+      -->
+    </style>
+    <title>$tt</title>
+  </head>
+  <body $bodyatts>
+    <table>
+      <tr>
+	<td></td>
+	<td align='left'>
+	  <p class='hd'>$tt</p>
+	</td>
+	<td align='right'>
+	  <p class='hd'>
+            @{[indent($t, 12)]}
+          </p>
+	</td>
+      </tr>
+      <tr>
+	<td valign='top'>
+	  @{[indent($b, 10)]}
+	</td>
+	<td valign='top' colspan='2'>
+	  @{[indent($cc, 10)]}
+	</td>
+      </tr>
+    </table>
+  </body>
+</html>
+EOD
 }
 
 sub button($$;$$) {
@@ -609,21 +599,51 @@ sub button($$;$$) {
     $active = 1 unless defined $active;
     $tag .= "-gr" unless $active;
     $level = "../" x $level;
-    my $b = "<img align=\"top\" src=\"${level}images/$tag.png\"".
-      " border=\"0\" alt=\"[$Tag]\">";
-    $active ? "<a href=\"$link\" alt=\"[$Tag]\">$b</a>" : $b;
+    my $b = img("${level}images/$tag.png", align => "top",
+		border => 0, alt => "[$Tag]");
+    $active ? "<a href='$link' alt='[$Tag]'>$b</a>" : $b;
+}
+
+# These are to aid XHTML compliancy.
+sub ixname($) {
+    my ($x) = @_;
+    "index" . ($x ? $x : "") . ".html";
+}
+
+sub br {
+    "<br>";
 }
 
 #### HTML helpers.
 
 sub html {
+    # Escape HTML sensitive characters, and turn newlines into <br>.
     my $t = shift;
     return '' unless $t;
     $t =~ s/\&/&amp;/g;
     $t =~ s/\</&lt;/g;
     $t =~ s/\>/&gt;/g;
-    $t =~ s/\n+/<br>/g;
+    $t =~ s/\n+/$br/go;
     $t;
+}
+
+sub indent {
+    # Shift contents to the right so it fits pretty.
+    my ($t, $n) = @_;
+    $n = " " x $n;
+    $t = detab($t);
+    $t =~ s/\n+$//;
+    $t =~ s/\n/\n$n/g;
+    $t;
+}
+
+sub img {
+    my ($file, %atts) = @_;
+    my $ret = "<img src='" . $file . "'";
+    foreach ( sort(keys(%atts)) ) {
+	$ret .= " $_='" . $atts{$_} . "'";
+    }
+    $ret . ">";
 }
 
 #### Caption helpers.
@@ -756,6 +776,19 @@ sub uptodate {
     }
 }
 
+sub detab {
+    my ($line) = @_;
+
+    my (@l) = split(/\t/, $line);
+
+    # Replace tabs with blanks, retaining layout
+
+    $line = shift(@l);
+    $line .= " " x (8-length($line)%8) . shift(@l) while @l;
+
+    $line;
+}
+
 ################ Subroutines ################
 
 sub app_options {
@@ -772,7 +805,7 @@ sub app_options {
 		     'cols=i'	=> \$index_columns,
 		     'rows=i'	=> \$index_rows,
 		     'thumbsize=i' => \$thumb,
-		     'mediumsize=i' => \$medium,
+		     'mediumsize:i' => \$medium,
 		     'title=s'	=> \$album_title,
 		     'clobber'	=> \$clobber,
 		     'caption=s' => \$caption,
@@ -791,6 +824,7 @@ sub app_options {
     }
     app_ident() if $ident;
     $dest_dir = shift(@ARGV) if @ARGV;
+    $medium = 915 if $medium && $medium == 1;
 }
 
 sub app_ident {
@@ -808,7 +842,7 @@ Usage: $0 [options] [ directory ]
     -cols NN		number of columns per page
     -rows NN		number of rows per page
     -thumbsize NNN	the max size of thumbnail images
-    -medium NNN		the max size of medium sized images
+    -medium [ NNN ]	the max size of medium sized images, default 915
     -captions XXX	f: filename s: size c: description t: tag
     -clobber		recreate everything
     -index-buttons	use index buttons instead of links
@@ -925,7 +959,7 @@ M2VY$3OYKI)29%CW5?VYV>FF0F[UO*O/?3@-R<S[R"XFFX$N)OY`F`````$E%
 &3D2N0F""
 `
 end
-begin 644 images/up.png
+begin 644 images/medium.png
 MB5!.1PT*&@H````-24A$4@```"(````B"`8````Z1PO"````!&=!34$``+&/
 M"_QA!0````9B2T=$`/\`_P#_H+VGDP````EP2%ES```+$@``"Q(!TMU^_```
 M``=T24U%!](&'@P%-8YZ"XH```&?241!5'B<[9A!BN)`%$!?#XW1OH(K#^':
@@ -993,20 +1027,6 @@ M;"W6R)+ZOK^-Z[IVGE,4!6F:_NH;+",&?)HF)_\@(//L15%T#,@<`B".W8XN
 MKR`V!$"2)/N"+$&LD1>0K1!PHC[B!<2UK_PD;QG9"N-U:[;`>*^1O\($*5:M
 M->,X'@^BE**J*I12SG.<3]^U*4^2!*VUL___ZB,^]`"QM5BL7=<%#;JT_FEN
 C>L8XS=W7P!SV&G":]Y$O&I:#2F!<C%$`````245.1*Y"8((`
-`
-end
-begin 644 images/index-gr.png
-MB5!.1PT*&@H````-24A$4@```"(````B"`8````Z1PO"````!&=!34$``+&/
-M"_QA!0````9B2T=$`/\`_P#_H+VGDP````EP2%ES```+$0``"Q$!?V1?D0``
-M``=T24U%!],%`PH<"_X9Y;P```%2241!5'B<[9BQ:H1`$(:_A'!R@7L"G\/:
-MZ:Z_=[#.*_@*J6VOM#@.1`0+P3+/D>H:&R.W"J:)<MDSB1ZGL?"'A1UWG/F<
-M95=V829ZT&P+>)XP_P?PIH-8P`M@3@CR#KPV,`W$7D1J8++VE6\/6$U%;,`%
-M!$!$[OWE5TJ2I.T"[I/N("*8IHGC.*-!>)Z'B%S"<`4"X#@.MFV/!@+@NNXW
-M^W'4;`,T&Y#.J>FKJJHX'`X`;+=;-IO-S;%NKHA2JH4`B**(HBBF!2F*@N/Q
-M>/4\"`*JJIH&),]S@B#X<?RR2J.!9%E&&(9_^OF^/PY(7=><3B?B..X=>"A,
-M+Y"R+$G3=%#@H3"]EN]JM6*WV_WJ<SZ?VZ:40BG%>KV^+T@?&8:!81@WOS^;
-MG74!T;6`Z%I`="T@NA8079W_&L_S1DW:%7\V)[W&F,W9MX'YM]N`V=R/?`+I
-3!JQ-F!I[D`````!)14Y$KD)@@@``
 `
 end
 begin 644 images/last-gr.png
