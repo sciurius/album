@@ -4,8 +4,8 @@ my $RCS_Id = '$Id$ ';
 # Author          : Johan Vromans
 # Created On      : Tue Sep 15 15:59:04 2002
 # Last Modified By: Johan Vromans
-# Last Modified On: Mon May 31 23:20:52 2004
-# Update Count    : 954
+# Last Modified On: Tue Jun  1 19:49:47 2004
+# Update Count    : 959
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -219,7 +219,7 @@ sub load_image_info {
 	# Try default.
 	$image_info = "$dest_dir/info.dat";
 	unless ( -s $image_info ) {
-	    $add_new++ if $import_dir && -d $import_dir;
+	    $add_new++ if $import_dir;
 	    $add_src++ if -d "$dest_dir/large";
 	    print STDERR ("No info.dat");
 	    print STDERR (", adding images from ") if $add_src || $add_new;
@@ -434,9 +434,10 @@ sub get_image_names {
     warn("Updating $image_info\n") if $verbose;
     my $fh = do { local *F; *F };
     open($fh, ">>", $image_info) || die("$image_info: $!\n");
-    print $fh ("\n# New entries added by $my_name $my_version\n",
+    print $fh ("\n# New entries added by $my_name $my_version, ".
+	       localtime(time), "\n",
 	       $newinfo,
-	       "# End added entries\n");
+	       "\n");
     close($fh);
 }
 
@@ -1043,12 +1044,13 @@ sub app_options {
     app_ident() if $ident;
     $dest_dir = shift(@ARGV) if @ARGV;
     $medium = 915 if $medium && $medium == 1;
-    if ( $add_new ) {
-	warn("--update ignored -- no import dir specified\n")
-	  unless $import_dir;
+    if ( $add_new && !$import_dir ) {
+	warn("--update ignored -- no import dir specified\n");
 	$add_new = 0;
     }
-
+    if ( $import_dir && ! -d $import_dir ) {
+	die("$import_dir: Not a directory\n");
+    }
 }
 
 sub app_ident {
