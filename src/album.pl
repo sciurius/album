@@ -6,8 +6,8 @@ my $RCS_Id = '$Id$ ';
 # Author          : Johan Vromans
 # Created On      : Tue Sep 15 15:59:04 1992
 # Last Modified By: Johan Vromans
-# Last Modified On: Sat May  3 17:18:22 2003
-# Update Count    : 533
+# Last Modified On: Sun May  9 17:33:06 2004
+# Update Count    : 535
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -252,7 +252,7 @@ sub load_image_info {
 	$rotate{$file} = $rotate unless $target_is_source;
 	$tag{$file} = $tag if $tag;
 	next if $file eq "*";
-	unless ( -s "$src_dir/$file" ) {
+	unless ( -s "$src_dir/$file" || -s "$dest_dir/large/$file" ) {
 	    warn("$src_dir/$file (info): $!\n");
 	    $err++;
 	}
