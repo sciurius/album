@@ -4,8 +4,8 @@ my $RCS_Id = '$Id$ ';
 # Author          : Johan Vromans
 # Created On      : Tue Sep 15 15:59:04 2002
 # Last Modified By: Johan Vromans
-# Last Modified On: Sun Jul  4 19:35:24 2004
-# Update Count    : 1731
+# Last Modified On: Wed Jul  7 16:38:01 2004
+# Update Count    : 1736
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -1552,22 +1552,19 @@ sub new {
 	       };
 
     if ( -f $file ) {
+	my @st = stat(_);
 	my $ii = ::cache_entry($file);
 	if ( $ii  ){
 	    $self = $ii;
-	    $self->{file_size} = -s _;
-	    $self->{timestamp} = (stat(_))[9];
 	    delete($self->{$_}) foreach grep { /^_/ } keys(%$self);
 	}
 
 	# Else, get image info.
 	else {
 	    my $ii = Image::Info::image_info($file);
-	    if ( exists($ii->{error}) ) {
-		$self->{file_size} = -s _;
-		$self->{timestamp} = (stat(_))[9];
-	    }
-	    else {
+	    $self->{file_size} = $st[7];
+	    $self->{timestamp} = $st[9];
+	    unless ( exists($ii->{error}) ) {
 		for my $key ( @exif_fields ) {
 		    my $val = $ii->{$key};
 		    next unless defined $val;
@@ -1585,6 +1582,9 @@ sub new {
 		::cache_entry($file, $self);
 	    }
 	}
+	# Actualize.
+	$self->{file_size} = $st[7];
+	$self->{timestamp} = $st[9];
     }
 
     bless($self, $pkg);
