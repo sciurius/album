@@ -1,7 +1,7 @@
 # Generic Makefile for albums.
 
 HERE	= .
-TOOLS	= $(HOME)/src/album/tools
+TOOLS	= $(HOME)/src/album/src
 CAMERA	= /mnt/camera
 DCIM	= dcim/101msdcf
 DSC	= $(CAMERA)/$(DCIM)
