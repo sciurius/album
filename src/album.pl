@@ -4,8 +4,8 @@ my $RCS_Id = '$Id$ ';
 # Author          : Johan Vromans
 # Created On      : Tue Sep 15 15:59:04 2002
 # Last Modified By: Johan Vromans
-# Last Modified On: Fri May 28 22:32:25 2004
-# Update Count    : 770
+# Last Modified On: Mon May 31 00:20:31 2004
+# Update Count    : 873
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -29,7 +29,8 @@ $my_version .= '*' if length('$Locker$ ') > 12;
 use Getopt::Long 2.13;
 
 # Command line options.
-my $src_dir;
+my $import_exif = 0;
+my $import_dir;
 my $dest_dir = ".";
 my $image_info;
 my $clobber = 0;
@@ -53,17 +54,6 @@ app_options();
 
 # Post-processing.
 $trace |= ($debug || $test);
-
-unless ( $src_dir ) {
-    $src_dir = "$dest_dir/raw";
-    $src_dir = "$dest_dir/large" unless -d $src_dir;
-}
-mkpath(["$dest_dir/large"], 1);
-my $target_is_source = do {
-    my @src = stat($src_dir);
-    my @dst = stat("$dest_dir/large");
-    $src[0] == $dst[0] && $src[1] == $dst[1];
-};
 
 ################ Presets ################
 
@@ -95,12 +85,11 @@ my $br = br();
 ################ The Process ################
 
 use File::Path;
-use File::Copy;
 use File::Basename;
+use Time::Local;
 
 # The list of files, in the order to be processed.
 my @filelist;
-my @htmllist;			# map fn to html name
 
 # Storage for image info. Will be cached.
 my $info;
@@ -111,7 +100,13 @@ my %rotate;			# rotate info (degrees clockwise)
 my %tag;			# tag info
 my %seen;			# to keep track
 
-my $add_from_src = 0;		# no info file, or wildcard seen
+my %newfiles;			# info for new files
+my $add_new = 0;		# no info file, or wildcard seen
+
+mkpath(["$dest_dir/large"], 1);
+
+# If files are to be imported, gather their names.
+load_new_files() if $import_dir;
 
 # Load image names and info from the info file, if any.
 load_image_info();
@@ -119,10 +114,12 @@ load_image_info();
 set_parameter_defaults();
 
 # Add image names from the source directory, if needed.
-get_image_names();
+get_image_names() if $add_new;
 
 my $num_entries = scalar(@filelist);
-print STDERR ("Number of entries = $num_entries\n") if $verbose;
+print STDERR ("Number of entries = $num_entries",
+	      $add_new ? " ($add_new added)" : "",
+	      "\n") if $verbose;
 die("Nothing to do?\n") unless $num_entries > 0;
 
 # Clean up and create directories.
@@ -151,10 +148,13 @@ for ( 0 ) {
     unlink("$dest_dir/medium/$excess");
     unlink("$dest_dir/large/$excess") or last;
 }
+
 # Map file names to html pages. Start with 1 to match "image N of M".
+my @htmllist;
 for my $i ( 0 .. $num_entries-1 ) {
     $htmllist[$i] = $fn++ . ".html";
 }
+
 # Cleanup excess files.
 for (my $i = $num_entries ; ; $i++ ) {
     my $excess = $fn++ . ".html";
@@ -218,7 +218,7 @@ sub load_image_info {
 	# Try default.
 	$image_info = "$dest_dir/info.dat";
 	unless ( -s $image_info ) {
-	    $add_from_src++;
+	    $add_new++;
 	    return;
 	}
     }
@@ -272,7 +272,7 @@ sub load_image_info {
 	    next;
 	}
 	($file, my $a) = split(' ', $_, 2);
-	$add_from_src |= $file eq "*";
+	$add_new |= $file eq "*";
 	my $rotate = 0;
 	if ( $a && $a =~ /^-O:(\d)\s*(.*)/ ) {
 	    $rotate = 90 * ($1 % 4);
@@ -282,8 +282,8 @@ sub load_image_info {
 	$rotate{$file} = $rotate;
 	$tag{$file} = $tag if $tag;
 	next if $file eq "*";
-	unless ( -s "$src_dir/$file" || -s "$dest_dir/large/$file" ) {
-	    warn("$src_dir/$file (info): $!\n");
+	unless ( $newfiles{$file} || -s "$dest_dir/large/$file" ) {
+	    warn("$file (info): Missing\n");
 	    $err++;
 	}
 	$seen{$file}++;
@@ -293,23 +293,126 @@ sub load_image_info {
     die("Aborted\n") if $err;
 }
 
-sub get_image_names {
-    return unless $add_from_src;
-
+sub load_new_files {
     my $dh = do { local *DH; *DH; };
-    opendir($dh, $src_dir)
-      or die("Cannot opendir $src_dir: $!\n");
+    opendir($dh, $import_dir)
+      or die("Cannot opendir $import_dir: $!\n");
 
-    foreach ( sort grep { !/^\./ && /$suffixpat$/
-			    && !/^(first|last|next|prev|index)(-gr)?\.png$/
-			      && $_ ne "thumbnails" } readdir($dh) ) {
-	next if $seen{$_}++;
-	push(@filelist, $_);
-	$description{$_} = $description{"*"};
-	$rotate{$_} = $rotate{"*"};
+    foreach my $f ( grep { !/^\./ && /$suffixpat$/ } readdir($dh) ) {
+	if ( $import_exif ) {
+	    do_exif($f);
+	}
+	else {
+	    $newfiles{$f} = [$f];
+	}
     }
 
     close($dh);
+}
+
+sub do_exif {
+    my ($file) = @_;
+    my $exif = get_exif("$import_dir/$file");
+
+    # Rename files from DSC.
+    # Sony DSC-V1 produces the following files:
+    #   DSC0nnnn.JPG	still image
+    #   DSC0nnnn.JPE	mail mode image*
+    #   DSC0nnnn.MPG	voice mode image*
+    #   DSC0nnnn.TIF	uncompressed image*
+    #   CLP0nnnn.GIF	clip motion file
+    #   CLP0nnnn.HTM	clip motion file index
+    #   MBL0nnnn.GIF	clip motion file, mobile mode
+    #   MBL0nnnn.HTM	clip motion file index, mobile mode
+    #   MOV0nnnn.MPG	movie
+    # Files marked with * have a normal still image associated.
+
+    # We only deal with the normal JPG images.
+    if ( $exif && $file =~ /^dsc0\d+\.jpg$/i ) {
+	my $fd = $exif->{"date/time"} || "";
+	if ( $fd =~ /(\d\d\d\d):(\d\d):(\d\d) (\d\d):(\d\d):(\d\d)/ ) {
+	    my $time = timelocal($6,$5,$4,$3,$2-1,$1);
+	    # YYYYMMDDhhmmSS (SS = sequence, not seconds).
+	    # Note: jhead uses YYYYMMDDhhssX, where X is empty, a, b, ...
+	    my $new = "$1$2$3$4$5"."00";
+	    # while ( !$clobber && -e "$dest_dir/large/$new.jpg" ) {
+	    #	$new++;
+	    # }
+	    $new .= ".jpg";
+	    $newfiles{$new} = [ $file, $time, 0 ];
+	    $file = $new;
+	}
+	else {
+	    warn("$file: Missing or unparsable file date [$fd]\n");
+	    $newfiles{$file} = [ $file, undef, 0 ];
+	}
+	if ( ($exif->{orientation}||"") =~ /^rotate (\d+)$/i  ) {
+	    $newfiles{$file}->[2] = int($1/90);
+	}
+    }
+    else {
+	# Copy as is.
+	$newfiles{$file} = [ $file, undef, 0 ];
+    }
+}
+
+sub get_image_names {
+
+    use constant MONTHS => [qw(january february march april
+			   may june july august
+			   september oktober november december)];
+
+
+    my $newinfo = "\n# New entries added by $my_name $my_version\n";
+    my $pdate = qr/(\d{4})(\d\d)(\d\d)\d{4}(?:\d\d|\w)/;
+    my $date = "";
+
+    foreach my $file ( sort(keys(%newfiles)) ) {
+	next if $seen{$file}++;
+	push(@filelist, $file);
+
+	$tag{$file}	 = $tag{"*"};
+	$description{$file} = $description{"*"};
+	$rotate{$file}	 = $rotate{"*"};
+
+	my ($y,$m,$d) = $file =~ /^$pdate\./io;
+	($y,$m,$d) = (0,0,0) unless defined($y);
+	if ( defined($y) && "$y$m$d" ne $date ) {
+	    $newinfo .= "\n!tag ";
+	    $date = "$y$m$d";
+	    if ( $date ne "000" ) {
+		$newinfo .= 0+$d . " " . MONTHS->[$m-1] . "\n";
+	    }
+	    else {
+		$newinfo .= "\n";
+	    }
+	}
+
+	$newinfo .= "$file " .
+	  ($rotate{$file} ? "-O:$rotate{$file} " : "") . " \n";
+	$add_new++;
+    }
+    $add_new--;
+    return unless $add_new;
+
+    $newinfo .= "# End added entries\n\n";
+
+    use Cwd qw(abs_path);
+    my $file = $image_info;
+    while ( -l $file ) {
+	$file = dirname($file) . "/" . readlink($file);
+    }
+    if ( -w $file ) {
+	local(@ARGV) = ($file);
+	local($^I) = "~";
+	while ( <> ) {
+	    if ( /^\*$/ ) {
+		print $newinfo;
+	    }
+	    print;
+	}
+    }
+
 }
 
 sub prepare_images {
@@ -324,12 +427,24 @@ sub prepare_images {
 	    mkpath(["$dest_dir/medium/$dn"], 1) if $medium;
 	}
 
-	my $i_src     = "$src_dir/$file";
 	my $i_large   = "$dest_dir/large/$file";
 
 	# Copy the file into place. Rotate if needed.
-	if ( !$target_is_source && ( $clobber || ! -s $i_large ) ) {
-	    if ( $rotate{$file} ) {
+	if ( ($clobber || ! -s $i_large) && $import_dir ) {
+	    my $i_src = "$import_dir/" . $newfiles{$file}->[0];
+	    if ( $import_exif ) {
+		# Unfortunately, jhead cannot rotate from->to, so
+		# we need to copy first and rotate later.
+		print STDERR ("copying... ") if $verbose;
+		my $time = $newfiles{$file}->[1];
+		copy($i_src, $i_large, $time);
+		if ( $newfiles{$file}->[2] ) {
+		    print STDERR ("rotating... ") if $verbose;
+		    system("jhead", "-autorot", $i_large);
+		    utime($time, $time, $i_large);
+		}
+	    }
+	    elsif ( $rotate{$file} ) {
 		print STDERR ("rotating... ") if $verbose;
 		system("convert", "-rotate", "$rotate{$file}",
 		       $i_src, $i_large);
@@ -673,7 +788,7 @@ sub c_caption {
     my ($file) = @_;
     my $t = $description{$file} || "";
     $t =~ s/\n.*//;
-    $t;
+    html($t);
 }
 
 #### Persistent info (cache) helpers.
@@ -795,6 +910,50 @@ sub detab {
     $line;
 }
 
+sub copy {
+    my ($orig, $new, $time) = @_;
+
+    $time = (stat($orig))[9] unless defined($time);
+
+    my $in = do { local *F; *F };
+    open($in, "<", $orig) or die("$orig: $!\n");
+    binmode($in);
+
+    my $out = do { local *F; *F };
+    open($out, ">", $new) or die("$new: $!\n");
+    binmode($out);
+
+    my $buf;
+
+    for (;;) {
+	my ($r, $w, $t);
+	defined($r = sysread($in, $buf, 10240))
+	  or die("$orig: $!\n");
+	last unless $r;
+	for ( $w = 0; $w < $r; $w += $t ) {
+	    $t = syswrite($out, $buf, $r - $w, $w)
+	      or die("$new: $!\n");
+	}
+    }
+    close($in);
+    close($out) or die("$new: $!\n");
+    utime($time, $time, $new);
+}
+
+sub get_exif {
+    my ($file) = @_;
+    use 5.008;
+    open(my $p, "-|", "jhead", $file) or die("$file: $!\n");
+    my %h;
+    while ( <$p> ) {
+	s/\s+:\s+/: /;
+	$h{lc($1)} = $2 if /^(.*?): (.*)/;
+    }
+    close($p) or die("$file: $!\n");
+    $h{exposure} ||= "manual";
+    \%h;
+}
+
 ################ Subroutines ################
 
 sub app_options {
@@ -806,7 +965,9 @@ sub app_options {
     return unless @ARGV > 0;
 
     if ( !GetOptions(
-		     'source=s'	=> \$src_dir,
+		     'import=s'	=> \$import_dir,
+		     'exif'	=> \$import_exif,
+		     'dcim=s'	=> sub { $import_dir = $_[1]; $import_exif++ },
 		     'info=s'	=> \$image_info,
 		     'cols=i'	=> \$index_columns,
 		     'rows=i'	=> \$index_rows,
@@ -828,6 +989,7 @@ sub app_options {
     {
 	app_usage(2);
     }
+
     app_ident() if $ident;
     $dest_dir = shift(@ARGV) if @ARGV;
     $medium = 915 if $medium && $medium == 1;
@@ -842,19 +1004,21 @@ sub app_usage {
     app_ident();
     print STDERR <<EndOfUsage;
 Usage: $0 [options] [ directory ]
-    -info XXX		description and control file
-    -title XXX		album title
-    -source XXX		where the original images reside
-    -cols NN		number of columns per page
-    -rows NN		number of rows per page
-    -thumbsize NNN	the max size of thumbnail images
-    -medium [ NNN ]	the max size of medium sized images, default 915
-    -captions XXX	f: filename s: size c: description t: tag
-    -clobber		recreate everything
-    -index-buttons	use index buttons instead of links
-    -help		this message
-    -ident		show identification
-    -verbose		verbose information
+    --info XXX		description and control file
+    --title XXX		album title
+    --import XXX	import new images from XXX
+    --exif		import images w/ EXIF info
+    --dcim XXX		as --import with --exit
+    --cols NN		number of columns per page
+    --rows NN		number of rows per page
+    --thumbsize NNN	the max size of thumbnail images
+    --medium [ NNN ]	the max size of medium sized images, default 915
+    --captions XXX	f: filename s: size c: description t: tag
+    --clobber		recreate everything
+    --index-buttons	use index buttons instead of links
+    --help		this message
+    --ident		show identification
+    --verbose		verbose information
 EndOfUsage
     exit $exit if defined $exit && $exit != 0;
 }
