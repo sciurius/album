@@ -4,8 +4,8 @@ my $RCS_Id = '$Id$ ';
 # Author          : Johan Vromans
 # Created On      : Tue Sep 15 15:59:04 2002
 # Last Modified By: Johan Vromans
-# Last Modified On: Wed Aug  4 13:45:12 2004
-# Update Count    : 2040
+# Last Modified On: Thu Aug  5 22:56:00 2004
+# Update Count    : 2042
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -275,10 +275,11 @@ sub set_defaults {
     $medium        ||= DEFAULTS->{medium};
 
     # Caption values.
-    $caption ||= DEFAULTS->{( -s $info_file || $import_dir) ?
-			    "caption" : "captionmin" };
+    $caption = DEFAULTS->{( -s $info_file || $import_dir) ?
+			  "caption" : "captionmin" }
+      unless defined($caption);
     die("Invalid value for caption: $caption\n")
-      unless $caption =~ /^[fsct]+$/i;
+      unless $caption =~ /^[fsct]*$/i;
     $caption = lc($caption);
 }
 
