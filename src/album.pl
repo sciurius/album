@@ -4,8 +4,8 @@ my $RCS_Id = '$Id$ ';
 # Author          : Johan Vromans
 # Created On      : Tue Sep 15 15:59:04 2002
 # Last Modified By: Johan Vromans
-# Last Modified On: Wed Jun 30 10:56:00 2004
-# Update Count    : 1591
+# Last Modified On: Sat Jul  3 16:54:12 2004
+# Update Count    : 1728
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -33,10 +33,10 @@ my $import_exif = 0;
 my $import_dir;
 my $update = 0;			# add new from large/import
 my $dest_dir = ".";
-my $image_info;
+my $info_file;
 my $linkthem = 1;		# link orig to large, if possible
 my $clobber = 0;
-my $verbose = 0;		# verbose processing
+my $verbose = 1;		# verbose processing
 
 # These are left undefined, for set_parameter_defaults.
 my $index_columns;
@@ -65,7 +65,7 @@ $import_dir =~ s;^\./;; if $import_dir;
 ################ Presets ################
 
 use constant DEFAULTS => { info       => "info.dat",
-			   title      => "Photos",
+			   title      => "Photo Album",
 			   medium     => 0,
 			   mediumsize => 915,
 			   thumbsize  => 200,
@@ -125,12 +125,15 @@ my $filelist = new FileList;
 load_cache();
 
 # Load image names and info from the info file, if any.
+# This produces the initial file list.
 load_info();
 #print STDERR Data::Dumper->Dump([$filelist],[qw(filelist)]);
 
-# Gather files.
+# Load image names and info for files we already got.
 load_files()  if -d d_large();
 #print STDERR Data::Dumper->Dump([$gotlist],[qw(gotlist)]);
+
+# Load image names and info for files we can import.
 load_import() if $import_dir && -d $import_dir;
 #print STDERR Data::Dumper->Dump([$implist],[qw(implist)]);
 
@@ -144,16 +147,16 @@ my $added = update_filelist();
 my $num_entries = $filelist->tally;
 print STDERR ("Number of entries = $num_entries",
 	      $added ? " ($added added)" : "",
-	      "\n") if $verbose;
+	      "\n") if $verbose > 1;
 die("Nothing to do?\n") unless $num_entries > 0;
 exit(0) if $test;
 
 # Clean up and create directories.
 if ( $clobber ) {
-    rmtree([d_thumbnails(), d_medium()], 1);
+    rmtree([d_thumbnails(), d_medium()], $verbose > 1);
 }
-mkpath([d_large(), d_thumbnails(), d_icons()], 1);
-mkpath([d_medium()], 1) if $medium;
+mkpath([d_large(), d_thumbnails(), d_icons()], $verbose > 1);
+mkpath([d_medium()], $verbose > 1) if $medium;
 
 # Copy the button images over to the target directory.
 add_button_images();
@@ -190,23 +193,23 @@ for (my $i = $num_entries ; ; $i++ ) {
 
 # Write the individual pages.
 print STDERR ("Creating pages for ", $num_entries, " image",
-	      $num_entries == 1 ? "" : "s", "\n") if $verbose;
+	      $num_entries == 1 ? "" : "s", "\n") if $verbose > 1;
 my $mod = 0;
 
 for my $el ( $filelist->entries ) {
     write_image_page($el, "large") && $mod++;
     write_image_page($el, "medium") && $mod++ if $medium;
 }
-uptodate("image", $mod) if $verbose;
+uptodate("image", $mod) if $verbose > 1;
 
 # Write the index pages.
 print STDERR ("Creating pages for ", $num_indexes, " index",
-	      $num_indexes == 1 ? "" : "es", "\n") if $verbose;
+	      $num_indexes == 1 ? "" : "es", "\n") if $verbose > 1;
 $mod = 0;
 for my $i ( 0 .. $num_indexes-1 ) {
     write_index_page($i) && $mod++;
 }
-uptodate("index", $mod) if $verbose;
+uptodate("index", $mod) if $verbose > 1;
 
 # Cleanup excess indices.
 for (my $i = $num_indexes ; ; $i++ ) {
@@ -222,9 +225,7 @@ use constant T_JPG   => 1;
 use constant T_MPG   => 2;
 use constant T_VOICE => 3;	# still image + sound
 
-# Storage for image info. Will be cached.
-my $info;
-
+# List of possible subdirs to process.
 my @subdirs;
 
 # Note: the HTML generators use the file names relatively.
@@ -233,7 +234,8 @@ sub d_medium     { unshift(@_, "medium");     goto &d_dest; }
 sub d_thumbnails { unshift(@_, "thumbnails"); goto &d_dest; }
 sub d_icons      { unshift(@_, "icons");      goto &d_dest; }
 sub d_journal    { unshift(@_, "journal");    goto &d_dest; }
-sub d_dest       { join("/", $dest_dir, @_); }
+sub d_dest       { unshift(@_, $dest_dir) unless $dest_dir eq ".";
+		   join("/", @_); }
 
 sub set_defaults {
 
@@ -255,13 +257,13 @@ sub load_info {
     my %typemap = ( 'p' => T_JPG, 'm' => T_MPG, 'v' => T_VOICE );
 
     # If an info has been supplied, it'd better exist.
-    if ( $image_info ) {
-	die("$image_info: $!\n") unless -s $image_info;
+    if ( $info_file ) {
+	die("$info_file: $!\n") unless -s $info_file;
     }
     else {
 	# Try default.
-	$image_info = d_dest(DEFAULTS->{info});
-	unless ( -s $image_info ) {
+	$info_file = d_dest(DEFAULTS->{info});
+	unless ( -s $info_file ) {
 	    my $add_new; $add_new++ if $import_dir;
 	    my $add_src; $add_src++ if -d d_large();
 	    print STDERR ("No ", DEFAULTS->{info});
@@ -279,8 +281,8 @@ sub load_info {
     my $tag;
 
     my $fh = do { local *FH; *FH };
-    die("$image_info: $!\n")
-      unless open($fh, $image_info);
+    die("$info_file: $!\n")
+      unless open($fh, $info_file);
 
     my $el;
     my %dirs;
@@ -323,6 +325,11 @@ sub load_info {
 		$journal++;
 		# $/ = "";	# para mode
 	    }
+	    elsif ( /^subdirs\s*(.*)/ ) {
+		foreach ( split(' ', $1)) {
+		    $dirs{$_}++;
+		}
+	    }
 	    else {
 		warn("Unknown control: !$_\n");
 		$err++;
@@ -331,7 +338,7 @@ sub load_info {
 	}
 	($file, my $a) = split(' ', $_, 2);
 
-	my $rotate = 0;
+	my $rotate;
 	my $type = T_JPG;
 	while ( $a && $a =~ /^-(\w):(\S+)\s*(.*)/ ) {
 	    if ( lc($1) eq 'o' ) {
@@ -339,17 +346,15 @@ sub load_info {
 	    }
 	    elsif ( lc($1) eq 't' ) {
 		$type = $typemap{lc($2)}
-		  or warn("$file (info): Illegal type: $2\n");
+		  or warn("$file (info): Illegal type: $2\n"), $err++;
 	    }
 	    $a = $3;
 	}
-	$el = new FileEntry
-	  (dest_name   => $file,
-	   description => $a || "",
-	   annotation  => "",
-	   orientation => $rotate,
-	   type        => $type);
+	$el = new ImageInfo($file);
+	$el->type($type);
+	$el->description($a) if $a;
 	$el->tag($tag) if $tag;
+	$el->_rotation($rotate) if defined($rotate);
 	if ( $file =~ /^(.+)\.mpg$/i ) {
 	    $el->type(T_MPG);
 	    $el->assoc_name($1."s.jpg"); # associates still image
@@ -385,14 +390,14 @@ sub load_files {
     while ( @files ) {
 	my $f = shift(@files);
 	next unless -f d_large($f);
-	my $el = new FileEntry
-	  (type => T_JPG, dest_name => $f);
+	my $el = new ImageInfo(d_large($f));
+	$el->type(T_JPG);
 	if ( $f =~ /^(.+)\.jpg$/ ) {
 	    my $m = "$1.mp3";
 	    if ( -s d_large($m) ) {
 		$el->type(T_VOICE);
 		$el->assoc_name($m);
-		warn("$f: Changed to VOICE\n");
+		warn(d_large($f).": Changed to VOICE\n") if $verbose;
 	    }
 	}
 	elsif ( $f =~ /^(.+)\.mpg$/ ) {
@@ -401,7 +406,7 @@ sub load_files {
 	    $el->assoc_name($assoc);
 	    if ( $files[0] eq $assoc ) {
 		shift(@files);
-		warn("$assoc: Skipped still ($f)\n");
+		warn(d_large($assoc).": Skipped still\n") if $verbose;
 	    }
 	}
 	$gotlist->add($el, $f);
@@ -418,12 +423,14 @@ sub load_import {
 
     while ( @files ) {
 	my $f = shift(@files);
+	next unless -f "$import_dir/$f";
+
+	my $el = new ImageInfo("$import_dir/$f");
 	if ( $import_exif ) {
-	    shift(@files) if do_exif($f, $files[0]);
+	    shift(@files) if handle_exif($f, $files[0], $el);
 	}
 	else {
-	    my $el = new FileEntry
-	      (type => T_JPG, orig_name => $f, dest_name => $f);
+	    $el->type(T_JPG);
 	    if ( $f =~ /^(.+)\.mpg$/i ) {
 		$el->type(T_MPG);
 		$el->assoc_name($1."s.jpg");
@@ -433,8 +440,8 @@ sub load_import {
     }
 }
 
-sub do_exif {
-    my ($file, $next) = @_;
+sub handle_exif {
+    my ($file, $next, $el) = @_;
 
     # Sony DSC-V1 produces the following files:
     #   DSC0nnnn.JPG	still image
@@ -449,47 +456,30 @@ sub do_exif {
     # Files marked with * have a normal still image associated.
 
     # Normal still image.
-    if ( $file =~ /^(dsc0)(\d+)\.(jpg)$/i ) {
+    if ( $file =~ /^(.{4})(\d{4})\.(jpg)$/i ) {
 	my ($type, $seq, $ext) = ($1, $2, $3);
-	my $exif = get_exif("$import_dir/$file");
-	my $el;
-	my $fd = $exif->{"DateTime"} || "";
+	my $fd = $el->DateTime || "";
 	if ( $fd =~ /(\d\d\d\d):(\d\d):(\d\d) (\d\d):(\d\d):(\d\d)/ ) {
 	    my $time = timelocal($6,$5,$4,$3,$2-1,$1);
 	    my $new = "$1$2$3$4$5$6$seq";
-	    my $ii = $info->entry("$new.$ext");
+	    my $ii = cache_entry("$new.$ext");
 	    if ( $ii && !$ii->orig_name ) {
-		my $f = "$import_dir/$file";
-		$f =~ s;^\./;;;
-		$ii->orig_name($f);
-		$info->entry("$new.$ext", $ii);
+		$ii->orig_name("$import_dir/$file");
 	    }
 
-	    $el = new FileEntry (type => T_JPG, orig_name => $file,
-				 dest_name => "$new.$ext",
-				 exif => $exif, timestamp => $time);
+	    $el->type(T_JPG);
+	    $el->dest_name("$new.$ext");
+	    $el->timestamp($time);
 	    $file = "$new.$ext";
+	    cache_entry($file, $el) unless $ii;
 	}
 	else {
-	    warn("$file: Missing or unparsable file date [$fd]\n");
-	    $el = new FileEntry (type => T_JPG, orig_name => $file,
-				 dest_name => $file, exif => $exif);
-	}
-	if ( exists $exif->{Orientation} ) {
-	    my $map = { top_left   => 0,
-			top_right  => 1,
-			bot_right  => 2,
-			bot_left   => 3,
-			left_top   => 0,
-			right_top  => 1,
-			right_bot  => 2,
-			left_bot   => 3,
-		      };
-
-	    $el->orientation($map->{$exif->{Orientation}});
+	    warn("$import_dir/$file: Missing or unparsable file date [$fd]\n")
+	      if $verbose;
+	    $el->type(T_JPG);
 	}
 	if ( $next && $next eq "$type$seq.mpg" ) {
-	    warn("$file: Changed to VOICE\n");
+	    warn("$import_dir/$file: Changed to VOICE\n") if $verbose;
 	    $el->type(T_VOICE);
 	    (my $t = $file) =~ s/\.jpg$/.mp3/i;
 	    $el->assoc_name($t);
@@ -500,36 +490,30 @@ sub do_exif {
     }
 
     # MPEG movie.
-    elsif ( $file =~ /^(mov0)(\d+)\.(mpg)$/i ) {
+    elsif ( $file =~ /^(mov0)(\d{4})\.(mpg)$/i ) {
 	my ($type, $seq, $ext) = ($1, $2, $3);
 	# We have to trust the file date...
-	my $time = (stat("$import_dir/$file"))[9];
+	my $time = $el->timestamp;
 	my @tm = localtime($time);
 	my $new = sprintf("%04d%02d%02d%02d%02d%02d$seq",
 			  1900+$tm[5], 1+$tm[4], @tm[3,2,1,0]);
-	my $ii = $info->entry("$new.$ext") || new ImageInfo::Entry;
-	if ( !$ii->orig_name ) {
-	    my $f = "$import_dir/$file";
-	    $f =~ s;^\./;;;
-	    $ii->orig_name($f);
+	my $ii = cache_entry("$new.$ext");
+	if ( $ii && !$ii->orig_name ) {
+	    $ii->orig_name("$import_dir/$file");
 	}
 
-	$implist->add
-	  (new FileEntry (type => T_MPG, orig_name => $file,
-			  dest_name => "$new.$ext",
-			  assoc_name => $new."s.jpg",
-			  timestamp => $time),
-	   "$new.$ext");
+	$el->type(T_MPG);
+	$el->dest_name("$new.$ext");
+	$el->assoc_name($new."s.jpg");
+	$implist->add($el, "$new.$ext");
 	$file = "$new.$ext";
-	$info->entry("$new.$ext", $ii);
+	cache_entry($file, $el) unless $ii;
     }
 
     # Assume ordinary JPEG.
     else {
-	# Copy as is.
-	$implist->add
-	  (new FileEntry (type => T_JPG, orig_name => $file,
-			  dest_name => $file), $file);
+	$el->type(T_JPG);
+	$implist->add($el, $file);
     }
     return 0;
 }
@@ -558,23 +542,6 @@ sub update_filelist {
 		$entry->tag($el->tag);
 		$entry->description($el->description);
 		$entry->annotation($el->annotation);
-
-		# If an entry has EXIF info, only override its
-		# orientation if explicitly specified in the info
-		# file.
-		$entry->orientation($el->orientation) if $el->orientation;
-
-		unless ( $entry->exif ) {
-		    my $ii = $info->entry($f);
-		    if ( $ii && $ii->orig_name ) {
-			my $exif = get_exif($ii->orig_name);
-			$entry->exif($exif) if $exif;
-		    }
-		}
-		unless ( $entry->exif && $import_exif ) {
-		    my $el = $implist->byname($f);
-		    $entry->exif($el->exif) if $el;
-		}
 		$todo->add($entry);
 		print STDERR ("\n") if $trace;
 	    }
@@ -589,8 +556,8 @@ sub update_filelist {
 	    print STDERR ("todo[inf]: $f -- missing\n");
 	    $missing++;
 	}
-	die("Aborted!\n") if $missing;
     }
+    die("Aborted!\n") if $missing;
 
     unless ( $filelist->tally == 0 || $update ) {
 	$filelist = $todo;
@@ -598,7 +565,7 @@ sub update_filelist {
     }
 
     my $newinfo = "";
-    my $date = "";
+    my $date;
     my $new;
 
     foreach $el ( $gotlist->entries ) {
@@ -614,7 +581,7 @@ sub update_filelist {
 	    $nd = "$3/$2/$1";
 	    $el->timestamp(timelocal($6,$5,$4,$3,$2-1,$1));
 	}
-	if ( $nd ne $date ) {
+	if ( !defined($date) || $nd ne $date ) {
 	    $newinfo .= "\n!tag $nd\n";
 	    $date = $nd;
 	}
@@ -637,12 +604,12 @@ sub update_filelist {
 	    my @tm = localtime($time);
 	    $nd = sprintf("%02d/%02d/%04d", $tm[3], 1+$tm[4], 1900+$tm[5]);
 	}
-	if ( $nd ne $date ) {
+	if ( !defined($date) || $nd ne $date ) {
 	    $newinfo .= "\n!tag $nd\n";
 	    $date = $nd;
 	}
 	$newinfo .= "$f " .
-	  ($el->orientation ? ("-O:".$el->orientation." ") : "") .
+	  ($el->rotation ? ("-O:".$el->rotation." ") : "") .
 	    ($el->type == T_VOICE ? "-T:V " : "") .
 	      " \n";
 	$todo->add($el);
@@ -652,25 +619,25 @@ sub update_filelist {
     $filelist = $todo;
 
     unless ( $new ) {		# nothing to add
-	warn("No new images imported\n") if $verbose;
+	warn("No new images imported\n") if $verbose > 1;
 	return 0;
     }
 
     return $new if $test;
 
-    unless ( -w $image_info ) {
-	warn("$image_info: Cannot update (".
+    unless ( -w $info_file ) {
+	warn("$info_file: Cannot update (".
 	     (-e _ ? "no write access" : "does not exist") .
-	     ")\n");
+	     ")\n") if $verbose;
 	return $new;
     }
 
-    my $infosize = -s $image_info;
+    my $infosize = -s $info_file;
 
     # Append new info.
-    warn("Updating $image_info\n") if $verbose;
+    warn("Updating $info_file\n") if $verbose > 1;
     my $fh = do { local *F; *F };
-    open($fh, ">>", $image_info) || die("$image_info: $!\n");
+    open($fh, ">>", $info_file) || die("$info_file: $!\n");
     unless ( $infosize ) {
 	print $fh ("# album control file created by $my_name $my_version, ".
 	       localtime(time), "\n\n");
@@ -683,12 +650,8 @@ sub update_filelist {
 	print $fh ("!page ${index_rows}x${index_columns}\n")
 	  if $index_rows != DEFAULTS->{indexrows}
 	      || $index_columns != DEFAULTS->{indexcols};
-	print $fh ("\n");
     }
-    else {
-	print $fh ("\n");
-    }
-    print $fh ("# New entries added by $my_name $my_version, ".
+    print $fh ("\n# New entries added by $my_name $my_version, ".
 	       localtime(time), "\n",
 	       $newinfo,
 	       "\n");
@@ -699,9 +662,13 @@ sub update_filelist {
 
 sub prepare_images {
 
+    my $ddot = 0;
+    my $tdot = 0;
+    my $fmt = "[%" . length($filelist->tally) . "d]\n";
+
     foreach my $el ( $filelist->entries ) {
 	my $file = $el->dest_name;
-	print STDERR ("$file: ") if $verbose;
+	my $msg = "";
 
 	# Check for directory names, e.g. f01/p01.jpg.
 	my $dn = dirname($file);
@@ -713,57 +680,59 @@ sub prepare_images {
 	my $i_large = d_large($file);
 	my $w;
 	my $h;
-	my $i_src;
 	my $movie = $el->type == T_MPG;
 
 	# Copy the file into place. Rotate if needed.
 	if ( ! -s $i_large && $el->orig_name ) {
-	    $i_src = "$import_dir/" . $el->orig_name;
+	    my $i_src = $el->orig_name;
 	    if ( $movie ) {
 		copy_mpg($i_src, $i_large,
 			 d_large($el->assoc_name),
 			 $el->timestamp,
-			 $el->orientation);
+			 $el->rotation, $el->mirror);
 	    }
 	    elsif ( $import_exif ) {
 		# Unfortunately, jhead cannot rotate from->to, so
 		# we need to copy first and rotate later.
 		my $time = $el->timestamp;
 
-		if ( $linkthem && !$el->orientation ) {
-		    print STDERR ("link ") if $verbose;
+		if ( $linkthem && !$el->rotation && !$el->mirror) {
+		    $msg .= "link ";
 		    unless ( link($i_src, $i_large) == 1 ) {
 			unlink($i_large); # just in case
-			print STDERR ("copy ") if $verbose;
+			substr($msg,-5) = "copy ";
 			copy($i_src, $i_large, $time);
 		    }
 		}
 		else {
-		    print STDERR ("copy ") if $verbose;
+		    $msg .= "copy ";
 		    copy($i_src, $i_large, $time);
 		}
-		if ( $el->orientation ) {
-		    print STDERR ("rotate ") if $verbose;
+		if ( $el->rotation || $el->mirror ) {
+		    $msg .= "rotate ";
 		    my $cmd = "jhead -autorot ".squote($i_large);
 		    my $t = `$cmd 2>&1`;
 		    print STDERR $t if $?;
 		    utime($time, $time, $i_large);
 		}
-		print STDERR ("[", bytes(-s $i_large), "] ") if $verbose > 1;
+		$msg .= "[" . bytes(-s $i_large) . "] " if $verbose > 2;
 	    }
-	    elsif ( $el->orientation ) {
-		print STDERR ("rotate ") if $verbose;
+	    elsif ( $el->rotation || $el->mirror ) {
+		$msg .= "mirror " if $verbose && $el->mirror;
+		$msg .= "rotate " if $verbose && $el->rotation;
 		my $t = convert
 		  ($i_src, $i_large,
-		   $verbose ? "-verbose" : (),
-		   "-rotate", 90 * $el->orientation);
-		print STDERR ("[", $t, "] ") if $verbose;
+		   $verbose > 1 ? "-verbose" : (),
+		   $el->mirror ?
+		     ($el->mirror eq 'h' ? "-flip" : "-flop") : (),
+		   "-rotate", 90 * $el->rotation);
+		$msg .= "[$t] " if $verbose > 2;
 		($w, $h) = $t =~ /^(\d+)x(\d+)/ unless $w && $h;
 	    }
 	    else {
-		print STDERR ("copy ") if $verbose;
+		$msg .= "copy ";
 		copy($i_src, $i_large);
-		print STDERR ("[", bytes(-s $i_large), "] ") if $verbose > 1;
+		$msg .= "[" . bytes(-s $i_large) . "] " if $verbose > 2;
 	    }
 	    if ( $el->type == T_VOICE ) {
 		copy_voice($i_src, d_large($el->assoc_name),
@@ -771,10 +740,6 @@ sub prepare_images {
 	    }
 	}
 	if ( $movie ) {
-	    $info->entry($file,
-			 new ImageInfo::Entry
-			 (width => 0, height => 0,
-			  large_size => -s $i_large));
 	    $movie = $file;
 	    $file = $el->assoc_name;
 	    $i_large = d_large($file);
@@ -784,79 +749,65 @@ sub prepare_images {
 	my $i_small  = d_thumbnails($file);
 
 	if ( $medium && ! -s $i_medium ) {
-	    print STDERR ("medium ") if $verbose;
+	    $msg .= "medium ";
 	    my $t = convert
 	      ($i_large, $i_medium,
-	       $verbose ? "-verbose" : (),
-	       # Read the docs.
+	       $verbose > 1 ? "-verbose" : (),
 	       "-size", "${medium}x$medium", "-resize", "${medium}x$medium",
 	       # Remove unnecessary stuff.
 	       "+profile", "*");
-	    print STDERR ("[", $t, "] ") if $verbose > 1;
+	    $msg .= "[$t] " if $verbose > 2;
 	    ($w, $h) = $t =~ /^(\d+)x(\d+)/ unless $w && $h;
 	}
+	$el->medium_size(-s $i_medium) if $medium && !$movie;
 
 	if ( ! -s $i_small ) {
-	    print STDERR ("thumbnail ") if $verbose;
+	    $msg .= "thumbnail ";
 	    my $t = convert
 	      ($i_large, $i_small,
-	       $verbose ? "-verbose" : (),
+	       $verbose > 1 ? "-verbose" : (),
 	       "-size", "${thumb}x$thumb", "-resize", "${thumb}x$thumb",
 	       "+profile", "*");
-	    print STDERR ("[", $t, "] ") if $verbose > 1;
+	    $msg .= "[$t] " if $verbose > 2;
 	    ($w, $h) = $t =~ /^(\d+)x(\d+)/ unless $w && $h;
 	}
 
-	# Get image info.
-	my $ii = $info->entry($file);
-	if ( $ii ) {
-	    print STDERR ("size (cached) ") if $verbose;
-	    ($w, $h) = ($ii->width, $ii->height);
-	    $ii->medium_size(-s $i_medium) if $medium;
-	    $ii->orig_name($i_src) if $i_src;
+	if ( $el->width && $el->height ) {
 	}
 	elsif ( $movie ) {
-	    print STDERR ("size ") if $verbose;
-	    $ii = new ImageInfo::Entry (large_size => -s $i_large);
-
-	    print STDERR ("(n/a) ") if $verbose;
-	    $ii->width(0);
-	    $ii->height(0);
-	    $ii->medium_size(0);
-	    $ii->large_size(-s d_large($movie));
-	    $ii->orig_name($i_src) if $i_src;
-	    print STDERR ($ii->tostr, " ") if $verbose > 1;
+	}
+	elsif ( $h && $w ) {
+	    $msg .= "size (known) ";
+	    $el->width($w) if $w;
+	    $el->height($h) if $h;
 	}
 	else {
-	    print STDERR ("size ") if $verbose;
-	    $ii = new ImageInfo::Entry (large_size => -s $i_large);
-
-	    if ( $h && $w ) {
-		print STDERR ("(known) ") if $verbose;
-	    }
-	    else {
-		my $ii = Image::Info::image_info($i_large);
-		if ( exists($ii->{error}) ) {
-		    warn("i_large: ",
-			 $ii->{error}, "\n");
-		}
-		else {
-		    ($w, $h) = Image::Info::dim($ii);
-		}
-	    }
-
-	    $ii->width($w) if $w;
-	    $ii->height($h) if $h;
-	    $ii->medium_size(-s $i_medium) if $medium;
-	    $ii->orig_name($i_src) if $i_src;
-	    print STDERR ($ii->tostr, " ") if $verbose > 1;
+	    $msg .= "size (unknown) ";
 	}
 
-	# Update image info.
-	$info->entry($file, $ii);
+#	$msg = "test " if $ddot == 47;
 
-	print STDERR ("OK\n") if $verbose;
+	if ( $verbose > 1 ) {
+	    if ( $verbose > 2 ) {
+		print STDERR ("$file: $msg", "OK\n");
+	    }
+	    elsif ( $msg ) {
+		printf STDERR ($fmt, $tdot) if $ddot;
+		print STDERR ("$file: $msg", "OK\n");
+		$tdot++;
+		$ddot = 0;
+	    }
+	    else {
+		print STDERR (".");
+		$tdot++;
+		if ( ++$ddot >= 50 ) {
+		    printf STDERR ($fmt, $tdot);
+		    $ddot = 0;
+		}
+	    }
+	}
     }
+    printf STDERR ($fmt, $tdot) if $ddot && $tdot;
 }
 
 #### Output generation.
@@ -925,19 +876,19 @@ sub write_image_page {
 	}
     }
 
-    my $exif = "";
-    if ( $el->exif && exists($el->exif->{Make}) ) {
-	$exif = "<table border='1' width='100%' bgcolor='$MGREY'>\n" . restyle_exif($el->exif) . "</table>\n";
-    }
-
     my $auxright = html($el->dest_name);
     my $s = size_info($el);
     $auxright .= " ($s)" if $s;
-    my $it2 = $it;
-    if ( $exif ) {
-	$it2 = "<a href='#' class='info'>$it<span>$exif</span></a>";
-    }
     my $auxleft  = html($el->tag || "");
+
+    my $it2 = $it;
+    if ( $el->Make ) {		# EXIF info
+	$it2 = "<a href='#' class='info'>" . $it .
+	  "<span>" .
+	    "<table border='1' width='100%' bgcolor='$MGREY'>\n" .
+	      restyle_exif($el) . "</table>\n" .
+		"</span></a>";
+    }
 
     update_if_needed(d_dest($dir, $htmllist[$i]), <<EOD);
 <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
@@ -998,7 +949,7 @@ sub write_index_page {
     my $b = "";			# buttons (vertical)
 
     # Construct buttons and index selector.
-    if ( $num_indexes > 1) {
+    if ( $num_indexes > 1 ) {
 	$b = join("$br\n",
 		  button("first", ixname(0),              0, $x > 0             ),
 		  button("prev",  ixname($x-1),           0, $x > 0             ),
@@ -1161,25 +1112,27 @@ sub img {
 }
 
 sub restyle_exif {
-    my ($exif) = @_;
+    my ($el) = @_;
     my $ret = "";
     my $v;
+
     my $app = sub {
 	$ret .= "<tr><td>".html($_[0])."</td>".
 	            "<td>".html($_[1])."</td></tr>\n";
     };
-    $app->("Date", $v) if $v = $exif->{DateTime};
-    my $t = $exif->{ExposureTime};
+
+    $app->("Date", $v) if $v = $el->DateTime;
+    my $t = $el->ExposureTime;
     if ( $t <= 0.5 ) {
 	$t = "1/".int(0.5 + 1/$t)."s";
     }
     $app->("Exposure",
-	   join(" ", $exif->{ExposureMode} || "",
-		$exif->{ExposureProgram} || "", $t));
+	   join(" ", $el->ExposureMode || "",
+		$el->ExposureProgram || "", $t));
     $app->("Aperture", sprintf("%.1f", $v))
-      if $v = $exif->{FNumber};
-    if ( $v = $exif->{FocalLength} ) {
-	if ( $exif->{Model} eq "DSC-V1" ) {
+      if $v = $el->FNumber;
+    if ( $v = $el->FocalLength ) {
+	if ( $el->Model eq "DSC-V1" ) {
 	    $v .= sprintf("mm  (%.1fmm equiv.)", $v*4.857);
 	}
 	else {
@@ -1187,14 +1140,14 @@ sub restyle_exif {
 	}
 	$app->("Focal length", $v);
     }
-    $app->("ISO", $v) if $v = $exif->{ISOSpeedRatings};
+    $app->("ISO", $v) if $v = $el->ISOSpeedRatings;
     $app->("Flash", $v)
-      if ($v = $exif->{Flash}) && $v ne "Flash did not fire";
-    $app->("Metering", $v) if $v = $exif->{MeteringMode};
-    $app->("Scene", $v) if $v = $exif->{SceneCaptureType};
+      if ($v = $el->Flash) && $v ne "Flash did not fire";
+    $app->("Metering", $v) if $v = $el->MeteringMode;
+    $app->("Scene", $v) if $v = $el->SceneCaptureType;
     $app->("Camera",
-	   join(" ", $v, $exif->{Model}))
-      if $v = $exif->{Make};
+	   join(" ", $v, $el->Model))
+      if $v = $el->Make;
 }
 
 #### Caption helpers.
@@ -1202,10 +1155,10 @@ sub restyle_exif {
 sub f_caption {
     my ($el) = @_;
     my $s = html($el->dest_name);
-    if ( $el->exif && exists($el->exif->{Make}) ) {
-	$s = "<a href='#' class='info'>$s<span>".
+    if ( $el->Make ) {
+	$s = "<a href='#' class='info'>" . $s . "<span>".
 	  "<table border='1' bgcolor='$MGREY' width='100%'>\n".
-	    restyle_exif($el->exif) . "</table>\n".
+	    restyle_exif($el) . "</table>\n".
 	      "</span></a>";
     }
     $s;
@@ -1230,13 +1183,35 @@ sub c_caption {
 
 #### Persistent info (cache) helpers.
 
-sub load_cache {
-    $info = new ImageInfo
-      ((!$clobber && -s d_dest(".cache")) ? d_dest(".cache") : undef);
-}
+{ my $cache;
 
-sub update_cache {
-    $info->store(d_dest(".cache"));
+  my @stats; INIT { @stats = (0, 0, 0); }
+
+  sub load_cache {
+    $cache = new ImageInfoCache
+      ((!$clobber && -s d_dest(".cache")) ? d_dest(".cache") : undef);
+  }
+
+  sub update_cache {
+    $cache->store(d_dest(".cache"));
+  }
+
+  sub cache_entry {
+      if ( @_ == 1 ) {
+	  $stats[0]++;
+	  my $ii = $cache->entry(@_);
+	  $stats[1]++ if $ii;
+	  warn("Cache miss: $_[0]\n") if !$ii && $trace;
+	  return $ii;
+      }
+      $stats[2]++;
+      $cache->entry(@_);
+  }
+
+  END {
+      print STDERR ("Cache: store = $stats[2], lookup = $stats[0], hits = $stats[1]\n")
+	if $trace;
+  }
 }
 
 #### Miscellaneous.
@@ -1308,21 +1283,21 @@ sub add_button_images {
         # Otherwise, search for the uudecode 'begin' line.
         if ( /^begin\s+\d+\s+(.+)$/ ) {
 	    next if !$clobber && -s d_icons($1);
-	    print STDERR ("Creating icons ") if $verbose && !defined($name);
+	    print STDERR ("Creating icons ") if $verbose > 1 && !defined($name);
 	    $did++;
             $name = d_icons($1);
-	    print STDERR ("$1 ") if $verbose;
+	    print STDERR ("$1 ") if $verbose > 1;
             open($out, ">$name");
             $doing = 1;         # Doing
             next;
         }
     }
     if ( $doing ) {
-        warn("Error in DATA: still processing $name\n");
+        die("Error in DATA: still processing $name\n");
         unlink($name);
     }
     else {
-	print STDERR ("done\n") if $did && $verbose;
+	print STDERR ("done\n") if $did && $verbose > 1;
     }
 }
 
@@ -1335,11 +1310,11 @@ sub bytes {
 
 sub size_info {
     my ($el, $med) = @_;
-    my $ii = $info->entry($el->dest_name);
-    return "" unless $ii;
+    return unless $el->width;
+
     my $ret = "";
-    $ret .= $ii->width . "x" . $ii->height if $ii->width;
-    for ( $med ? $ii->medium_size : $ii->large_size ) {
+    $ret .= $el->width . "x" . $el->height if $el->width;
+    for ( $med ? $el->medium_size : $el->file_size ) {
 	next unless $_;
 	$ret .= "," if $ret;
 	$ret .= bytes($_);
@@ -1402,10 +1377,10 @@ sub copy {
 }
 
 sub copy_mpg {
-    my ($orig, $new, $still, $time, $rotate) = @_;
+    my ($orig, $new, $still, $time, $rotate, $mirror) = @_;
     $time = (stat($orig))[9] unless defined($time);
 
-    print STDERR ($rotate ? "copy/rotate " : "copy ") if $verbose;
+    print STDERR ($rotate ? "copy/rotate " : "copy ") if $verbose > 1;
 
     # I'm not sure what this does. The resultant file is about 10% of
     # the original, without missing something...
@@ -1413,13 +1388,13 @@ sub copy_mpg {
       "-of mpeg -ovc lavc -lavcopts vcodec=mpeg1video -oac copy ".
 	($rotate ? "-vop rotate=".int($rotate/90)." " : "") .
 	  squote($orig) . " -o ". squote($new);
-    warn("\n+ $cmd\n") if $verbose > 1;
+    warn("\n+ $cmd\n") if $verbose > 2;
 
     my $res = `$cmd 2>&1`;
     die("${res}Aborted\n") if $?;
 
     utime($time, $time, $new);
-    print STDERR ("still ") if $verbose;
+    print STDERR ("still ") if $verbose > 1;
 
     unless ( -s $still ) {
 	copy("icons/movie.jpg", $still, $time);
@@ -1432,77 +1407,16 @@ sub copy_voice {
     $orig =~ s/\.\w+$/.mpg/;
     return if -s $new;
 
-    print STDERR ("sound ") if $verbose;
+    print STDERR ("sound ") if $verbose > 2;
     # This will produce an MP2 file. Good enough for now...
     my $cmd = "mplayer -vo null ".
       "-dumpaudio -dumpfile " . squote($new) . " " . squote($orig);
-    warn("\n+ $cmd\n") if $verbose > 1;
+    warn("\n+ $cmd\n") if $trace;
     my $res = `$cmd 2>&1`;
     die("${res}Aborted\n") if $?;
     die("${res}Aborted\n") unless -s $new;
 
     utime($time, $time, $new);
-}
-
-sub get_exif {
-    my ($file) = @_;
-
-    # Use cached info.
-    my $ii = $info->entry($file);
-    if ( $ii && $info->version >= 2 ) {
-	my $e = $ii->exif;
-	return $e if $e;
-    }
-
-    my $exif = Image::Info::image_info($file);
-    return $exif if exists($exif->{error});
-
-    my %h;
-    for my $key ( qw(DateTime ExifImageLength ExifImageWidth
-		     ExposureMode ExposureProgram ExposureTime
-		     FNumber Flash FocalLength ISOSpeedRatings
-		     ImageDescription Make Model
-		     MeteringMode Orientation SceneCaptureType
-		     height width
-		    ) ) {
-	my $val = $exif->{$key};
-	next unless defined $val;
-	$val = $val->as_float if UNIVERSAL::can($val,"as_float");
-	$h{$key} = $val;
-    }
-
-    $ii ||= new ImageInfo::Entry;
-    $ii->width($exif->{width});
-    $ii->height($exif->{height});
-    $ii->exif(\%h);
-    $info->entry($file, $ii);
-
-    return \%h;
-
-=begin obsolete
-
-    # Run jhead to collect the EXIF data.
-    open(my $p, "-|", "jhead " . squote($file)) or die("$file: $!\n");
-    my %h;
-    while ( <$p> ) {
-	s/\s+:\s+/: /;
-	$h{lc($1)} = $2 if /^(.*?): (.*)/;
-    }
-    close($p) or die("$file: $!\n");
-
-    return undef if exists($h{"not jpeg"});
-
-    $h{exposure} ||= "manual";
-
-    # Update cache.
-    $ii ||= new ImageInfo::Entry(exif => \%h);
-    $info->entry($file, $ii);
-
-    # Return.
-    \%h;
-
-=cut
-
 }
 
 ################ Subroutines ################
@@ -1520,7 +1434,7 @@ sub app_options {
 		     'exif'	=> \$import_exif,
 		     'dcim=s'	=> sub { $import_dir = $_[1]; $import_exif++ },
 		     'update'   => \$update,
-		     'info=s'	=> \$image_info,
+		     'info=s'	=> \$info_file,
 		     'cols=i'	=> \$index_columns,
 		     'rows=i'	=> \$index_rows,
 		     'thumbsize=i' => \$thumb,
@@ -1530,6 +1444,7 @@ sub app_options {
 		     'link!'	=> \$linkthem,
 		     'caption=s' => \$caption,
 		     'ident'	=> \$ident,
+		     'quiet'	=> sub { $verbose = 0 },
 		     'verbose+'	=> \$verbose,
 		     'trace'	=> \$trace,
 		     'test'	=> \$test,
@@ -1545,10 +1460,13 @@ sub app_options {
     }
 
     app_ident() if $ident;
-    $dest_dir = shift(@ARGV) if @ARGV;
+    $dest_dir = @ARGV ? shift(@ARGV) : ".";
+    $dest_dir =~ s;^\./;;;
     $medium = DEFAULTS->{mediumsize} if defined($medium) && !$medium;
-    if ( $import_dir && ! -d $import_dir ) {
-	die("$import_dir: Not a directory\n");
+    if ( $import_dir ) {
+	die("$import_dir: Not a directory\n")
+	  unless -d $import_dir;
+	$import_dir =~ s;^\./;;;
     }
 }
 
@@ -1589,30 +1507,104 @@ EndOfUsage
 
 ################ Modules ################
 
-package FileEntry;
+package ImageInfo;
 
-use Class::Struct "FileEntry" =>
-  [ type	 => '$',	#  T_JPG, T_MPG, ...
-    seq          => '$',	#  1, 2, ...
-    dest_name	 => '$',	#  20040618120400.jpg
-    orig_name	 => '$',	#  dsc00058.jpg, if any
-    assoc_name	 => '$',	#  20040618120400.mp3 (for a T_VOICE)
-    timestamp    => '$',	#  1087556744
-    orientation  => '$',	#  degrees
-    exif	 => '$',	#  { 'camera make' => 'SONY', ... }
-    tag		 => '$',	#  18 jun
-    description  => '$',	#  Nice image
-    annotation   => '$',	#  When walking through this beautiful landscape ...
-  ];
+my @std_fields;
+my @exif_fields;
+my $exif_rot;
+
+INIT {
+    @std_fields  = qw(type seq
+		      dest_name orig_name assoc_name
+		      timestamp file_size medium_size
+		      tag description annotation
+		      rotation mirror);
+
+    @exif_fields = qw(DateTime ExifImageLength ExifImageWidth
+		      ExposureMode ExposureProgram ExposureTime
+		      FNumber Flash FocalLength ISOSpeedRatings
+		      ImageDescription Make Model
+		      MeteringMode SceneCaptureType Orientation
+		      height width file_ext);
+
+    $exif_rot = { top_left   => [   0, ''  ],    # corr. needed
+		  top_right  => [   0, 'v' ],    # flop (V)
+		  bot_right  => [ 180, ''  ],    # 180
+		  bot_left   => [   0, 'h' ],    # flip (H)
+		  left_top   => [  90, 'h' ],    # flip 90
+		  right_top  => [  90, ''  ],    # 90
+		  right_bot  => [  90, 'v' ],    # flop 90
+		  left_bot   => [ 270, ''  ],    # 270
+		};
+}
+
+sub new {
+    my ($pkg, $file) = @_;
+    $pkg = ref($pkg) if ref($pkg);
+
+    my $self = { orig_name    => $file,
+		 dest_name    => ::basename($file),
+		 description  => "",
+		 annotation   => "",
+		 tag	      => "",
+	       };
+
+    if ( -f $file ) {
+	my $ii = ::cache_entry($file);
+	if ( $ii  ){
+	    $self = $ii;
+	    $self->{file_size} = -s _;
+	    $self->{timestamp} = (stat(_))[9];
+	    delete($self->{$_}) foreach grep { /^_/ } keys(%$self);
+	}
+
+	# Else, get image info.
+	else {
+	    my $ii = Image::Info::image_info($file);
+	    unless ( exists($ii->{error}) ) {
+
+		for my $key ( @exif_fields ) {
+		    my $val = $ii->{$key};
+		    next unless defined $val;
+		    if ( $key eq "Orientation" ) {
+			($self->{rotation}, $self->{mirror}) =
+			  @{$exif_rot->{$val}}
+			    if exists $exif_rot->{$val};
+		    }
+		    else {
+			$val = $val->as_float
+			  if UNIVERSAL::can($val,"as_float");
+			$self->{$key} = $val;
+		    }
+		}
+		::cache_entry($file, $self);
+	    }
+	}
+    }
+
+    bless($self, $pkg);
+}
+
+INIT {
+    no strict 'refs';
+    for my $sub ( @std_fields, @exif_fields ) {
+	$sub = "_".$sub if $sub eq "rotation";
+	*{"ImageInfo::$sub"} = sub {
+	    my ($self, $value) = @_;
+	    $self->{$sub} = $value if defined($value);
+	    $self->{$sub};
+	};
+    }
+}
+
+sub rotation  {
+    my ($self) = @_;
+    defined($self->{_rotation}) ? $self->{_rotation} : $self->{rotation};
+}
 
 sub html_name {
     my ($self) = @_;
     sprintf("img%04d.html", $self->seq);
-}
-
-sub clone {
-    my ($self) = @_;
-    bless [ @{$self} ], ref($self);
 }
 
 package FileList;
@@ -1657,7 +1649,9 @@ sub byseq {
 
 #### Cache maintenance.
 
-package ImageInfo;
+package ImageInfoCache;
+
+use constant CACHE_VERSION => 3;
 
 sub new {
     my ($pkg, $file) = @_;
@@ -1665,8 +1659,13 @@ sub new {
     my $self = bless({}, $pkg);
     if ( defined($file) ) {
 	$self->load($file);
-warn("loaded cache v" . $self->version . "\n");
+	if ( ($self->{_version} || 1) != CACHE_VERSION ) {
+	    warn("Incompatible cache version " . $self->version .
+		 " -- invalidated\n") if $verbose;
+	    $self = bless({}, $pkg);
+	}
     }
+    $self->{_version} = CACHE_VERSION;
     $self;
 }
 
@@ -1674,27 +1673,25 @@ sub load {
     my ($self, $file) = @_;
     our $info;
     $info = undef;
-    require $file;
-
-    foreach my $f ( keys(%$info) ) {
-	my $entry = $info->{$f};
-	bless $entry, "ImageInfo::Entry"
-	  unless $f eq "_version" || UNIVERSAL::isa($entry, "ImageInfo::Entry");
-	$self->{info}->{$f} = $entry;
+    eval {
+	require $file;
+    };
+    if ( $@ ) {
+	warn("Illegal cache -- invalidated\n") if $verbose;
+	return;
     }
+    @{$self}{keys(%$info)} = values(%$info);
 }
 
 sub store {
     my ($self, $file) = @_;
-    my $info = $self->{info};
-    $info->{_version} = 2;
     $Data::Dumper::Indent = 1;
     $Data::Dumper::Sortkeys = 1;
     $Data::Dumper::Sortkeys = 1; # avoid warnings
     $Data::Dumper::Purity = 1;
     my $cache = do { local *C; *C };
     open($cache, ">$file")
-      and print $cache (Data::Dumper->Dump([$info],[qw(info)]), "\n1;\n")
+      and print $cache (Data::Dumper->Dump([$self],[qw(info)]), "\n1;\n")
 	and close($cache);
 }
 
@@ -1702,41 +1699,22 @@ sub entry {
     my ($self, $file, $entry) = @_;
     $file =~ s;^\./;;;
     if ( defined $entry ) {
-	$self->{info}->{$file} = $entry;
+	$self->{$file} = $entry;
     }
     else {
-	$entry = $self->{info}->{$file};
+	$entry = $self->{$file};
     }
     $entry;
 }
 
 sub entries {
     my ($self) = @_;
-    [ sort(keys(%{$self->{info}})) ];
+    [ sort(keys(%{$self})) ];
 }
 
 sub version {
     my ($self) = @_;
-    $self->{info}->{_version} || 1;
-}
-
-use Class::Struct "ImageInfo::Entry" =>
-  [ large_size	 => '$',
-    medium_size	 => '$',
-    width	 => '$',
-    height	 => '$',
-    exif	 => '$',
-    orig_name	 => '$',
-  ];
-
-sub ImageInfo::Entry::tostr {
-    my ($self) = @_;
-    "[" . join(" ",
-	       $self->large_size,
-	       $self->medium_size || 0,
-	       $self->width,
-	       $self->height,
-	      ) . "]";
+    $self->{_version};
 }
 
 package main;
