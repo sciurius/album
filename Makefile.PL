@@ -2,8 +2,8 @@
 # Author          : Johan Vromans
 # Created On      : Fri Jul  9 15:45:48 2004
 # Last Modified By: Johan Vromans
-# Last Modified On: Fri Jul  9 22:11:01 2004
-# Update Count    : 15
+# Last Modified On: Mon Jul 12 23:18:13 2004
+# Update Count    : 19
 # Status          : Experimental
 
 use strict;
@@ -27,30 +27,26 @@ print STDERR <<EOD;
 This program requires some helper programs.
 
   jpegtrans   will be used to rotate JPEG files loslessly.
-	      If missing, JPEG files will be rotated with loss
-	      of information.
+	      If missing, JPEG files will be rotated by ImageMagick,
+	      with possible loss of information.
 EOD
 checkexec("jpegtran");
 
 print STDERR <<EOD;
 
-  mencoder    is needed to manipulate MPEG files
+  mencoder    is needed to manipulate MPEG files.
+	      If missing, MPEG movies will be copied, and cannot be rotated.
 EOD
 checkexec("mencoder");
 
 print STDERR <<EOD;
 
-  mplayer     is needed extract audio from VOICE files
+  mplayer     is used to extract a still image from MPEG files, and
+	      to extract audio from VOICE files.
+	      If missing, no stills will be produced, and VOICE files
+	      will remain silent.
 EOD
 checkexec("mplayer");
-
-print STDERR <<EOD;
-
-  mpeg2decode is used to extract a still image from MPEG files.
-	      For best performance, install the mpegstill program that
-	      comes with this kit.
-EOD
-checkexec("mpegstill") || checkexec("mpeg2decode");
 
 print STDERR ("\n");
 
