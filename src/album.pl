@@ -4,8 +4,8 @@ my $RCS_Id = '$Id$ ';
 # Author          : Johan Vromans
 # Created On      : Tue Sep 15 15:59:04 2002
 # Last Modified By: Johan Vromans
-# Last Modified On: Fri May 28 00:33:30 2004
-# Update Count    : 761
+# Last Modified On: Fri May 28 22:32:25 2004
+# Update Count    : 770
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -210,13 +210,18 @@ sub set_parameter_defaults {
 
 sub load_image_info {
 
+    # If an info has been supplied, it'd better exist.
     if ( $image_info ) {
 	die("$image_info: $!\n") unless -s $image_info;
     }
     else {
+	# Try default.
 	$image_info = "$dest_dir/info.dat";
+	unless ( -s $image_info ) {
+	    $add_from_src++;
+	    return;
+	}
     }
-    $add_from_src++, return unless -s $image_info;
 
     my $err = 0;
     my $file;
@@ -236,7 +241,7 @@ sub load_image_info {
 	    next;
 	}
 
-	if ( /^!(.*)/ ) {
+	if ( /^!\s*(\S.*)/ ) {
 	    $_ = $1;
 	    if ( /^title\s+(.*)/ ) {
 		$album_title ||= $1;
@@ -274,7 +279,7 @@ sub load_image_info {
 	    $a = $2;
 	}
 	$description{$file} = $a || "";
-	$rotate{$file} = $rotate unless $target_is_source;
+	$rotate{$file} = $rotate;
 	$tag{$file} = $tag if $tag;
 	next if $file eq "*";
 	unless ( -s "$src_dir/$file" || -s "$dest_dir/large/$file" ) {
@@ -321,11 +326,9 @@ sub prepare_images {
 
 	my $i_src     = "$src_dir/$file";
 	my $i_large   = "$dest_dir/large/$file";
-	my $i_medium  = "$dest_dir/medium/$file";
-	my $i_small   = "$dest_dir/thumbnails/$file";
 
 	# Copy the file into place. Rotate if needed.
-	if ( !$target_is_source and $clobber || ! -s $i_large ) {
+	if ( !$target_is_source && ( $clobber || ! -s $i_large ) ) {
 	    if ( $rotate{$file} ) {
 		print STDERR ("rotating... ") if $verbose;
 		system("convert", "-rotate", "$rotate{$file}",
@@ -339,6 +342,9 @@ sub prepare_images {
 		copy($i_src, $i_large);
 	    }
 	}
+
+	my $i_medium  = "$dest_dir/medium/$file";
+	my $i_small   = "$dest_dir/thumbnails/$file";
 
 	# Get image info.
 	my $ii = $info->entry($file);
