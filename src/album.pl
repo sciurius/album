@@ -4,13 +4,13 @@ my $RCS_Id = '$Id$ ';
 # Author          : Johan Vromans
 # Created On      : Tue Sep 15 15:59:04 2002
 # Last Modified By: Johan Vromans
-# Last Modified On: Sun Aug 29 13:15:15 2004
-# Update Count    : 2069
+# Last Modified On: Mon Sep 13 20:53:54 2004
+# Update Count    : 2080
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
 
-$VERSION = 0.08;
+$VERSION = 0.09;
 
 use strict;
 
@@ -50,6 +50,7 @@ my $medium;			# medium size, between large and small
 my $mediumonly;			# only medium size (for web export)
 my $album_title;
 my $caption;
+my $datefmt;
 
 # These are not command line options.
 my $journal;			# create journal
@@ -78,6 +79,7 @@ use constant DEFAULTS => { info       => "info.dat",
 			   indexcols  => 4,
 			   caption    => "fct",
 			   captionmin => "f",
+			   dateformat  => '%F',
 			 };
 
 my $TMPDIR = $ENV{TMPDIR} || $ENV{TEMP} || '/usr/tmp';
@@ -125,6 +127,8 @@ use Time::Local;
 use Image::Info;
 use Image::Magick;
 use Data::Dumper;
+use POSIX qw(strftime);
+use locale;
 
 # The files already there, if any.
 my $gotlist = new FileList;
@@ -283,6 +287,9 @@ sub set_defaults {
     die("Invalid value for caption: $caption\n")
       unless $caption =~ /^[fsct]*$/i;
     $caption = lc($caption);
+
+    # Default tags.
+    $datefmt ||= DEFAULTS->{dateformat};
 }
 
 sub load_info {
@@ -368,6 +375,9 @@ sub load_info {
 	    }
 	    elsif ( /^medium\s*(\d+)?/ ) {
 		$medium = $1 || DEFAULTS->{mediumsize};
+	    }
+	    elsif ( /^dateformat\s*(.*)/ ) {
+		$datefmt = $1;
 	    }
 	    elsif ( /^tag\s*(.*)/ ) {
 		$tag = $1;
@@ -665,8 +675,9 @@ sub update_filelist {
 	print STDERR (" -- added\n") if $trace;
 	my $nd = "";
 	if ( $f =~ /^(\d{4})(\d\d)(\d\d)(\d\d)(\d\d)(\d\d)/ ) {
-	    $nd = "$3/$2/$1";
-	    $el->timestamp(timelocal($6,$5,$4,$3,$2-1,$1));
+	    my $tl = timelocal($6,$5,$4,$3,$2-1,$1);
+	    $nd = strftime($datefmt, localtime($tl));
+	    $el->timestamp($tl);
 	}
 	if ( !defined($date) || $nd ne $date ) {
 	    $newinfo .= "\n!tag $nd\n";
@@ -1425,8 +1436,8 @@ sub restyle_exif {
     };
 
     $app->("Date", $v) if $v = $el->DateTime;
-    my $t = $el->ExposureTime;
-    if ( $t <= 0.5 ) {
+    my $t = $el->ExposureTime || 0;
+    if ( $t && $t <= 0.5 ) {
 	$t = "1/".int(0.5 + 1/$t)."s";
     }
     $app->("Exposure",
