@@ -4,8 +4,8 @@ my $RCS_Id = '$Id$ ';
 # Author          : Johan Vromans
 # Created On      : Tue Sep 15 15:59:04 2002
 # Last Modified By: Johan Vromans
-# Last Modified On: Sun Jun 13 17:54:22 2004
-# Update Count    : 1036
+# Last Modified On: Mon Jun 21 22:26:52 2004
+# Update Count    : 1292
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -83,7 +83,7 @@ p.ft  { font-size: 80%; $fontfam; }
 EOD
 my $bodyatts = "text='#000000' link='#000000' vlink='#000000'".
                " alink='#FF0000' bgcolor='$DGREY'";
-my $suffixpat = qr{\.(?:jpe?g|png|gif)}i;
+my $suffixpat = qr{\.(?:jpe?g|png|gif|mpg)}i;
 
 my %capfun = ('c' => \&c_caption,
 	      'f' => \&f_caption,
@@ -93,26 +93,30 @@ my %capfun = ('c' => \&c_caption,
 
 my $br = br();
 
+use constant T_JPG   => 1;
+use constant T_MPG   => 2;
+use constant T_VOICE => 3;
+
 ################ The Process ################
 
 use File::Path;
 use File::Basename;
 use Time::Local;
+use Data::Dumper;
 
 # The list of files, in the order to be processed.
-my @filelist;
+my $filelist = new FileList;
 
 # Storage for image info. Will be cached.
 my $info;
 
 # Individual file properties:
-my %description;		# descriptions
-my %rotate;			# rotate info (degrees clockwise)
-my %tag;			# tag info
 my %seen;			# to keep track
+my %missing;			# to keep track
 
 my %newfiles;			# info for new files
 my $add_src = 0;		# * seen in info
+my $journal;			# create journal
 
 # Load image names and info from the info file, if any.
 load_image_info();
@@ -129,8 +133,14 @@ load_src_files() if $add_src;
 
 # Add image names from the source directory, if needed.
 get_image_names() if $add_new || $add_src;
+if ( %missing ) {
+    foreach ( sort keys %missing ) {
+	warn("$_: Missing\n");
+    }
+    die("Aborted!\n");
+}
 
-my $num_entries = scalar(@filelist);
+my $num_entries = $filelist->tally;
 print STDERR ("Number of entries = $num_entries",
 	      $add_new ? " ($add_new added)" : "",
 	      "\n") if $verbose;
@@ -142,6 +152,9 @@ if ( $clobber ) {
 }
 mkpath(["$dest_dir/large", "$dest_dir/thumbnails", "$dest_dir/icons"], 1);
 mkpath(["$dest_dir/medium"], 1) if $medium;
+
+# Copy the button images over to the target directory.
+add_button_images();
 
 # Copy images in place, rotate if necessary, and create the thumbnails.
 prepare_images();
@@ -177,9 +190,10 @@ for (my $i = $num_entries ; ; $i++ ) {
 print STDERR ("Creating pages for ", $num_entries, " image",
 	      $num_entries == 1 ? "" : "s", "\n") if $verbose;
 my $mod = 0;
-for my $i ( 0 .. $num_entries-1 ) {
-    write_image_page($i, "large") && $mod++;
-    write_image_page($i, "medium") && $mod++ if $medium;
+
+for my $el ( $filelist->entries ) {
+    write_image_page($el, "large") && $mod++;
+    write_image_page($el, "medium") && $mod++ if $medium;
 }
 uptodate("image", $mod) if $verbose;
 
@@ -196,9 +210,6 @@ uptodate("index", $mod) if $verbose;
 for (my $i = $num_indexes ; ; $i++ ) {
     unlink("$dest_dir/index$i.html") or last;
 }
-
-# Copy the button images over to the target directory.
-add_button_images();
 
 exit 0;
 
@@ -222,6 +233,8 @@ sub set_parameter_defaults {
 }
 
 sub load_image_info {
+
+    my %typemap = ( 'p' => T_JPG, 'm' => T_MPG, 'v' => T_VOICE );
 
     # If an info has been supplied, it'd better exist.
     if ( $image_info ) {
@@ -251,13 +264,15 @@ sub load_image_info {
     die("$image_info: $!\n")
       unless open($fh, $image_info);
 
+    my $el;
+    local($/) = $/;
     while ( <$fh> ) {
 	chomp;
 	next if /^\s*#/;
 	next unless /\S/;
 
-	if ( /^\s+/ && $file ) {
-	    $description{$file} .= "\n" . $_;
+	if ( /^\s+/ && $el ) {
+	    $el->descriptions($el->description . "\n" . $_);
 	    next;
 	}
 
@@ -285,6 +300,10 @@ sub load_image_info {
 	    elsif ( /^caption\s*(.*)/ ) {
 		$caption ||= $1;
 	    }
+	    elsif ( /^journal\s*(.*)/ ) {
+		$journal++;
+		# $/ = "";	# para mode
+	    }
 	    else {
 		warn("Unknown control: !$_\n");
 		$err++;
@@ -294,22 +313,46 @@ sub load_image_info {
 	($file, my $a) = split(' ', $_, 2);
 	if ( $file eq "*" ) {
 	    $add_src = 1;
+	    $el = undef;
 	    next;
 	}
+
+	$el = undef, next if $seen{$file};
+
 	my $rotate = 0;
-	if ( $a && $a =~ /^-O:(\d)\s*(.*)/ ) {
-	    $rotate = 90 * ($1 % 4);
-	    $a = $2;
+	my $type = T_JPG;
+	while ( $a && $a =~ /^-(\w):(\S+)\s*(.*)/ ) {
+	    if ( lc($1) eq 'o' ) {
+		$rotate = 90 * ($2 % 4);
+	    }
+	    elsif ( lc($1) eq 't' ) {
+		$type = $typemap{lc($2)}
+		  or warn("$file (info): Illegal type: $2\n");
+	    }
+	    $a = $3;
 	}
-	$description{$file} = $a || "";
-	$rotate{$file} = $rotate;
-	$tag{$file} = $tag if $tag;
-	unless ( $newfiles{$file} || -s "$dest_dir/large/$file" ) {
+	$el = new FileEntry
+	  (dest_name   => $file,
+	   description => $a || "",
+	   orientation => $rotate,
+	   type        => $type);
+	$el->tag($tag) if $tag;
+	if ( $file =~ /^(.+)\.mpg$/i ) {
+	    $el->type(T_MPG);
+	    $el->assoc_name($1."s.jpg"); # associates still image
+	}
+	elsif ( $type == T_VOICE ) {
+	    (my $t = $file) =~ s/\.jpg$/.mp3/i;
+	    $el->assoc_name($t);
+	}
+	unless ( -s "$dest_dir/large/$file" ) {
 	    warn("$file (info): Missing\n");
-	    $err++;
+	    $missing{$file} = $el;
 	}
-	$seen{$file}++;
-	push(@filelist, $file) unless $description{$file} =~ /^--/;
+	else {
+	    $seen{$file} = $el;
+	}
+	$filelist->add($el) unless $el->description =~ /^--/;
     }
     close($fh);
     die("Aborted\n") if $err;
@@ -320,8 +363,23 @@ sub load_src_files {
     opendir($dh, "$dest_dir/large")
       or die("Cannot opendir $dest_dir/large: $!\n");
 
-    foreach my $f ( grep { !/^\./ && /$suffixpat$/ } readdir($dh) ) {
-	$newfiles{$f} = [$f];
+    foreach my $f ( sort grep { !/^\./ && /$suffixpat$/ } readdir($dh) ) {
+	my $el = new FileEntry
+	  (type => T_JPG, orig_name => $f, dest_name => $f);
+	if ( $f =~ /^(.+)\.jpg$/ ) {
+	    my $m = "$1.mp3";
+	    if ( -s "$dest_dir/large/$m" ) {
+		$el->type(T_VOICE);
+		$el->assoc_name($m);
+		warn("$f: Changed to VOICE\n");
+	    }
+	}
+	elsif ( $f =~ /^(.+)\.mpg$/ ) {
+	    warn("$f: Changed to MPG\n");
+	    $el->type(T_MPG);
+	    $el->assoc_name($1."s.jpg");
+	}
+	$newfiles{$f} = $el;
     }
 
     close($dh);
@@ -332,12 +390,18 @@ sub load_new_files {
     opendir($dh, $import_dir)
       or die("Cannot opendir $import_dir: $!\n");
 
-    foreach my $f ( grep { !/^\./ && /$suffixpat$/ } readdir($dh) ) {
+    foreach my $f ( sort grep { !/^\./ && /$suffixpat$/ } readdir($dh) ) {
 	if ( $import_exif ) {
 	    do_exif($f);
 	}
 	else {
-	    $newfiles{$f} = [$f];
+	    my $el = new FileEntry
+	      (type => T_JPG, orig_name => $f, dest_name => $f);
+	    if ( $f =~ /^(.+)\.mpg$/i ) {
+		$el->type(T_MPG);
+		$el->assoc_name($1."s.jpg");
+	    }
+	    $newfiles{$f} = $el;
 	}
     }
 
@@ -346,7 +410,6 @@ sub load_new_files {
 
 sub do_exif {
     my ($file) = @_;
-    my $exif = get_exif("$import_dir/$file");
 
     # Sony DSC-V1 produces the following files:
     #   DSC0nnnn.JPG	still image
@@ -360,47 +423,123 @@ sub do_exif {
     #   MOV0nnnn.MPG	movie
     # Files marked with * have a normal still image associated.
 
-    # We only deal with the normal JPG images.
-    if ( $exif && $file =~ /^dsc0\d+\.jpg$/i ) {
+    my $clashcheck = sub {
+	my ($file, $new, $ext) = @_;
+	$new .= "00";
+	my $clash = 0;
+	while ( $newfiles{"$new.$ext"} && !$missing{"$new.ext"} ) {
+	    print STDERR ("Import $file -> $new.$ext clashes with ",
+			  $newfiles{"$new.$ext"}->dest_name, "\n")
+	      if $verbose;
+	    $clash = 1;
+	    $new++;
+	}
+	print STDERR ("Import $file -> $new.$ext\n") if $verbose && $clash;
+	$new;
+    };
+
+    # Normal still image.
+    if ( $file =~ /^(dsc0)(\d+)\.(jpg)$/i ) {
+	my ($type, $seq, $ext) = ($1, $2, $3);
+	my $exif = get_exif("$import_dir/$file");
 	my $fd = $exif->{"date/time"} || "";
 	if ( $fd =~ /(\d\d\d\d):(\d\d):(\d\d) (\d\d):(\d\d):(\d\d)/ ) {
 	    my $time = timelocal($6,$5,$4,$3,$2-1,$1);
-	    # YYYYMMDDhhmmSS (SS = sequence, not seconds).
-	    # Note: jhead uses YYYYMMDDhhssX, where X is empty, a, b, ...
-	    my $new = "$1$2$3$4$5"."00";
-	    my $clash = 0;
-	    while ( $newfiles{"$new.jpg"} ) {
-		print STDERR ("Import $file -> $new.jpg clashes with ",
-			      $newfiles{"$new.jpg"}->[0], "\n")
-		  if $verbose;
-		$clash = 1;
-		$new++;
-	    }
-	    $new .= ".jpg";
-	    print STDERR ("Import $file -> $new\n") if $verbose && $clash;
-	    my $ii = $info->entry($new);
+	    my $new = $clashcheck->($file, "$1$2$3$4$5", $ext);
+	    my $ii = $info->entry("$new.$ext");
 	    if ( $ii && !$ii->orig_name ) {
 		my $f = "$import_dir/$file";
 		$f =~ s;^\./;;;
 		$ii->orig_name($f);
-		$info->entry($new, $ii);
+		$info->entry("$new.$ext", $ii);
 	    }
 
-	    $newfiles{$new} = [ $file, $time, 0 ];
-
-	    $file = $new;
+	    $newfiles{"$new.$ext"} =
+	      new FileEntry (type => T_JPG, orig_name => $file,
+			     dest_name => "$new.$ext",
+			     timestamp => $time);
+	    $file = "$new.$ext";
 	}
 	else {
 	    warn("$file: Missing or unparsable file date [$fd]\n");
-	    $newfiles{$file} = [ $file, undef, 0 ];
+	    $newfiles{$file} =
+	      new FileEntry (type => T_JPG, orig_name => $file,
+			     dest_name => $file);
 	}
 	if ( ($exif->{orientation}||"") =~ /^rotate (\d+)$/i  ) {
-	    $newfiles{$file}->[2] = $1;
+	    $newfiles{$file}->orientation(int($1/90));
 	}
     }
+
+    # Still image + sound clip.
+    elsif ( $file =~ /^(dsc0)(\d+)\.(mpg)$/i ) {
+	my ($type, $seq, $ext) = ($1, $2, $3);
+	(my $f = $file) =~ s/\.mpg$/.jpg/;
+	my $exif = get_exif("$import_dir/$f");
+	unless ( $exif ) {
+	    warn("$file: Clip without still image?\n");
+	    return;
+	}
+	my $fd = $exif->{"date/time"} || "";
+	if ( $fd =~ /(\d\d\d\d):(\d\d):(\d\d) (\d\d):(\d\d):(\d\d)/ ) {
+	    my $time = timelocal($6,$5,$4,$3,$2-1,$1);
+	    my $new = $clashcheck->($file, "$1$2$3$4$5", $ext);
+	    my $ii = $info->entry("$new.$ext");
+	    if ( $ii && !$ii->orig_name ) {
+		my $f = "$import_dir/$file";
+		$f =~ s;^\./;;;
+		$ii->orig_name($f);
+		$info->entry("$new.$ext", $ii);
+	    }
+
+	    # Since we process alphabetically, the .jpg should already
+	    # be there.
+	    $newfiles{"$new.jpg"}->type(T_VOICE);
+	    $newfiles{"$new.jpg"}->assoc_name("$new.mp3");
+	    $file = "$new.$ext";
+	}
+	else {
+	    warn("$file: Missing or unparsable file date [$fd]\n");
+	    (my $t = $file) =~ s/\.jpg$/.mp3/i;
+	    $newfiles{$file} =
+	      new FileEntry (type => T_VOICE, orig_name => $file,
+			     dest_name => $file,
+			     assoc_name => $t);
+	}
+    }
+
+    # MPEG movie.
+    elsif ( $file =~ /^(mov0)(\d+)\.(mpg)$/i ) {
+	my ($type, $seq, $ext) = ($1, $2, $3);
+	# We have to trust the file date...
+	my $time = (stat("$import_dir/$file"))[9];
+	my @tm = localtime($time);
+	my $new = $clashcheck->($file,
+				sprintf("%04d%02d%02d%02d%02d",
+					1900+$tm[5], 1+$tm[4], @tm[3,2,1]),
+				$ext);
+	my $ii = $info->entry("$new.$ext") || new ImageInfo::Entry;
+	if ( !$ii->orig_name ) {
+	    my $f = "$import_dir/$file";
+	    $f =~ s;^\./;;;
+	    $ii->orig_name($f);
+	}
+
+	$newfiles{"$new.$ext"} =
+	  new FileEntry (type => T_MPG, orig_name => $file,
+			 dest_name => "$new.$ext",
+			 assoc_name => $new."s.jpg",
+			 timestamp => $time);
+	$file = "$new.$ext";
+	$info->entry("$new.$ext", $ii);
+    }
+
+    # Assume ordinary JPEG.
     else {
 	# Copy as is.
-	$newfiles{$file} = [ $file, undef, 0 ];
+	$newfiles{$file} =
+	  new FileEntry (type => T_JPG, orig_name => $file,
+			 dest_name => $file);
     }
 }
 
@@ -414,10 +553,8 @@ sub get_image_names {
     my $t = "";
     foreach my $file ( sort(keys(%newfiles)) ) {
 	next if $seen{$file}++;
-	push(@filelist, $file);
 
-	$description{$file} = "";
-	$rotate{$file}	    = 0;
+	my $el = $newfiles{$file};
 
 	my ($y,$m,$d) = $file =~ /^$pdate\./io;
 	($y,$m,$d) = (0,0,0) unless defined($y);
@@ -433,14 +570,25 @@ sub get_image_names {
 		$t = "";
 	    }
 	}
-	$tag{$file} = $t;
 
-	$newinfo .= "$file " .
-	  ($rotate{$file} ? "-O:$rotate{$file} " : "") . " \n";
-	$add_new++;
+	$el->description("") unless $el->description;
+	$el->orientation(0)  unless $el->orientation;
+	$el->tag($t)         unless $el->tag;
+
+	if ( $missing{$file} ) {
+	    delete $missing{$file};
+	}
+	else {
+	    $filelist->add($el);
+	    $newinfo .= "$file " .
+	      ($el->orientation ? ("-O:".$el->orientation." ") : "") .
+		($el->type == T_VOICE ? "-T:V " : "") .
+		  " \n";
+	    $add_new++;
+	}
     }
 
-    unless ( $newinfo ) {	# nothing to add
+    unless ( $add_new ) {	# nothing to add
 	warn("No new images imported\n") if $verbose;
 	return;
     }
@@ -481,7 +629,8 @@ sub get_image_names {
 
 sub prepare_images {
 
-    foreach my $file ( @filelist ) {
+    foreach my $el ( $filelist->entries ) {
+	my $file = $el->dest_name;
 	print STDERR ("$file: ") if $verbose;
 
 	# Check for directory names, e.g. f01/p01.jpg.
@@ -495,16 +644,23 @@ sub prepare_images {
 	my $w;
 	my $h;
 	my $i_src;
+	my $movie = $el->type == T_MPG;
 
 	# Copy the file into place. Rotate if needed.
-	if ( ($clobber || ! -s $i_large) && $import_dir ) {
-	    $i_src = "$import_dir/" . $newfiles{$file}->[0];
-	    if ( $import_exif ) {
+	if ( ! -s $i_large && $import_dir ) {
+	    $i_src = "$import_dir/" . $newfiles{$file}->orig_name;
+	    if ( $movie ) {
+		copy_mpg($i_src, $i_large,
+			 "$dest_dir/large/".$el->assoc_name,
+			 $newfiles{$file}->timestamp,
+			 $el->orientation);
+	    }
+	    elsif ( $import_exif ) {
 		# Unfortunately, jhead cannot rotate from->to, so
 		# we need to copy first and rotate later.
-		my $time = $newfiles{$file}->[1];
+		my $time = $newfiles{$file}->timestamp;
 
-		if ( $linkthem && !$newfiles{$file}->[2] ) {
+		if ( $linkthem && !$newfiles{$file}->orientation ) {
 		    print STDERR ("link ") if $verbose;
 		    unless ( link($i_src, $i_large) == 1 ) {
 			unlink($i_large); # just in case
@@ -516,7 +672,7 @@ sub prepare_images {
 		    print STDERR ("copy ") if $verbose;
 		    copy($i_src, $i_large, $time);
 		}
-		if ( $newfiles{$file}->[2] ) {
+		if ( $newfiles{$file}->orientation ) {
 		    print STDERR ("rotate ") if $verbose;
 		    my $cmd = "jhead -autorot ".squote($i_large);
 		    my $t = `$cmd 2>&1`;
@@ -525,12 +681,12 @@ sub prepare_images {
 		}
 		print STDERR ("[", bytes(-s $i_large), "] ") if $verbose > 1;
 	    }
-	    elsif ( $rotate{$file} ) {
+	    elsif ( $el->orientation ) {
 		print STDERR ("rotate ") if $verbose;
 		my $t = convert
 		  ($i_src, $i_large,
 		   $verbose ? "-verbose" : (),
-		   "-rotate", "$rotate{$file}");
+		   "-rotate", 90 * $el->orientation);
 		print STDERR ("[", $t, "] ") if $verbose;
 		($w, $h) = $t =~ /^(\d+)x(\d+)/ unless $w && $h;
 	    }
@@ -539,6 +695,19 @@ sub prepare_images {
 		copy($i_src, $i_large);
 		print STDERR ("[", bytes(-s $i_large), "] ") if $verbose > 1;
 	    }
+	    if ( $el->type == T_VOICE ) {
+		copy_voice($i_src, "$dest_dir/large/".$el->assoc_name,
+			   $newfiles{$file}->timestamp);
+	    }
+	}
+	if ( $movie ) {
+	    $info->entry($file,
+			 new ImageInfo::Entry
+			 (width => 0, height => 0,
+			  large_size => -s $i_large));
+	    $movie = $file;
+	    $file = $el->assoc_name;
+	    $i_large = "$dest_dir/large/$file";
 	}
 
 	my $i_medium  = "$dest_dir/medium/$file";
@@ -576,6 +745,18 @@ sub prepare_images {
 	    $ii->medium_size(-s $i_medium) if $medium;
 	    $ii->orig_name($i_src) if $i_src;
 	}
+	elsif ( $movie ) {
+	    print STDERR ("size ") if $verbose;
+	    $ii = new ImageInfo::Entry (large_size => -s $i_large);
+
+	    print STDERR ("(void) ") if $verbose;
+	    $ii->width(0);
+	    $ii->height(0);
+	    $ii->medium_size(0);
+	    $ii->large_size(-s "$dest_dir/large/$movie");
+	    $ii->orig_name($i_src) if $i_src;
+	    print STDERR ($ii->tostr, " ") if $verbose > 1;
+	}
 	else {
 	    print STDERR ("size ") if $verbose;
 	    $ii = new ImageInfo::Entry (large_size => -s $i_large);
@@ -612,18 +793,20 @@ sub button($$;$$);
 sub ixname($);
 
 sub write_image_page {
-    my ($i, $dir) = @_;
-    my $file = $filelist[$i];
+    my ($el, $dir) = @_;
+    my $i = $el->seq - 1;
+    my $file = $el->dest_name;
 
     # Try movie.
-    my $movie = $file;
-    $movie =~ s/\.jpg$/.mpg/;
-    $movie = 0 unless -s "large/$movie";
+    my $movie = $el->type == T_MPG;
+    if ( $movie ) {
+	$file = $el->assoc_name;
+    }
 
     my $tt = "$album_title: Image " . ($i+1);
     $tt .= " of " . $num_entries if $num_entries > 1;
     $tt = html($tt);
-    my $it = html($description{$file}) || $tt;
+    my $it = html($el->description) || $tt;
 
     my $b = join("$br\n",
 		 ($dir eq "large" && $medium) ?
@@ -634,10 +817,20 @@ sub write_image_page {
 		 button("next",   $htmllist[$i+1],                         1, $i < $num_entries-1),
 		 button("last",   $htmllist[-1],                           1, $i < $num_entries-1));
 
+    if ( $journal ) {
+	$b .= "$br\n" .
+	  button("journal", "../journal/index.html", 1, 1);
+    }
+    if ( $el->type == T_VOICE ) {
+	my $sound = $el->assoc_name;
+	$b .= "$br\n" .
+	  button("sound", "../large/$sound", 1, 1);
+    }
+
     my $imglink;
     if ( $dir eq "medium" ) {
 	if ( $movie ) {
-	    $imglink = "<a href='../large/$movie'>" .
+	    $imglink = "<a href='../large/" . $el->dest_name . "'>" .
 	      img($file, alt => "[Click to play movie]", border => 2) .
 		"</a>";
 	}
@@ -649,7 +842,7 @@ sub write_image_page {
     }
     else {
 	if ( $movie ) {
-	    $imglink = "<a href='$movie'>" .
+	    $imglink = "<a href='" . $el->dest_name . "'>" .
 	      img($file, alt => "[Click to play movie]", border => 2) .
 		"</a>";
 	}
@@ -658,8 +851,10 @@ sub write_image_page {
 	}
     }
 
-    my $auxright = html($file . " (" . size_info($file) . ")");
-    my $auxleft  = html($tag{$file} || "");
+    my $auxright = html($el->dest_name);
+    my $s = size_info($el);
+    $auxright .= " ($s)" if $s;
+    my $auxleft  = html($el->tag || "");
 
     update_if_needed("$dest_dir/$dir/".$htmllist[$i], <<EOD);
 <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
@@ -669,6 +864,12 @@ sub write_image_page {
     <style type='text/css'>
       <!--
       @{[indent($css, 6)]}
+      a.info{position: relative;z-index:24;background-color:#ccc; color:#000; text-decoration:none}
+      a.info:hover{z-index:25;background-color: #ff0}
+      a.info span{display: none}
+      a.info:hover span{display:block;
+	  position:absolute; top:2em;left:2em; width:15em;
+	  border:1px solid #0cf; background-color:#cff; color:#000;text-align: center}
       -->
     </style>
   </head>
@@ -730,6 +931,10 @@ sub write_index_page {
 	    }
 	}
     }
+    if ( $journal ) {
+	$b .= "$br\n" if $b;
+	$b .= button("journal", "journal/index.html", 0, 1);
+    }
 
     # Construct the actual index part.
     my $cc = "<table border='2' cellpadding='3' cellspacing='3'" .
@@ -743,19 +948,21 @@ sub write_index_page {
 	    for ( my $j = 0; $j < $index_columns; $j++ ) {
 		my $this = $first_in_row + $j;
 		if ( $this < $num_entries ) {
-		    my $file = $filelist[$this];
+		    my $el = $filelist->byseq($this+1);
+		    my $file = $el->dest_name;
+		    my $img = $el->type == T_MPG ? $el->assoc_name : $file;
 		    my $base = $medium ? "medium/" : "large/";
 		    $base .= $htmllist[$this];
 		    $cc .= "    <td align='center' valign='bottom'>\n".
 			  "      <table border='0' cellpadding='0' cellspacing='0' bgcolor='$LGREY'>\n".
 			  "        <tr>\n".
 			  "          <td align='center'>\n".
-			  "            <a href='$base'>".img("thumbnails/$file", alt => "[Click for bigger image]", border => 0)."</a>\n".
+			  "            <a href='$base'>".img("thumbnails/$img", alt => "[Click for bigger image]", border => 0)."</a>\n".
 			  "          </td>\n".
 			  "        </tr>\n".
 			  "        <tr>\n".
 			  "          <td align='center'>\n".
-			  "            <p class='ft'>" . join($br, map { $capfun{$_}->($file) } split(//, $caption)) . "</p>\n".
+			  "            <p class='ft'>" . join($br, map { $capfun{$_}->($el) } split(//, $caption)) . "</p>\n".
 			  "          </td>\n".
 			  "        </tr>\n".
 			  "      </table>\n".
@@ -818,7 +1025,7 @@ sub button($$;$$) {
     $level = "../" x $level;
     my $b = img("${level}icons/$tag.png", align => "top",
 		border => 0, alt => "[$Tag]");
-    $active ? "<a href='$link' alt='[$Tag]'>$b</a>" : $b;
+    $active ? "<a class='info' href='$link' alt='[$Tag]'>$b</a>" : $b;
 }
 
 # These are to aid XHTML compliancy.
@@ -867,23 +1074,23 @@ sub img {
 #### Caption helpers.
 
 sub f_caption {
-    my ($file) = @_;
-    html($file);
+    my ($el) = @_;
+    html($el->dest_name);
 }
 
 sub s_caption {
-    my ($file) = @_;
-    size_info($file, $medium);
+    my ($el) = @_;
+    size_info($el, $medium);
 }
 
 sub t_caption {
-    my ($file) = @_;
-    $tag{$file} ? html($tag{$file}) : "";
+    my ($el) = @_;
+    $el->tag  ? html($el->tag) : "";
 }
 
 sub c_caption {
-    my ($file) = @_;
-    my $t = $description{$file} || "";
+    my ($el) = @_;
+    my $t = $el->description || "";
     $t =~ s/\n.*//;
     html($t);
 }
@@ -994,10 +1201,17 @@ sub bytes {
 }
 
 sub size_info {
-    my ($file, $med) = @_;
-    my $ii = $info->entry($file);
-    $ii->width . "x" . $ii->height . ", " .
-      bytes($med ? $ii->medium_size : $ii->large_size);
+    my ($el, $med) = @_;
+    my $ii = $info->entry($el->dest_name);
+    return "" unless $ii;
+    my $ret = "";
+    $ret .= $ii->width . "x" . $ii->height if $ii->width;
+    for ( $med ? $ii->medium_size : $ii->large_size ) {
+	next unless $_;
+	$ret .= "," if $ret;
+	$ret .= bytes($_);
+    }
+    $ret;
 }
 
 sub uptodate {
@@ -1054,6 +1268,49 @@ sub copy {
     utime($time, $time, $new);
 }
 
+sub copy_mpg {
+    my ($orig, $new, $still, $time, $rotate) = @_;
+    $time = (stat($orig))[9] unless defined($time);
+
+    print STDERR ($rotate ? "copy/rotate " : "copy ") if $verbose;
+
+    # I'm not sure what this does. The resultant file is about 10% of
+    # the original, without missing something...
+    my $cmd = "mencoder ".
+      "-of mpeg -ovc lavc -lavcopts vcodec=mpeg1video -oac copy ".
+	($rotate ? "-vop rotate=".int($rotate/90)." " : "") .
+	  squote($orig) . " -o ". squote($new);
+    warn("\n+ $cmd\n") if $verbose > 1;
+
+    my $res = `$cmd 2>&1`;
+    die("${res}Aborted\n") if $?;
+
+    utime($time, $time, $new);
+    print STDERR ("still ") if $verbose;
+
+    unless ( -s $still ) {
+	copy("icons/movie.jpg", $still, $time);
+    }
+}
+
+sub copy_voice {
+    my ($orig, $new, $time) = @_;
+    $time = (stat($orig))[9] unless defined($time);
+    $orig =~ s/\.\w+$/.mpg/;
+    return if -s $new;
+
+    print STDERR ("sound ") if $verbose;
+    # This will produce an MP2 file. Good enough for now...
+    my $cmd = "mplayer -vo null ".
+      "-dumpaudio -dumpfile " . squote($new) . " " . squote($orig);
+    warn("\n+ $cmd\n") if $verbose > 1;
+    my $res = `$cmd 2>&1`;
+    die("${res}Aborted\n") if $?;
+    die("${res}Aborted\n") unless -s $new;
+
+    utime($time, $time, $new);
+}
+
 sub get_exif {
     my ($file) = @_;
 
@@ -1072,6 +1329,8 @@ sub get_exif {
 	$h{lc($1)} = $2 if /^(.*?): (.*)/;
     }
     close($p) or die("$file: $!\n");
+
+    return undef if exists($h{"not jpeg"});
 
     $h{exposure} ||= "manual";
 
@@ -1169,6 +1428,63 @@ EndOfUsage
 
 ################ Modules ################
 
+package FileEntry;
+
+use Class::Struct "FileEntry" =>
+  [ type	 => '$',	#  T_JPG, T_MPG, ...
+    seq          => '$',	#  1, 2, ...
+    dest_name	 => '$',	#  20040618120400.jpg
+    orig_name	 => '$',	#  dsc00058.jpg, if any
+    assoc_name	 => '$',	#  20040618120400.mp3 (for a T_VOICE)
+    timestamp    => '$',	#  1087556744
+    orientation  => '$',	#  degrees
+    tag		 => '$',	#  18 jun
+    description  => '$',	#  Nice image
+    annotation   => '$',	#  When walking through this beautiful landscape ...
+  ];
+
+sub html_name {
+    my ($self) = @_;
+    sprintf("img%04d.html", $self->seq);
+}
+
+sub clone {
+    my ($self) = @_;
+    bless [ @{$self} ], ref($self);
+}
+
+package FileList;
+
+use Class::Struct "FileList" =>
+  [ _data        => '$',
+  ];
+
+sub add {
+    my ($self, $el) = @_;
+    my $data = $self->_data;
+    $self->_data($data = []) unless $data;
+    $el->seq(@$data+1);
+    push(@$data, $el);
+    $self;
+}
+
+sub entries {
+    my ($self) = @_;
+    wantarray ? @{$self->_data} : $self->_data;
+}
+
+sub tally {
+    my ($self) = @_;
+    $self->_data ? scalar(@{$self->_data}) : 0;
+}
+
+sub byseq {
+    my ($self, $seq) = @_;
+    $self->_data->[$seq-1];
+}
+
+#### Cache maintenance.
+
 package ImageInfo;
 
 sub new {
@@ -1196,9 +1512,10 @@ sub load {
 sub store {
     my ($self, $file) = @_;
     my $info = $self->{info};
-    use Data::Dumper;
     $Data::Dumper::Indent = 1;
     $Data::Dumper::Sortkeys = 1;
+    $Data::Dumper::Sortkeys = 1;
+    $Data::Dumper::Purity = 1;
     my $cache = do { local *C; *C };
     open($cache, ">$file")
       and print $cache (Data::Dumper->Dump([$info],[qw(info)]), "\n1;\n")
@@ -1244,176 +1561,289 @@ sub ImageInfo::Entry::tostr {
 package main;
 
 __END__
+
 begin 644 icons/first-gr.png
-MB5!.1PT*&@H````-24A$4@```"`````@"`````!6$24H```!YDE$051XG&63
-MP6O:8!C&?_T:Z)#M@Q2J+%1HAP;MXAS"H#WDD)T\#GK99=#=]^?T/^C%VZY>
-MN@P"11@$K1^U6&&',46%.@(+R&3L8!*2[#G]>)_GS9>$[]GY2JRI6LXFFU!6
-M]+)E)-.=.*`&7I!,I=VTLH&IZP4%RZP7=5:+ASL52MLQ4@'5]:7MF,D3QJX7
-MM-I6$E"7FUK[E+1Z75]^LH#="U"7F[./M8S/8?VO&KS48?>"Z>?%V8<#<GKZ
-MXH_Z=?0,`:Y?>[^?]V'_7<MW0:`\V2Y%PR$I*+6E]QW!(+#C]QN.AFDXM8,O
-MB*E7<!(_!T[AVU2HP#+C<3T'9FVCQ)*3Z.?$XP3@5;@4,ZK;M7Z]D06@RDQ,
-M*$9K#3(`4&0B-NC`.%X;I_9!)Q`A`&OVR$*D@B:#50D:>WU,2`$`*S2MXB]*
-M@(E:-T@#P(**IO,0&?WHXV,`1NBBS%UDO![E`,:4-4NJ\?90<QTG8A@K:0G#
-M#MTHWZCGP`UM0]"4;B\Q&FGH>;*)P++#[CQ.D()Y-[`M!#@MO_/(?WKL^"T'
-M!!CG\OIJGO?G5]>R;6QOM7[T^^;GD\.,W^O<;*^]!F"!?^_DBW-^#+GJG52W
-MU;N]SU>/?'G?O#V.,`G`5/U838*"5GE^D*K_/Q0XR_]A^:_J`````$E%3D2N
-#0F""
+MB5!.1PT*&@H````-24A$4@```"$````A"`,```!@.C)=````8U!,5$4```"R
+MK[*QK[&?FY^5E95U=W4O+R\I*2DF)R8A(2'.SL[*RLK#PL.^PKZ\O+R[NKL'
+M!P>XMKBTN+2JJJJHK*BIIJF>FIZ6EI8P,C`H*"C-S<W+R\O"P<*_O[^[O[N[
+MN;NUN;4M,E&?````STE$051XG(W4VPZ#(`P&X.J&HF[.TSK4J;S_4T[*C$9I
+MX+]I(E\\0"L\?8%_G;MSYJ/00F9P3B:%WD2C`*KDG`I`-59H!6D[Y>=,GQ24
+M)B&@+R[K)D4/@H2$U@GR_`[2B#FKKH^P*:WH(#E<'&T91D[4+UOC+R-J7*A&
+MR(@:20PQ,F(%1@P1,L*`51!P"@*K(.`2%N`2(R,>-[OR1D[X[Q'P'@'?$K`?
+M`7L:<"X!9^ON#W^/^?LTH-=I7LIK]GFAF7-FFSF:6U?VN0W[._#Y`1,--!>D
+/,0GZ`````$E%3D2N0F""
 `
 end
 begin 644 icons/first.png
-MB5!.1PT*&@H````-24A$4@```"`````@"`````!6$24H```!X4E$051XG(63
-M/VO;0!C&GYPSI"8<5FAM7(E6'N(_<,4@FC]@M'GPGJ%+*?X>6;KT"_0C9$F'
-M0J&3APP%(3`-%18],"H!R48:3$T%1Z(,]=`ATDD*F+[3P_/[Z3C$O3O?D$W@
-MK9>+3:(I#;6CRW8G$[CKAK+5^GU6%@+;$E76:ZD*XLB?\X2:`[T@\*OOU!PP
-M>0*W+7$\9%+@%Z$Q.D5QIA-'>\<`5,8`OPB'XVZ)0^O=S_QF':B,$7SUAF^?
-MX='L'_[]<?>\!@+8CO'F(*T_0H:#@>'8P"ZX14>-M#Z/"X'=WEA';0)7F-G]
-MSG^*8C@UQ35(8%4'DH.6PJ#J!L03C$D.40J,A1Y9HY=ST&(`>EB3)5HY+P4`
-M+2S)`NI6#A4+LH&RE4/!AB2/?V%Y$J(A!O#A55K(``"(H1$%$;8:$132@(^M
-MAH\&43''5F,.E70TSG,@2@;G6H?HW<3./Z59$`!@)WV=X)A:T\PP1*92`%.+
-M]D'`3#%9I<9[,U.[P&HB3(;*&#1V[@^?/(#7V?5.\.?2-D8U5,:H47]VJ^^C
-M/*O+*^VL_?"JZTU_%NUI)3[]9.?/'O7FG>/^WJM+S+]\#HRS?''^OWH`?EU;
-K0IY`S:-V&J4`!%ZTBL/J[LL73POK_P\K=,7]/+GO5`````!)14Y$KD)@@@``
+MB5!.1PT*&@H````-24A$4@```"$````A"`,```!@.C)=````;U!,5$4```"5
+ME95U=W5O;V]555534U,]/3T[.SLO+R\I*2DF)R8A(2'.SL[,S,S*RLJ^PKZ\
+MO+P'!P>TN+0#`P.JJJJHK*BBHJ*@H*">GIZ6EI9P<'!86%A45%0P,C`H*"C-
+MS<W+R\N_O[^[O[NUN;4"`@)5ZT`7````T$E$051XG(W4V0Z",!`%T"N([`@(
+M+L@BR_]_HW9&`BEMVOLR"9Q`:6?`U13\ZU3+F?9B=J(8<N+(F5=1=D`1R"F`
+MKF0Q=PBK,9$SOD)T,PD'?7:X+Y+U<$A$J)0@24Z(A)CBXO@*3LZB1K"[^."2
+MWG7"O7#UWAK1+#[5%FHQN(`0J0>-^`$A/F=H1`,2!)3"74@,+32"`7P&"O%D
+M@!MTPOP,BW58?(O%?ECLJ?E<;,Y6W1_F'C/WJ46OT[SDQVSS0C.GS#IS-+>J
+<;'-K]W?0YPL&.S)%W$I>4`````!)14Y$KD)@@@``
 `
 end
 begin 644 icons/index.png
-MB5!.1PT*&@H````-24A$4@```"`````@"`````!6$24H```"&4E$051XG'63
-M06L341#'?WV)@J$\:JD$#*0)2&+A+8$%2R#L02(8*.82#[T(N?@I<MYOX&<H
-M'NQE1<C!H+!$0@LK)0]B>FD2B-!2C*RX@O3@87>3C>@<EN']?S-OWNS,QD=B
-MFXRO9].;0.[F=\J%Y>E&#.@S]R:(3Z554>O`I._ZF8=&,7>7Q?QBI`-IU0H)
-M0+\_D58M#@+==_W])PH@#:#?#LU&E94I5>F>_$)%@'[EUP^SH=3!!J!:?-T#
-M!:DV$V=2?W$OTH=7N@[`9NGKYY_WMQ#0]\S#[5B'82?TMU^:7A\$VI6-[$I?
-M$=F&=,\1G/E6-:FOB*KEGY*>N)E:5+L)##%"!Z#VP:VEQ_Y^^/Z.V6I!$QLX
-M]NSPM7HLKMF+\GNK/GC1+7O!M9A13-[O.,DZBLS$E%Q"I]DD0>28;CP(WMQ>
-MQ3?C#V#8_'Z>$<M?_&\+A&0!M@$8CH,##HYCA`E8(,4N<R(B622&#<S9%7DN
-M2!#-9D+G@KS8841(Q/T#S%!GQ$ZZ++56`#;''D`'S%8+`*UE.5VPWO55W#^`
-M(1#J](.#@J`BW0$DZXCR,W!E!8&R_.YEDHCURZYO*5)MY,(+2G<`J.NKI?[M
-MZ)/9V"+59DM^'_PH;D9$-HX_ZAD'I7"JU9S>(AK[2&;0]8QG\=CS-'?+^_+X
-MK\4Q&PK65T_M_7?U@/-3UU]FD-:C4N0N@6C]_4QZ??W_`!TTUX71'EU>````
-)`$E%3D2N0F""
+MB5!.1PT*&@H````-24A$4@```"$````A"`,```!@.C)=````=5!,5$4```"M
+MK:VKJZN5E963DY-U=W4[.SLW-S<O+R\I*2DF)R8A(2$='1W.SL[,S,S*RLK(
+MR,@5%14/#P^^PKZ\O+P'!P>TN+2JJJJHK*B6EI9\?'QJ:FI86%@P,C`H*"@B
+M(B+-S<W'Q\?!P<&_O[^[O[L&!@:UN;44R\/V````R4E$051XG,V4VQ*"(!1%
+M3R:F&&GE+14U-?[_$QN.D0YJV%.M%_:,:U28LX&K"7BM?:;33PU!J`\Z/B5"
+M&0D'B%V=&(`G@R$X>&G'=+J;!UR@0:`*9L\E004$#0II$RGNK%6Q97N@TNC]
+MN`O?_Y<S1T6'18.1@<M">'B2,QJUC+5N'/'+!1J6C-9OC$LA.:!1RECJAFFW
+MIURQ8[:*]M18X:MW;#EU\U[^Y=0_S8=YQLQSNF'6L2_1G+$OV+E%5.>PMTN,
+;O=UV.ZSS!'/7.?2F!-OE`````$E%3D2N0F""
+`
+end
+begin 644 icons/journal.png
+MB5!.1PT*&@H````-24A$4@```"$````A"`,```!@.C)=````L5!,5$4```"Q
+ML;&OKZ^GIZ>EI:6CHZ.AH:&?GY^5E963DY.-C8V'AX>!@8%U=W5'1T<U-34O
+M+R\I*2DF)R8C(R,A(2'.SL[,S,S*RLK(R,C$Q,3"PL*^PKZ^OKZ\O+P'!P>V
+MMK:TN+2TM+2JJJJHK*B@H*"8F)B6EI:,C(R`@(!\?'QV=G9P<'!L;&QJ:FI>
+M7EY86%A`0$`P,C`H*"C-S<W'Q\?%Q<7!P<&_O[\,#`R[O[NUN;4S?"*<```!
+M$DE$051XG)64VU*#0!!$QVLT"B8L+685$G-1HR9*U"#\_X?)#BS@LDIR7H8J
+M3E%=4]/0;1=4SG1FDC:-S/%\,O$])]/&)":*!B8143PIC"RFX32!2?(PI#AC
+MPZ%-T'JO"#;DL.'1%)_+G$O@=%EPS\H9><I(_2A!J+)]`^LR9I^-L#!F-`"^
+M5CDOP&)5<-@R[#2-F[[F)/^0FEO#"*M%N8!0\]@P1F^:)^!5S?'>.8(><P3<
+M]32!+8<`+JI$X2]#NLP:F+L:N6>.ZX,FTF+4^U`\6XSM59-'B]&=XT,RHWPS
+MLGKLV(<PC$0P[\"YJ!ZUP3?V;PZ^4SOEG>YPZ]R7L$W=%^Z<%=TY[JV-NK>[
+9_1W^Y@<C5%E2*SL"I@````!)14Y$KD)@@@``
 `
 end
 begin 644 icons/last-gr.png
-MB5!.1PT*&@H````-24A$4@```"`````@"`````!6$24H```",4E$051XG&V3
-MSVO:8!C'/WVK2Z<CQ"*V="VM8$-TL19A8`\Y=!>]][+;NOO^G[%C;SUL=WLH
-M#@*CEV5U#35HP<$8J(B&C`E.&3OD1ZO;<WKS?#YO>-^'][ORD;"&G=OQW7PB
-MYU*%W:VHNQ(*=M/THJYLE/1%87AA>@E=S6?6&0VZ7^V);%33#P2[;LG&L1K]
-MH=TPO7)-CX0O[^9:K<+#NJI;\AL=6#T%^^W\Z+6VP-G._[&;SU*P>LKP_>#H
-M59JE>I+[;;MJ`@$7EO926>:@5,O6!0AL4ZYM`#<!F'V;^8N]FFS:")J>40%N
-M6H'1[3B!43&\)F)H)H[][\"8CGNA<9PPAZ+CZ<']\[XAK:V%AJIY'7'+07@L
-MWYBB;/8<%X`RM[$QF5`HTI)4)-C!E9)Q(,LX=D>6>^,:=0K)'?I3+0X9[F)S
-MUGEH3$%"27[N22JLXXG)PG0D@"F0#!H)(3.ZY^WKPR+`S'%W,\"(F,@QB/B-
-M<Z@"TB_'W<@JP("<2-&-]K<T%21&W]V-;!R@14H4L$+A.J_Z)^@IP<W:%,2N
-M[+2#4>>+_N+GID8<H&W+^V++F#2"0?I<>KRY$X\#T)@8Z1@ELU&J0)%@?^;1
-M4Q]S9<HE!+HQJ?<AY"A[`>_7/4-'0+5LG;O\4^ZY5:Z"@/2)?'G67^;]LTNY
-MEO9?=6JOZ?Q8VU[@5^>?_&?O!Z?[X3_!.<G"4O0.LG[T+&<Y>BR']_F+\)5$
-A0A!_+Q'+I0K[]SGZ"\%5UFJUEF59`````$E%3D2N0F""
+MB5!.1PT*&@H````-24A$4@```"$````A"`,```!@.C)=````=5!,5$4```"O
+MK:^LJ:REH:6AG:&?FY^5E95U=W4O+R\I*2DF)R8A(2'.SL[,S,S*RLJ^PKZ_
+MOK^\O+P'!P>TN+2TLK2SL+.JJJJHK*BGI*>BGJ*AGJ&@G*">FIZ6EI8P,C`H
+M*"C+R\O$P\3`O\"_O[^_O;^[O[NUN;7'-O7)````UDE$051XG)V4ZQ*"(!!&
+M-\M0-/-26DE>4GG_1RP7S09AUNG\V1'/`,)^PID"ICH4.L.O(1D/0"?@3,Y&
+M5@&DGDX*4&7*D!7X>1?J=$\?*HD&@SI:O1^):F!H<,B-0A@>@8_&$*3K)12)
+M,@KP\+&9AANK<8G5\*ZU&5?WA=6YMS9#N#B+(PZMS1!NC\9761NB[-&8%8,A
+MRA@-\6AMQF<O:"C%:(CRINK^].\<Y#[(;R'/@SQ3\E[HN[7W!]UC=)]NZ'7,
+H2[)FR0MFSLB<.<RMB26WV_X.=M[O[#PGJ]"<S`````!)14Y$KD)@@@``
 `
 end
 begin 644 icons/last.png
-MB5!.1PT*&@H````-24A$4@```"`````@"`````!6$24H```!XTE$051XG(63
-M,6O;0!S%7\X=4A,.*[0VKD0K#XEMN&(0;6H0VCQXS]"E%'^/+EWZ!?H1LJ1#
-MH=#)0X:"$)B$&IL>N,HBV5B#J:G@:)2A'CKD=)("HF_1X_V>_IS$_?>^(57H
-M;U?+76)H#;UMJG0O+?#Y?*U2H]=CQ4+HN:+*NBU=0QP%"YY0QS9S!7YQ21V;
-MJ0G<<\7)@*D"/UM;PS[RFHRGQEL&H#("^-EZ,.H4.(SN[2QHUH'*".%7?_#F
-M,>[IX.CO]YLG-1#`FUJO#_$Q):DYM*VI!Q!PEPX;P,]W$BC#AM2]!L%<.'T`
-MXH<$RJ#OB"N0T*W:`$`A@3*`79V'Q!>,`8"`!,H`C*U]LD57OBB!,@"ZV)(5
-M6MFWJ>'2M+`B2^@H;>A8DATTE#8T[$AR_Q<6E1`#<3YX_B%O8AA$0U3*$4$C
-M#02E'`$:1,>BE&,!G;0-S@NQR#CG1IN8G<2[RV5,LT%>TC,)3J@[`4`M&0O%
-M)R[M@8`Y8KP!.N]E[*1\,Q8.0V4$&D]OCQZ^2D_Z0CY_GWO6L(;*"#4:S/Z8
-M!RAJ<WYAG![?W>IZ,YA%^T:!3SYYV;5'O7DSG?_:KRO,OWP.K=-L<?Z_>@"N
-MKURA)E#GY;&TJ@"$?K2)U]4'SYX^RJW_/Y;\Q-+/0K%7`````$E%3D2N0F""
+MB5!.1PT*&@H````-24A$4@```"$````A"`,```!@.C)=````;U!,5$4```"5
+ME95U=W5O;V]555534U,]/3T[.SLO+R\I*2DF)R8A(2'.SL[,S,S*RLJ^PKZ\
+MO+P'!P>TN+0#`P.JJJJHK*BBHJ*@H*">GIZ6EI9P<'!86%A45%0P,C`H*"C-
+MS<W+R\N_O[^[O[NUN;4"`@)5ZT`7````T$E$051XG)V4V0Z",!!%KR`"!1$0
+M7)!%EO__1M.I!`.=#/&\3&A/*+1SBXL$OG4HUPR_QNBH"&LBY8RSD3=`%JS)
+M@"8WQM@@+/IX3?\,T8QD.&B3S;PF:>&0H5!8A3@^0&ECB++M$H;4&"4">KR=
+MS?"=-5Z>&3ZYK(&:JC]5K`%/+^0#;L<9.+[)@,L:6M$&*M9`W9$QN:R!F@RC
+MV`U<39D>?[]#_`[Q7\3]$/=4/!?Q;/G^D'M,[M,=O4YY2;<L>:',69DS1[FU
+<L>1VW^W`\P$(+S)%*AO?S0````!)14Y$KD)@@@``
 `
 end
 begin 644 icons/medium.png
-MB5!.1PT*&@H````-24A$4@```"`````@"`````!6$24H```!STE$051XG(63
-M,6O;0!3'_SE["":(*+06KHY6'AK'<&`0)!B$-@_>,V0IQ9\@7R#?(A\A2QLH
-M%#IYR%`0`M-08>$#HRR2C40Q,1$<C3K40X<V\DEVZ)ONWN_WWG'PWLY7/$44
-M+.>S549536\9>7;G2>"^'^=9VNFPHA"YCJBQ=E-7D2;AE&>*;1F2P&^^*;;%
-M\@[<=<1)C^4"OXK-?A=RC(8>?<\`5`8`OXI[@Z,"!VW_&H>-.E`9(/H2]-Z]
-M1"GVWO[^_OAJ'U7`]<RS@S('#JP?7L,``7>4OK;)`=97G#L0^,+N;N-`UQ:W
-M()%3LZ3DQ85TL6I^1`+!F,0G$\E@+`[($FV9`[+1QI+,T2SP@M'$G,R@%[EL
-MZ)B1%=02EPP5*Y*5ZXL],D*1;O#<2$&K:IQH`"Y3*I2U(-++<P`)U*HV"4T`
-MY]@6(32B8[J5`0"FT$F+<OX<YYRVB'&4N<\);M8Q"$X49[2=CQRE`P)FB^%B
-M&U\,A<U``,OTKA\V^<.U9UI`98!])1S_-/;*]1]NZ.GAWZFN-\)QLDN+[W]T
-MUV./>N/1\^]WZ^O_??X4F:?KQ?G_Z@&XNW5$WD&QCP__'7,!B()DD<:UZIO7
-9+Z3U_P/BQ[<`/5AEWP````!)14Y$KD)@@@``
+MB5!.1PT*&@H````-24A$4@```"$````A"`,```!@.C)=````:5!,5$4```"G
+MIZ>5E96'AX=Y>7EU=W5U=74O+R\I*2DF)R8A(2'.SL[*RLH1$1$/#P^^PKZ\
+MO+P'!P>TN+0#`P,!`0&JJJJHK*BFIJ:6EI9V=G9T='0P,C`H*"@0$!#!P<&_
+MO[^[O[NUN;4"`@+$?8!#````P$E$051XG,74[0Z"(!B&X:</5-1,+;7$$CK_
+M@TPAAP&&6VO=?_SAM>GD?<71%UY77IOQN1"$QC"+*1&3*!E0A&8%P$HE!$-4
+M]8E9?XG`A!0$76K='TL[$"DH*B=(DBWH*'A<V(]0Y4K4"!?`7T7O$^VA^2S:
+M!V;$(=K3<&2:V"(XRU.]-4LBF`X^:]PBT+.1;5QB>$F=>I=W<=]?Y^V^^:8_
+M$OX9\\_IBEF7^Y+;Z7V1.^=LVCFYMZ[TWJ[[.RSW!!/T,=8!(V$7`````$E%
+&3D2N0F""
 `
 end
 begin 644 icons/next-gr.png
-MB5!.1PT*&@H````-24A$4@```"`````@"`````!6$24H```!TTE$051XG&63
-MOVO;0!S%7RX"%]$>*!"'BAB28ALK/=?%$$B&&]1)8R%+ET*Z]\_)?Y#%6U<O
-MJ0J"8"@(NSGBX!@RE,K8AK@<5%`J2@=7Q]WY35_>^]P/CGM;7U`J$\O9M,AI
-MW:LQ7[E;)2!&B50NY1UF`EF<2)<U@ZJ'U>+^5N24A[X&B'Y*>=A4.TSB1'8C
-MI@!Q4;2B$^@:]%/ZD0'8/@?$17'ZH67DV`_^BM%+#]@^1_9I<?I^%Y:>OO@C
-M?AX\`P'BM/5NQ\Z!G;?=-`8(1$*CO=*]T8B]B"8/(!A)KNYW,]:)$RX_@V2)
-M&VJF083NUXP(R9J:%^A$LU4(LL21<3>#>)4OG1D:!M#&N**V;&#F3%&%10Q1
-M$E5,G0(>-HC?[?7H09(<&ZJ@HF:74*RL?#)\71ZQ@D/J6%BY4#D6J!,/]]9Z
-M[5W&\$@-MP8P#+1WFZ!&&!43+1\';?TTRHC/\U@#]!QQSGV"#HT'I=,V\D%"
-M.R!@/._/%:'E\[[D#`0(NVGO$1MZ[*7=$""`?T:O+N=V/K^\HI&__M7>P:_K
-M'T_VC7S0NUY_>P<`&)#>A79QS@X!JWI'C77UOMW9U8-=WN,WA_]'!0"9^+Z:
-=2M>I/]_5ZO\/L`FP$[WWEKH`````245.1*Y"8((`
+MB5!.1PT*&@H````-24A$4@```"$````A"`,```!@.C)=````6E!,5$4```"E
+MH:6DH:25E95U=W4O+R\I*2DF)R8A(2'.SL[*RLK(R,B^PKZ\O+P'!P>TN+2J
+MJJJKJ*NHK*BIIJFDH*2>FIZ6EI8P,C`H*"C+R\O(Q\B_O[^[O[NUN;7NS3(>
+M````LDE$051XG*64V0Z#(!1$1XOB4I?:4JS*__]F(]1@$#,F/2\D<,)Z!]P9
+M^+7+$++L#2-D@9!""K,9G0;:+*0%=.<,HY'W<QDROW-H8PV!L3J,KU0CA#4D
+M^JA0EC?(U5B*]KB$HW'&@,SW?:CQF)B1O&IFJ+T2-U0Z,4,E$S.\<FJHM&:&
+M>OX]!]T'/0N]#WJG]%WXVT;K@]<8K],+M6[STASQ>;&9B[)ESN8VAL_MM=_A
+6G"\3.BJ6%4:2\P````!)14Y$KD)@@@``
 `
 end
 begin 644 icons/next.png
-MB5!.1PT*&@H````-24A$4@```"`````@"`````!6$24H```!TTE$051XG(63
-M,6O;0!B&WYP[I"8<5FAM7(E6'A+'<,4@VA`0VCQXS]"E%/V/SOT#_0E9TJ%0
-MZ.0A0T$(3$.$10]<9Y%LI,'45'`TRE`/'>*<3@JFWW2\S\/'?<=].]]P7_%L
-MM9BO<T-KZ5U3ICOW`@_#1*9&O\_*0NQ[HLYZ'5U#ED93GE/'-A6!7WRGCLUD
-M!^Y[XGC`I,#/$FMX`K7&H\!XQP#47("?)0/WJ,1A]&XG4;L)U%S$7V>#MT]1
-MJ;V#OU<WSQH@@!]8;_;OTH^*L6];@0\0<(\.6YOPYWO%8$/J78,@%(Z\G_BA
-M&B>.N`2)O;HM(XJ28=?#F,P$*^87*!F,)3.R0@]*A[+1PXHLT*D,J!@=+,@<
-M>O4)"D/'G*RA587"T+`F^0-<JIP8R!ZD+S]L#AD,HB'=RI%"(RU$6SDBM(B.
-MZ5:.*732-3B7@2ASSHTN,8]R7R:TQ.'G?9/@F'ICV:'$QQ[M@X`Y8K3<1([*
-MER/A,-1<T"RX/7@,`'BE\-_GOC5LH.:B0:/)'W.O,NSR_,(X/;S[U<UV-$EW
-MC1(??_*+;X]F^R8(?^TVB_F^?(ZMTV)Q_K]Z`*XO/5&\A_/Z<'.4`A#/TF66
-=U!^]>/Y$6?]_`AZQ"95([D4`````245.1*Y"8((`
+MB5!.1PT*&@H````-24A$4@```"$````A"`,```!@.C)=````8U!,5$4```"5
+ME95U=W4Y.3DO+R\I*2DF)R8A(2$='1W.SLX;&QO*RLJ^PKZ\O+P'!P>VMK:T
+MN+2TM+2RLK*JJJJHK*B6EI8P,C`P,#`H*"@<'!P:&AH8&!C!P<&_O[^[O[NU
+MN;6SL[-4@WEY````LDE$051XG*64:P^"(!B%3Z08FN8MLHO2__^53<C1$'?<
+M>KZPP3.N[P%G!K[MU(=,OX81,D-()H59C%H#51)2`;IVAM%(NU&%C-<4VEA#
+M8"A6XS/%`&$-B2XJ*'6`G(TIJ]9+.$IG]$A\WXL:QS<S3H\+,_!LF(&\90;N
+M+3.\LFD@;YB!V]]ST'W0L]#[H'=*WX6_;;0^>(WQ.MU1ZS8OY1J?%YNY*$OF
+?;&YC^-SN^QVV^0#@"BB#A-7F#0````!)14Y$KD)@@@``
 `
 end
 begin 644 icons/prev-gr.png
-MB5!.1PT*&@H````-24A$4@```"`````@"`````!6$24H```!V4E$051XG&63
-ML6O;0!C%7RZ"%-$>*!"'BAB28@LK.=?!4$@&#>JD,9"E2R'=^^?D/\CBK:N7
-M5`%!,!2$71]Q4`P90F5L0UP.*@@5I8.C\YWRIN^^]_M.I^/>VA4*I7P^&><9
-MK5E59LON6@'P021DEWHMI@-I&`F3.6[%PF)V=\,SZOFV`O!N3#W?D3LD823:
-M`9,`/\\;P1%4];HQ_<H`K)\!_#P__M+0?.RX__C@P`+6SY!^FQU_WD))K]_]
-MY;]WWX``8=SXM%GV@<V3=AP"!#RBP;9B#(MB.Z#1/0@&PE//-QQ)XL@3WT'2
-MR/0U7UGXYH^4<,$<U7<5P&GDG,RQO^HDF@^\S^9D@OIJON\V-:"."1FCHLSK
-M/BH8DQQ6X9?G`0N"9'+UA`V\D&E0L7B^IN9&'XYN+V"0&F;RKP[Y4`=FJ!D6
-M[N27'?1U8`2+5'&S:CB'(PU(4"6,\D0A7)5(.&7$]K)0Z375JPPSSR9HT;"G
-M$?)(O8BV0,"\K#M5B:*8=H7'0`"_'7<>\4*/G;CM`P2P3^GEQ;3L3R\N:6`O
-M7[6U^^?ZUZL=S>]UKI?/W@``!L2W?CDXIWM`*7K[]67T?MZ6HX=R>#]\W'LN
-C)0"D_&$Q%J91>[NEQ/\_BN>Q[4W6NT,`````245.1*Y"8((`
+MB5!.1PT*&@H````-24A$4@```"$````A"`,```!@.C)=````6E!,5$4```"?
+MFY^5E95U=W4O+R\I*2DF)R8A(2'.SL[*RLJ^PKZ^O+Z\O+P'!P>TN+2TLK2J
+MJJJHK*B>FIZ6EI8P,C`H*"C+R\O)R<F_O[^_O;^^O;Z[O[NUN;6UL[4C?\V)
+M````M4E$051XG*74ZQ*"(!`%X&,H8GD/RY3>_S4;EQP+"':F\\<9_<8+[!'G
+M5/`^KH.;]5,8(4NX*:4PNV@UT.1N&D"W5AB-HI^5F_E:0!L2`E/E7=]231`D
+M)/H@4.H$N8FU;/Q'V-16#,B_S]]28GDFQ"/KXF(9Q[BX9`FQ@:@@$!,+@8BX
+M6_#7/1COP?@6QGHPUI2Q+XR]#<Q'>L;2<\J8=>I+[>?H"W4NF+USU-M0CM[R
+9_@Z_\P*'^R8LF<,MN@````!)14Y$KD)@@@``
 `
 end
 begin 644 icons/prev.png
-MB5!.1PT*&@H````-24A$4@```"`````@"`````!6$24H```!UDE$051XG(63
-M,6O;0!3'_SEG2$T05FAM7!VM/,2.X8I!-"$@M'GPGJ%+*?H>6;KT"_0C9$F'
-M0J&3APP%(3`)%18],"H%R48:3$T%(E&&>NA@6[I+,'W+/;W?CX?N<6_G&S81
-M!8O9=)E3M:%U]**ZLQ&X[\=%E?9Z3!8BU\FJK-O25*1)..&Y8IFZ(/"K:\4R
-M6=&!NTYVTF>%P"]B8W`*,49#C[YC`"HVP"_BOGTD<=#N_3ALUH&*C>AKT'_[
-M#`]B__#O][OG-1#`]8PW!P+ZN#H.3,-S@5UP1QDT!'Z>KA-V^\LY;A/XF27^
-MW_F/;).>6MD-2.1438E#*3[,JA^1(&-,XB@Z@+$X(`MT92YT0!<+,D-+YF*T
-M,"-3:%LY-$S)$NI6#A5+DC^J2I$3BLU@/KQZA%-0HB+!5B.!2AH(L=4(T2`:
-M)MAJ3*"1#N5<-LI)<DX[1#_*74A&.4DW[^D$)XHS$@VCZ#!RE!X(F)4-YX+Q
-MWEHG\V%F,51L**EW?_BD-%ZOCC^7KC&HH6*CIH3C6WW_P0WGEU?TK+UZU?5F
-M.$[VJ,1'G]SRV:/>O//\WWOU\GY?/D?&6;DX_U\]`#]OG')"BG7<7J>%`$1!
-@,D_CZN[+%T^%]?\'5"^R'?&3]F@`````245.1*Y"8((`
+MB5!.1PT*&@H````-24A$4@```"$````A"`,```!@.C)=````:5!,5$4```"5
+ME96+BXN)B8F'AX=U=W4O+R\I*2DF)R8A(2'.SL[*RLJ^PKZ\O+RZNKH'!P<%
+M!06TN+0#`P.JJJJHK*B6EI:*BHJ(B(AD9&1>7EXP,C`H*"C!P<&_O[^[O[L&
+M!@:UN;4$!`0"`@*5DT73````N$E$051XG(V4VQ*"(!1%=Q<4-4/3M#"5^O^/
+M;,0<"XESU@LSL(;KV>!$@4\[U"[#MV&$3."22&$6H]2`BEP4H,O9,!IQU:<N
+M_36&-M80Z++-^$3605A#HO(*:;J#G(PA4=LE9O+9J!']]C\HXW`CC/WE'C::
+M%\)&6R!L'$>$C7820D93(&R<GR`,>@[&/AAG8=P'XTX9[\)X6T]]T#5&URFC
+KUFU>\BUK7FSFO"R9L[GUL>:6]SO\YPUUDRQAT]LVZ@````!)14Y$KD)@@@``
 `
 end
-begin 644 icons/simtext.png
-MB5!.1PT*&@H````-24A$4@```"`````@"`````!6$24H```"1$E$051XG(63
-MP4L;013&?VX6$186D3(2D4B6TD*9Q1*$!D000R$0*D)[:%H*TAX\^@=XZ*G>
-M>RQ4>I)XT$LED$LD$%I2*`MA!T&0#1$E9*`B*W,)"#VDVB8*?<?W??,]'F]^
-M(S6N2ZO.2?O*N#.II!0WW9%K@VK6XYNNNS`K!PWZH!8[?EI.CG/1;:G0N(M+
-MXA^#J@3NPKR\25#?ZG$F+P$2J\#/W</,JY6_<Q%S4R8X<Z?^&-1NE'O[D(&:
-M?F2"KA"06$7O'>;>W&.HG`>7@;GO8,%!D"E.#.LP4<P$!V"C:FY>#&J-%A01
-M^>.:E#;-N)`=U'L?#>0$V6:Y*2U==^:'PO<,T`7FG;JV5.SW]]=AV.L'?,4'
-M!4@_5G8'"1!MA4!A#?AB>!D9`R`;'>L$`?0V0L<7E&N@R_B^1PL@S8G=Q@-.
-ML_J=UWM!!TJPCB`"F*1M7S$.>.M$H8(DNDI.(#"]41CGRC;]S7<B`%*4H+6!
-M@2,?P-AN?"'0F_A/4_M5QXNJ]-/Y!5S@VC-A5U"%]Z.$>&SA+`.4Z`!=9NQ4
-MV/(!*F)?(\.0Y2+`CT@!BI25)("<P^=-`^S@/`=`T`5:)&WI'BDI/NR8)_F*
-M22+3HP`\2P,J=.5(;;M<6+M];``^E0NO+6;=>N-NO5%W9[&0BW%%WZ7K2KPH
-ML6`I$Y3.;^OGI2"S!(E5'/<LN/2<X??;56\EW?_5PNT&IV/3@_-+W[V5QX`-
-M,#=6"8Z;=X,S@)Y,]]$+CH;1X[_P`FC5TNW820SB_QM6H.ZIC)2"H`````!)
-'14Y$KD)@@@``
+begin 644 icons/sound2.png
+MB5!.1PT*&@H````-24A$4@```"$````A"`,```!@.C)=````^5!,5$4```"I
+MJ:FGIZ>EI:6AH:&=G9V5E961D9&#@X.!@8%Y>7EU=W5Q<7%E965C8V-=75U9
+M65E!04$]/3TS,S,O+R\M+2TI*2DF)R8A(2$='1W.SL[,S,S*RLH7%Q?(R,C&
+MQL;$Q,3`P,"^PKZ^OKZ\O+P)"0D'!P>XN+@%!06VMK:TN+0#`P.TM+0!`0&R
+MLK*JJJJHK*BDI*2<G)R6EI:,C(R$A(1\?'QX>'AJ:FI<7%Q86%A.3DY(2$A&
+M1D9$1$1"0D)`0$`T-#0P,C`L+"PH*"@F)B8<'!S-S<W)R<D4%!02$A+!P<&_
+MO[^]O;V[O[L&!@:UN;6UM;4"`@)(U\([```!04E$051XG(W4:5>"0!0&X&N[
+M80L&`XT4E$2A%;;37J268D3]_Q\3#-LXT-C[A3EG'LXLW`OLSPJDSZ#')J!%
+M*"@JL%$5(<Q$QP.P)#86@-=)1.@!<B:8S>0"@1<2(4!?HV9:^4CK@T"$`@X%
+M](=BO`1*+`+5HI9PU'$R^#C$V$Q$#Z0"G(^`B(6-[8%6)5:[$(NU871:V2\+
+M[?D'B'@#N?'=FEIE-YJQ3YODIB)1LY-7&+&\`YG(PH@LD3AVW7N$+CEBOAL/
+MGC@"UZ]73-/GB9G[P)]FFR_L+SB2I%N..$,H.GJ#?Q^&;1NTT$11;.M-2K`[
+M3;^+FWZ7%[2Y:%0)C*]&1,@G``=WU?51VR*KS-V\CM=S,5UC^F.ZCST_%TR=
+MOM=+=<K6>I&\UDF_F.44_4)ZKC)9SY&^K4K1M__[._R=7]$S;]8[D-^%````
+)`$E%3D2N0F""
+`
+end
+begin 644 icons/sound.png
+MB5!.1PT*&@H````-24A$4@```"$````A"`,```!@.C)=````^5!,5$4```"I
+MJ:FGIZ>EI:6AH:&=G9V5E961D9&#@X.!@8%Y>7EU=W5Q<7%E965C8V-=75U9
+M65E!04$]/3TS,S,O+R\M+2TI*2DF)R8A(2$='1W.SL[,S,S*RLH7%Q?(R,C&
+MQL;$Q,3`P,"^PKZ^OKZ\O+P)"0D'!P>XN+@%!06VMK:TN+0#`P.TM+0!`0&R
+MLK*JJJJHK*BDI*2<G)R6EI:,C(R$A(1\?'QX>'AJ:FI<7%Q86%A.3DY(2$A&
+M1D9$1$1"0D)`0$`T-#0P,C`L+"PH*"@F)B8<'!S-S<W)R<D4%!02$A+!P<&_
+MO[^]O;V[O[L&!@:UN;6UM;4"`@)(U\([```!04E$051XG(W4:5>"0!0&X&N[
+M80L&`XT4E$2A%;;37J268D3]_Q\3#-LXT-C[A3EG'LXLW`OLSPJDSZ#')J!%
+M*"@JL%$5(<Q$QP.P)#86@-=)1.@!<B:8S>0"@1<2(4!?HV9:^4CK@T"$`@X%
+M](=BO`1*+`+5HI9PU'$R^#C$V$Q$#Z0"G(^`B(6-[8%6)5:[$(NU871:V2\+
+M[?D'B'@#N?'=FEIE-YJQ3YODIB)1LY-7&+&\`YG(PH@LD3AVW7N$+CEBOAL/
+MGC@"UZ]73-/GB9G[P)]FFR_L+SB2I%N..$,H.GJ#?Q^&;1NTT$11;.M-2K`[
+M3;^+FWZ7%[2Y:%0)C*]&1,@G``=WU?51VR*KS-V\CM=S,5UC^F.ZCST_%TR=
+MOM=+=<K6>I&\UDF_F.44_4)ZKC)9SY&^K4K1M__[._R=7]$S;]8[D-^%````
+)`$E%3D2N0F""
+`
+end
+begin 644 icons/movie.jpg
+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
+BP%Z*@%63]X#MB@"&QLK>QMEM[2%8HUZ!1^OUHJS10!__V0``
 `
 end
