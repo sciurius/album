@@ -4,8 +4,8 @@ my $RCS_Id = '$Id$ ';
 # Author          : Johan Vromans
 # Created On      : Tue Sep 15 15:59:04 2002
 # Last Modified By: Johan Vromans
-# Last Modified On: Fri Jul  9 15:54:58 2004
-# Update Count    : 1808
+# Last Modified On: Fri Jul  9 18:08:09 2004
+# Update Count    : 1827
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -103,6 +103,13 @@ my %capfun = ('c' => \&c_caption,
 	     );
 
 my $br = br();
+
+# Helper programs
+my $prog_jpegtran  = findbin("jpegtran");
+my $prog_mplayer   = findbin("mplayer");
+my $prog_mencoder  = findbin("mencoder");
+my $prog_mpegstill = findbin("mpegstill");
+my $prog_mpeg2decode = findbin("mpeg2decode");
 
 ################ The Process ################
 
@@ -726,6 +733,51 @@ sub prepare_images {
 	 warn("resize: $t\n") if $t;
     };
 
+    unless ( $prog_jpegtran ) {
+	foreach my $el ( $filelist->entries ) {
+	    next unless $el->rotation || $el->mirror;
+	    next if -s d_large($el->dest_name);
+	    warn("WARNING: Helper program 'jpegtran' not found.\n",
+		 "JPG files will be rotated with loss of information.\n");
+	    last;
+	}
+    }
+
+    unless ( $prog_mplayer ) {
+	foreach my $el ( $filelist->entries ) {
+	    next unless $el->type == T_MPG;
+	    next if -s d_large($el->dest_name);
+	    warn("WARNING: Helper program 'mplayer' not found.\n",
+		 "\tMPG files will be copied.\n");
+	    last;
+	}
+    }
+
+    unless ( $prog_mencoder ) {
+	foreach my $el ( $filelist->entries ) {
+	    next unless $el->type == T_VOICE;
+	    next if -s d_large($el->assoc_name);
+	    warn("WARNING: Helper program 'mencoder' not found.\n",
+		 "\tVOICE files will remain silent.\n");
+	    last;
+	}
+    }
+
+    unless ( $prog_mpegstill ) {
+	foreach my $el ( $filelist->entries ) {
+	    next unless $el->type == T_MPG;
+	    next if -s d_large($el->assoc_name);
+	    warn("WARNING: Helper program 'mpegstill' not found.\n");
+	    unless ( $prog_mpeg2decode ) {
+		warn("WARNING: Helper program 'mpeg2decoder' also not found.\n",
+		     "\tGenerating still files from MPG will be disabled.\n");
+	    }
+	    else {
+		warn("\tGenerating still files from MPG will be extremely slow.\n");
+	    }
+	}
+    }
+
     foreach my $el ( $filelist->entries ) {
 	my $file = $el->dest_name;
 	$msgfile = $file;
@@ -748,12 +800,17 @@ sub prepare_images {
 
 	    if ( $movie ) {
 		$msg->("copy");
-		$msg->("/rotate") if $el->rotation;
-		$msg->(" (be patient) ");
-		# Currently. movies have a bad ugly copy routine...
-		copy_mpg($i_src, $i_large,
-			 $el->timestamp,
-			 $el->rotation, $el->mirror);
+		if ( $prog_mencoder ) {
+		    $msg->("/rotate") if $el->rotation;
+		    $msg->(" (be patient) ");
+		    # Currently. movies have a bad ugly copy routine...
+		    copy_mpg($i_src, $i_large, $time,
+			     $el->rotation, $el->mirror);
+		}
+		else {
+		    $msg->(" ");
+		    copy($i_src, $i_large, $time);
+		}
 	    }
 	    elsif ( $el->rotation || $el->mirror ) {
 		$msg->("copy");
@@ -762,8 +819,8 @@ sub prepare_images {
 		$msg->(" ");
 
 		# Use jpegtran to rotate jpg files.
-		if ( ($el->file_ext || "") eq "jpg" ) {
-		    my $cmd = "jpegtran -rotate " . $el->rotation . " ";
+		if ( ($el->file_ext || "") eq "jpg" && $prog_jpegtran ) {
+		    my $cmd = "$prog_jpegtran -rotate " . $el->rotation . " ";
 		    $cmd .= $el->mirror eq 'h' ? "-transpose " : "-transverse "
 		      if $el->mirror;
 		    $cmd .= "-outfile " . squote($i_large) .
@@ -798,6 +855,7 @@ sub prepare_images {
 		copy($i_src, $i_large, $time);
 	    }
 	    if ( $el->type == T_VOICE ) {
+		$msg->("sound ");
 		copy_voice($i_src, d_large($el->assoc_name),
 			   $time);
 	    }
@@ -807,7 +865,8 @@ sub prepare_images {
 	    $file = $el->assoc_name;
 	    $i_large = d_large($file);
 	    unless ( -s $i_large ) {
-		$msg->("still (be very patient) ");
+		$msg->("still ");
+		$msg->("(be very patient) ") unless $prog_mpegstill;
 		$image = still($el);
 	    }
 	}
@@ -1245,6 +1304,14 @@ sub c_caption {
 
 #### Miscellaneous.
 
+sub findbin {
+    my ($bin) = @_;
+    foreach ( split(":", $ENV{PATH}) ) {
+	return "$_/$bin" if -x "$_/$bin";
+    }
+    undef;
+}
+
 sub squote {
     my ($t) = @_;
     $t =~ s/([\\\'])/\\$1/g;
@@ -1400,7 +1467,7 @@ sub copy_mpg {
 
     # I'm not sure what this does. The resultant file is about 10% of
     # the original, without missing something...
-    my $cmd = "mencoder ".
+    my $cmd = "$prog_mencoder ".
       "-of mpeg -ovc lavc -lavcopts vcodec=mpeg1video -oac copy ".
 	($rotate ? "-vop rotate=".int($rotate/90)." " : "") .
 	  squote($orig) . " -o ". squote($new);
@@ -1416,12 +1483,25 @@ sub still {
     my ($el) = @_;
 
     my $new = d_large($el->assoc_name);
-    # This works, but is very slow...
     my $still = new Image::Magick;
-    $still->Read(d_large($el->dest_name)."[0]");
+    if ( $prog_mpegstill ) {
+	my $tmp = "mps$$.tmp";
+	system($prog_mpegstill, d_large($el->dest_name), $tmp);
+	$still->Read($tmp);
+	unlink($tmp);
+    }
+    else {
+	# This may take minutes.
+	$still->Read(d_large($el->dest_name)."[0]");
+    }
 
     # Get still dimensions.
     my ($hs, $ws) = $still->Get(qw(height width));
+    unless ( $hs && $ws ) {
+	$still->Read(d_icons("movie.jpg"));
+	$still->Write($new);
+	return $still;
+    }
     # Scale to 640x480 if needed.
     my $r = $hs > $ws ? 640 / $hs : 640 / $ws;
     if ( abs($r - 1) > 0.05 ) {
@@ -1476,10 +1556,10 @@ sub copy_voice {
     $time = (stat($orig))[9] unless defined($time);
     $orig =~ s/\.\w+$/.mpg/;
     return if -s $new;
+    return unless $prog_mplayer;
 
-    print STDERR ("sound ") if $verbose > 2;
     # This will produce an MP2 file. Good enough for now...
-    my $cmd = "mplayer -vo null ".
+    my $cmd = "$prog_mplayer -vo null ".
       "-dumpaudio -dumpfile " . squote($new) . " " . squote($orig);
     warn("\n+ $cmd\n") if $trace;
     my $res = `$cmd 2>&1`;
