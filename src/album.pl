@@ -4,8 +4,8 @@ my $RCS_Id = '$Id$ ';
 # Author          : Johan Vromans
 # Created On      : Tue Sep 15 15:59:04 2002
 # Last Modified By: Johan Vromans
-# Last Modified On: Fri Sep 17 21:53:15 2004
-# Update Count    : 2283
+# Last Modified On: Sun Sep 19 18:37:22 2004
+# Update Count    : 2297
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -52,6 +52,7 @@ our $album_title;
 our $caption;
 our $datefmt;
 our $icon;
+our $locale;
 
 # These are not command line options.
 my $journal;			# create journal
@@ -129,7 +130,7 @@ use Time::Local;
 use Image::Info;
 use Image::Magick;
 use Data::Dumper;
-use POSIX qw(strftime);
+use POSIX qw(locale_h strftime);
 use locale;
 
 # The files already there, if any.
@@ -164,6 +165,8 @@ load_import() if $import_dir && -d $import_dir;
 
 # Apply defaults to unset parameters.
 set_defaults();
+
+warn("date => ", strftime($datefmt, localtime(time)), "\n");
 
 # Verify and update the file list.
 my $added = update_filelist();
@@ -329,6 +332,9 @@ sub parse_line {
 	elsif ( /^icon\s*(.*)/ ) {
 	    setopt("icon", defined($1) && length($1) ? $1 : 1);
 	}
+	elsif ( /^locale\s*(.*)/ ) {
+	    setopt("locale", $1);
+	}
 	else {
 	    warn("Unknown control: $_[0]\n");
 	    $err++;
@@ -379,6 +385,11 @@ sub set_defaults {
     die("Invalid value for caption: $caption\n")
       unless $caption =~ /^[fsct]*$/i;
     $caption = lc($caption);
+
+    if ( $locale ) {
+	setlocale(LC_TIME, $locale);
+	setlocale(LC_COLLATE, $locale);
+    }
 }
 
 sub load_info {
@@ -839,12 +850,18 @@ sub update_filelist {
 		undef $entry;
 	    }
 	}
-	elsif ( $trace ) {
-		print STDERR ("\n");
-	}
 	else {
-	    print STDERR ("todo[inf]: $f -- missing\n");
-	    $missing++;
+	    if ( $trace ) {
+		print STDERR ("\n");
+	    }
+	    else {
+		unless ( $el->description =~ /^--($|\s)/ ) {
+		    print STDERR ("todo[inf]: $f -- missing\n");
+		}
+	    }
+	    unless ( $el->description =~ /^--($|\s)/ ) {
+		$missing++;
+	    }
 	}
 	$prev = $entry if $entry && $entry->type != T_REF;
     }
@@ -1062,7 +1079,7 @@ sub prepare_images {
 =cut
 
     foreach my $el ( $filelist->entries ) {
-	next unless $el->type > 0;
+	$msg->(), next unless $el->type > 0;
 	my $file = $el->dest_name;
 	$msgfile = $file;
 	$image = undef;
