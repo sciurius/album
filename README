@@ -27,11 +27,11 @@ installed the 'album' tool in your execution path, you can now execute
 it as follows:
 
   $ album -v
-  No info.dat, adding images from ./large
-  ./info.dat: Cannot update (does not exist)
+  No info.dat, adding images from large
+  info.dat: Cannot update (does not exist)
   Number of entries = 7 (7 added)
-  mkdir ./thumbnails
-  mkdir ./icons
+  mkdir thumbnails
+  mkdir icons
   Creating icons first-gr.png first.png ... sound.png movie.jpg done
   im023.jpg: thumbnail size (known) OK
   im024.jpg: thumbnail size (known) OK
@@ -56,16 +56,10 @@ version. Navigation buttons are provided to the left of the image.
 It is interesting to run 'album' again:
 
   $ album -v
-  No info.dat, adding images from ./large
-  ./info.dat: Cannot update (does not exist)
+  No info.dat, adding images from large
+  info.dat: Cannot update (does not exist)
   Number of entries = 7 (7 added)
-  im023.jpg: size (cached) OK
-  im024.jpg: size (cached) OK
-  im025.jpg: size (cached) OK
-  im026.jpg: size (cached) OK
-  im027.jpg: size (cached) OK
-  im028.jpg: size (cached) OK
-  im029.jpg: size (cached) OK
+  .......[7]
   Creating pages for 7 images
   (No image pages needed updating)
   Creating pages for 1 index
@@ -73,6 +67,8 @@ It is interesting to run 'album' again:
 
 'album' tries to avoid doing unnecessary work as much as possible. In
 this case, all thumbnails and image and index pages are up to date.
+The line of periods shows progress, one period for each image
+processed.
 
 The purpose of medium sized images is easy browsing by having a
 consistent and convenient size. The default size shows normal 4:3
@@ -82,17 +78,17 @@ mode.
 To add medium sized images (and specify an album title):
 
   $ album -v --medium --title "My First Album"
-  No info.dat, adding images from ./large
-  ./info.dat: Cannot update (does not exist)
+  No info.dat, adding images from large
+  info.dat: Cannot update (does not exist)
   Number of entries = 7 (7 added)
-  mkdir ./medium
-  im023.jpg: medium size (cached) OK
-  im024.jpg: medium size (cached) OK
-  im025.jpg: medium size (cached) OK
-  im026.jpg: medium size (cached) OK
-  im027.jpg: medium size (cached) OK
-  im028.jpg: medium size (cached) OK
-  im029.jpg: medium size (cached) OK
+  mkdir medium
+  im023.jpg: medium OK
+  im024.jpg: medium OK
+  im025.jpg: medium OK
+  im026.jpg: medium OK
+  im027.jpg: medium OK
+  im028.jpg: medium OK
+  im029.jpg: medium OK
   Creating pages for 7 images
   (Needed to write 14 image pages)
   Creating pages for 1 index
@@ -119,10 +115,14 @@ followed by its description. Control lines start with an '!' mark.
 
   $ touch info.dat
   $ album -v --medium --title "My First Album"
-  No info.dat, adding images from ./large
-  Updating ./info.dat
+  No info.dat, adding images from large
+  Updating info.dat
   Number of entries = 7 (7 added)
-  ...
+  .......[7]
+  Creating pages for 7 images
+  (No image pages needed updating)
+  Creating pages for 1 index
+  (No index pages needed updating)
 
 Upon completion, 'info.dat' will look similar to:
 
@@ -155,7 +155,11 @@ Re-run the program (no need for --medium and --title anymore):
 
   $ album -v
   Number of entries = 7
-  ...
+  .......[7]
+  Creating pages for 7 images
+  (Needed to write 14 image pages)
+  Creating pages for 1 index
+  (Needed to write 1 index page)
 
 There are no complaints anymore about a missing 'info.dat', but
 there's also no message 'adding images from ./large'. In other words,
@@ -187,13 +191,11 @@ Assuming you mounted a CD-ROM with new images, execute 'album' as
 follows:
 
   $ album -v --import /mnt/cdrom --update
-  Updating ./info.dat
+  Updating info.dat
   Number of entries = 9 (2 added)
-  im023.jpg: size (cached) OK
-  ...
-  im029.jpg: size (cached) OK
-  im030.jpg: copy medium thumbnail size (known) OK
-  im031.jpg: copy medium thumbnail size (known) OK
+  .......[7]
+  im030.jpg: copy medium thumbnail OK
+  im031.jpg: copy medium thumbnail OK
   Creating pages for 9 images
   (Needed to write 18 image pages)
   Creating pages for 1 index
@@ -214,21 +216,19 @@ information that is present in these files:
     according to the 'orientation' property in the EXIF information.
 
 To enable EXIF processing, add the --exif command line option, or
-specify the import directory with --dcim:
+specify the import directory with --dcim instead of --import:
 
   $ ls -l /mnt/camera/dcim/101msdcf
   -rwxr-xr-x 1 jv jv 2347808 Jun 25 12:08 /mnt/camera/dcim/101msdcf/dsc00052.jpg
   -rwxr-xr-x 1 jv jv 1327475 Jun 25 12:05 /mnt/camera/dcim/101msdcf/dsc00053.jpg
   $ album -v --dcim /mnt/camera/dcim/101msdcf --update
-  Updating ./info.dat
-  Number of entries = 10 (1 added)
-  im023.jpg: size (cached) OK
-  ...
-  im031.jpg: size (cached) OK
-  200405171843310052.jpg: link copy medium thumbnail size (known) OK
-  200405171845030053.jpg: copy rotate medium thumbnail size (known) OK
-  Creating pages for 10 images
-  (Needed to write 20 image pages)
+  Updating info.dat
+  Number of entries = 11 (2 added)
+  .........[ 9]
+  200405171843310052.jpg: link medium thumbnail OK
+  200405171845030053.jpg: copy rotate medium thumbnail OK
+  Creating pages for 11 images
+  (Needed to write 22 image pages)
   Creating pages for 1 index
   (Needed to write 1 index page)
 
@@ -249,7 +249,9 @@ re-import of the 'large' images. To completely rebuild everything
 save info.dat, remove all the files in the album directory (including
 .cache), restore info.dat and re-run the 'album' program.
 
-Much of the digital camera import is designed for my Sony DSC-V1. 
+The digital camera import is designed for cameras that adhere to the
+ISO DCF standard. Handling of MPG movies and voice images is probably
+specific for my Sony DSC-V1.
 
 When importing images from different camera's, there's an extremely
 small chance that the EXIF information would lead to identical file
