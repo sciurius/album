@@ -32,13 +32,13 @@ it as follows:
   Number of entries = 7 (7 added)
   mkdir ./thumbnails
   mkdir ./icons
-  im023.jpg: resize [1024x768=>200x150] size (known) [173440 0 1024 768] OK
-  im024.jpg: resize [1024x768=>200x150] size (known) [129865 0 1024 768] OK
-  im025.jpg: resize [1024x768=>200x150] size (known) [92774 0 1024 768] OK
-  im026.jpg: resize [1024x768=>200x150] size (known) [227080 0 1024 768] OK
-  im027.jpg: resize [1024x768=>200x150] size (known) [170244 0 1024 768] OK
-  im028.jpg: resize [1024x768=>200x150] size (known) [159526 0 1024 768] OK
-  im029.jpg: resize [1024x768=>200x150] size (known) [131038 0 1024 768] OK
+  im023.jpg: thumbnail size (known) OK
+  im024.jpg: thumbnail size (known) OK
+  im025.jpg: thumbnail size (known) OK
+  im026.jpg: thumbnail size (known) OK
+  im027.jpg: thumbnail size (known) OK
+  im028.jpg: thumbnail size (known) OK
+  im029.jpg: thumbnail size (known) OK
   Creating pages for 7 images
   (Needed to write 7 image pages)
   Creating pages for 1 index
@@ -86,13 +86,13 @@ To add medium sized images (and specify an album title):
   ./info.dat: Cannot update (does not exist)
   Number of entries = 7 (7 added)
   mkdir ./medium
-  im023.png: resize [1024x768=>915x686] OK
-  im024.png: resize [1024x768=>915x686] OK
-  im025.png: resize [1024x768=>915x686] OK
-  im026.png: resize [1024x768=>915x686] OK
-  im027.png: resize [1024x768=>915x686] OK
-  im028.png: resize [1024x768=>915x686] OK
-  im029.png: resize [1024x768=>915x686] OK
+  im023.png: medium OK
+  im024.png: medium OK
+  im025.png: medium OK
+  im026.png: medium OK
+  im027.png: medium OK
+  im028.png: medium OK
+  im029.png: medium OK
   Creating pages for 7 images
   (Needed to write 14 image pages)
   Creating pages for 1 index
@@ -191,8 +191,8 @@ follows:
   im023.png: OK
   ...
   im029.png: OK
-  im030.png: copy [155kb] resize [1024x768=>200x150] size (known) [159526 0 1024 768] OK
-  im031.png: copy [155kb] resize [1024x768=>200x150] size (known) [159526 0 1024 768] OK
+  im030.png: copy medium thumbnail size (known) OK
+  im031.png: copy medium thumbnail size (known) OK
   Creating pages for 9 images
   (Needed to write 9 image pages)
   Creating pages for 1 index
@@ -206,7 +206,7 @@ exist in 'large' (i.e., have the same name) are skipped.
 When importing images from a digital camera, 'album' can use the EXIF
 information that is present in these files:
 
-  - it will use the time stamp rename it to YYYYMMDDHHMMSS (where SS
+  - it will use the time stamp rename it to YYYYMMDDhhmmSS (where SS
     is a sequence number, not seconds);
   - it will set the modification time of the file to the time stamp;
   - while copying the image, it will be rotated if necessary,
@@ -223,7 +223,7 @@ specify the import directory with --dcim:
   im023.png: OK
   ...
   im031.png: OK
-  20040601220700.jpg: copy [154kb] resize [1024x768=>200x150] size (known) [157030 0 1024 768] OK
+  20040601220700.jpg: copy rotate medium thumbnail size (known) OK
   Creating pages for 10 images
   (Needed to write 10 image pages)
   Creating pages for 1 index
@@ -242,3 +242,7 @@ save info.dat, remove all the files in the album directory (including
 An 'info.dat' line with only an asterisk will insert all images from
 the 'large' directory that have not yet been processed. This is
 similar to what happens when there's no 'info.dat' file.
+
+If, when renaming a source image according to the EXIF timestamp, a
+clash occurs, the sequence number part of the file name is incremented
+and a warning message is generated.

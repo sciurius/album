@@ -4,8 +4,8 @@ my $RCS_Id = '$Id$ ';
 # Author          : Johan Vromans
 # Created On      : Tue Sep 15 15:59:04 2002
 # Last Modified By: Johan Vromans
-# Last Modified On: Tue Jun  1 23:33:43 2004
-# Update Count    : 972
+# Last Modified On: Wed Jun  2 22:14:42 2004
+# Update Count    : 1008
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -57,6 +57,15 @@ app_options();
 $trace |= ($debug || $test);
 
 ################ Presets ################
+
+use constant DEFAULTS => { info       => "info.dat",
+			   title      => "Photos",
+			   mediumsize => 915,
+			   thumbsize  => 200,
+			   indexrows  => 3,
+			   indexcols  => 4,
+			   caption    => "fct",
+			 };
 
 my $TMPDIR = $ENV{TMPDIR} || $ENV{TEMP} || '/usr/tmp';
 
@@ -196,16 +205,16 @@ exit 0;
 
 sub set_parameter_defaults {
 
-    $album_title ||= "Photos";
+    $album_title ||= DEFAULTS->{title};
 
     # Other settings.
-    $index_rows ||= 3;
-    $index_columns ||= 4;
-    $thumb ||= 200;
+    $index_rows ||= DEFAULTS->{indexrows};
+    $index_columns ||= DEFAULTS->{indexcols};
+    $thumb ||= DEFAULTS->{thumbsize};
     $medium ||= 0;
 
     # Caption values.
-    $caption ||= "fct";
+    $caption ||= DEFAULTS->{caption};
     die("Invalid value for caption: $caption\n")
       unless $caption =~ /^[fsct]+$/i;
     $caption = lc($caption);
@@ -219,11 +228,11 @@ sub load_image_info {
     }
     else {
 	# Try default.
-	$image_info = "$dest_dir/info.dat";
+	$image_info = "$dest_dir/" . DEFAULTS->{info};
 	unless ( -s $image_info ) {
 	    $add_new++ if $import_dir;
 	    $add_src++ if -d "$dest_dir/large";
-	    print STDERR ("No info.dat");
+	    print STDERR ("No ", DEFAULTS->{info});
 	    print STDERR (", adding images from ") if $add_src || $add_new;
 	    print STDERR ("$dest_dir/large")       if $add_src;
 	    print STDERR (" and ")                 if $add_src && $add_new;
@@ -267,7 +276,7 @@ sub load_image_info {
 		$medium = $1;
 	    }
 	    elsif ( /^medium\s*(\d+)?/ ) {
-		$medium = $1 || 915;
+		$medium = $1 || DEFAULTS->{mediumsize};
 	    }
 	    elsif ( /^tag\s*(.*)/ ) {
 		$tag = $1;
@@ -338,7 +347,6 @@ sub do_exif {
     my ($file) = @_;
     my $exif = get_exif("$import_dir/$file");
 
-    # Rename files from DSC.
     # Sony DSC-V1 produces the following files:
     #   DSC0nnnn.JPG	still image
     #   DSC0nnnn.JPE	mail mode image*
@@ -359,10 +367,17 @@ sub do_exif {
 	    # YYYYMMDDhhmmSS (SS = sequence, not seconds).
 	    # Note: jhead uses YYYYMMDDhhssX, where X is empty, a, b, ...
 	    my $new = "$1$2$3$4$5"."00";
-	    # while ( !$clobber && -e "$dest_dir/large/$new.jpg" ) {
-	    #	$new++;
-	    # }
+	    my $clash = 0;
+	    while ( $newfiles{"$new.jpg"} ) {
+		print STDERR ("Import $file -> $new.jpg clashes with ",
+			      $newfiles{"$new.jpg"}->[0], "\n")
+		  if $verbose;
+		$clash = 1;
+		$new++;
+	    }
 	    $new .= ".jpg";
+	    print STDERR ("Import $file -> $new\n") if $verbose && $clash;
+
 	    $newfiles{$new} = [ $file, $time, 0 ];
 	    $file = $new;
 	}
@@ -371,7 +386,7 @@ sub do_exif {
 	    $newfiles{$file} = [ $file, undef, 0 ];
 	}
 	if ( ($exif->{orientation}||"") =~ /^rotate (\d+)$/i  ) {
-	    $newfiles{$file}->[2] = int($1/90);
+	    $newfiles{$file}->[2] = $1;
 	}
     }
     else {
@@ -437,10 +452,13 @@ sub get_image_names {
 	       localtime(time), "\n\n");
 	print $fh ("!title $album_title\n") if $album_title;
 	print $fh ("!medium\n") if $medium;
-	print $fh ("!mediumsize $medium\n") if $medium != 915;
-	print $fh ("!thumbsize $thumb\n") if $thumb != 200;
+	print $fh ("!mediumsize $medium\n")
+	  if $medium != DEFAULTS->{mediumsize};
+	print $fh ("!thumbsize $thumb\n")
+	  if $thumb != DEFAULTS->{thumbsize};
 	print $fh ("!page ${index_rows}x${index_columns}\n")
-	  if $index_rows != 3 || $index_columns != 4;
+	  if $index_rows != DEFAULTS->{indexrows}
+	      || $index_columns != DEFAULTS->{indexcols};
     }
     else {
 	print $fh ("\n");
@@ -479,10 +497,12 @@ sub prepare_images {
 		copy($i_src, $i_large, $time);
 		if ( $newfiles{$file}->[2] ) {
 		    print STDERR ("rotate ") if $verbose;
-		    system("jhead", "-autorot", $i_large);
+		    my $cmd = "jhead -autorot ".squote($i_large);
+		    my $t = `$cmd 2>&1`;
+		    print STDERR $t if $?;
 		    utime($time, $time, $i_large);
 		}
-		print STDERR ("[", bytes(-s $i_large), "] ") if $verbose;
+		print STDERR ("[", bytes(-s $i_large), "] ") if $verbose > 1;
 	    }
 	    elsif ( $rotate{$file} ) {
 		print STDERR ("rotate ") if $verbose;
@@ -496,47 +516,47 @@ sub prepare_images {
 	    else {
 		print STDERR ("copy ") if $verbose;
 		copy($i_src, $i_large);
-		print STDERR ("[", bytes(-s $i_large), "] ") if $verbose;
+		print STDERR ("[", bytes(-s $i_large), "] ") if $verbose > 1;
 	    }
 	}
 
 	my $i_medium  = "$dest_dir/medium/$file";
 	my $i_small   = "$dest_dir/thumbnails/$file";
 
-	if ( $medium && ($clobber  || ! -s $i_medium) ) {
-	    print STDERR ("resize ") if $verbose;
+	if ( $medium && ! -s $i_medium ) {
+	    print STDERR ("medium ") if $verbose;
 	    my $t = convert
 	      ($i_large, $i_medium,
 	       $verbose ? "-verbose" : (),
 	       # Read the docs.
 	       "-size", "${medium}x$medium", "-resize", "${medium}x$medium",
-	       # Remove unneccessary stuff.
+	       # Remove unnecessary stuff.
 	       "+profile", "*");
-	    print STDERR ("[", $t, "] ") if $verbose;
+	    print STDERR ("[", $t, "] ") if $verbose > 1;
 	    ($w, $h) = $t =~ /^(\d+)x(\d+)/ unless $w && $h;
 	}
 
-	if ( $clobber || ! -s $i_small ) {
-	    print STDERR ("resize ") if $verbose;
+	if ( ! -s $i_small ) {
+	    print STDERR ("thumbnail ") if $verbose;
 	    my $t = convert
 	      ($i_large, $i_small,
 	       $verbose ? "-verbose" : (),
 	       "-size", "${thumb}x$thumb", "-resize", "${thumb}x$thumb",
 	       "+profile", "*");
-	    print STDERR ("[", $t, "] ") if $verbose;
+	    print STDERR ("[", $t, "] ") if $verbose > 1;
 	    ($w, $h) = $t =~ /^(\d+)x(\d+)/ unless $w && $h;
 	}
 
 	# Get image info.
 	my $ii = $info->entry($file);
 	if ( $ii ) {
+	    print STDERR ("size (cached) ") if $verbose;
 	    ($w, $h) = ($ii->width, $ii->height);
 	    $ii->medium_size(-s $i_medium) if $medium;
 	}
 	else {
 	    print STDERR ("size ") if $verbose;
-	    $ii = new ImageInfo::Entry
-	      (large_size   => -s $i_large);
+	    $ii = new ImageInfo::Entry (large_size => -s $i_large);
 
 	    if ( $h && $w ) {
 		print STDERR ("(known) ") if $verbose;
@@ -552,7 +572,7 @@ sub prepare_images {
 	    $ii->width($w);
 	    $ii->height($h);
 	    $ii->medium_size(-s $i_medium) if $medium;
-	    print STDERR ($ii->tostr, " ") if $verbose;
+	    print STDERR ($ii->tostr, " ") if $verbose > 1;
 	}
 
 	# Update image info.
@@ -838,10 +858,16 @@ sub update_cache {
 
 #### Miscellaneous.
 
+sub squote {
+    my ($t) = @_;
+    $t =~ s/([\\\'])/\\$1/g;
+    "'".$t."'";
+}
+
 sub convert {
     my ($from, $to, @args) = @_;
     my $cmd = "convert ".
-      join(" ", map { "'".$_."'" } @args, $from, $to);
+      join(" ", map { squote($_) } @args, $from, $to);
     my $res = `$cmd 2>&1`;
     die("${res}Aborted\n") if $? == 2;
     die(sprintf("${res}convert error: 0x%02x%02x\n", $? >> 8, $? & 0xff))
@@ -1039,7 +1065,7 @@ sub app_options {
 		     'clobber'	=> \$clobber,
 		     'caption=s' => \$caption,
 		     'ident'	=> \$ident,
-		     'verbose'	=> \$verbose,
+		     'verbose+'	=> \$verbose,
 		     'trace'	=> \$trace,
 		     'help|?'	=> \$help,
 		     'debug'	=> \$debug,
@@ -1054,7 +1080,7 @@ sub app_options {
 
     app_ident() if $ident;
     $dest_dir = shift(@ARGV) if @ARGV;
-    $medium = 915 if defined($medium) && !$medium;
+    $medium = DEFAULTS->{mediumsize} if defined($medium) && !$medium;
     if ( $add_new && !$import_dir ) {
 	warn("--update ignored -- no import dir specified\n");
 	$add_new = 0;
@@ -1073,19 +1099,23 @@ sub app_usage {
     app_ident();
     print STDERR <<EndOfUsage;
 Usage: $0 [options] [ directory ]
-    --info XXX		description and control file
-    --title XXX		album title
-    --import XXX	import new images from XXX
-    --exif		import images w/ EXIF info
+  Album:
+    --info XXX		description file, default "@{[DEFAULTS->{info}]}" (if it exists)
+    --title XXX		album title, default "@{[DEFAULTS->{title}]}"
+  Index:
+    --cols NN		number of columns per page, default @{[DEFAULTS->{indexcols}]}
+    --rows NN		number of rows per page, default @{[DEFAULTS->{indexrows}]}
+    --thumbsize NNN	the max size of thumbnail images, default @{[DEFAULTS->{thumbsize}]}
+    --captions XXX	f: filename s: size c: description t: tag
+  Medium:
+    --medium [ NNN ]	the max size of medium sized images, default @{[DEFAULTS->{mediumsize}]}
+  Importing:
+    --import XXX	original images
+    --exif		use w/ EXIF info, if possible
     --dcim XXX		as --import with --exif
     --update		add new entries from import, if needed
-    --cols NN		number of columns per page
-    --rows NN		number of rows per page
-    --thumbsize NNN	the max size of thumbnail images
-    --medium [ NNN ]	the max size of medium sized images, default 915
-    --captions XXX	f: filename s: size c: description t: tag
-    --clobber		recreate everything
-    --index-buttons	use index buttons instead of links
+  Miscellaneous:
+    --clobber		recreate everything (except large)
     --help		this message
     --ident		show identification
     --verbose		verbose information
@@ -1308,3 +1338,4 @@ M-IN->8AE68/G&:V0>^,!Z4;O[)MEF=:B??EGL])K&[-9^[888[L!L]D?^0#`
 3M8HSIG;M-P````!)14Y$KD)@@@``
 `
 end
+
