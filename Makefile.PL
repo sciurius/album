@@ -2,8 +2,8 @@
 # Author          : Johan Vromans
 # Created On      : Fri Jul  9 15:45:48 2004
 # Last Modified By: Johan Vromans
-# Last Modified On: Fri Aug  6 18:00:32 2004
-# Update Count    : 20
+# Last Modified On: Sat Aug  7 19:51:15 2004
+# Update Count    : 21
 # Status          : Experimental
 
 use strict;
@@ -52,7 +52,7 @@ print STDERR ("\n");
 
 WriteMakefile
   (
-   NAME         => "$scripts[0]",
+   NAME         => ucfirst($scripts[0]),
    VERSION_FROM => "script/$scripts[0]",
    ($] >= 5.005) ?
    ( AUTHOR	=> 'Johan Vromans (jvromans@squirrel.nl)',

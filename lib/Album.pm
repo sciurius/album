@@ -8,7 +8,7 @@ use strict;
 
 =head1 NAME
 
-Album - create and maintain HTML based photo albums
+Album - Create and maintain HTML based photo albums
 
 =head1 SYNOPSIS
 
