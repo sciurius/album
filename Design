@@ -1,8 +1,6 @@
 Directory structure:
 
   dir/
-    raw/
-      XXX.jpg	  original image, will not be touched
     large/
       NNNN.html	  image page
       XXX.jpg	  Copy of original (possibly rotated)
@@ -20,7 +18,7 @@ Directory structure:
 Process:
 
   Process info.dat, if it exists.
-  Copy or copy/rotate	from <raw>    to <large> unless it exists.
+  Copy or copy/rotate	from <new>    to <large> unless it exists.
   Generate <medium>	from <large>		 unless it exists.
   Generate <thumbnails> from <large>		 unless it exists.
   Generate image pages.
@@ -28,11 +26,11 @@ Process:
 
 Notes:
 
-  <dir> defaults to current directory unless specified with --dest option.
-  <raw> may be specified with --source option (e.g., to copy from CD).
+  <dir> defaults to current directory unless otherwise specified.
+  <new> must be specified with --import option (e.g., to copy from
+  CD), or with --dcim option (e.g., to copy from digital camera).
   An alternate info.dat can be specified with --info option.
   "unless it exists" will be ignored with --clobber option.
-  With no <raw>, the <large> is taken as source, and rotation is disabled.
 
 Format of Control/Info file:
 
@@ -44,6 +42,7 @@ Format of Control/Info file:
     !page NxM	     set the layout to N rows (--rows) and 
 		     M columns (--columns)
     !thumbsize NNN   desired width of thumbnails (--thumbsize)
+    !medium          include medium sized images (--medium)
     !mediumsize NNN  desired width of medium sized images (--mediumsize)
     !tag	     tagline for all following images
     !caption	     caption code for index pages (--caption)
@@ -55,7 +54,12 @@ Format of Control/Info file:
     XXX.jpg [ -O:n ] [ caption ]
       -O:n controls orientation (n x 90 degrees)
 
-    If the image name contains a directory, multi mode is enabled.
-
     If the name is "*", all files found in the source directory are
-    processed. 
+    processed. Files already processed (because they were explictly
+    enumerated earlier on) will be ignored.
+
+When --import (or --dcim) has been specified with --update, the import
+directory will be scanned for new entries that are not yet present in
+the destination directory. Any new entries will be added and the info
+file will be modified (if possible) to include the new entries.
+
