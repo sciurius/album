@@ -4,8 +4,8 @@ my $RCS_Id = '$Id$ ';
 # Author          : Johan Vromans
 # Created On      : Tue Sep 15 15:59:04 2002
 # Last Modified By: Johan Vromans
-# Last Modified On: Sat Jul 10 18:41:09 2004
-# Update Count    : 1839
+# Last Modified On: Sat Jul 10 19:20:56 2004
+# Update Count    : 1844
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -552,6 +552,7 @@ sub update_filelist {
 		$entry->tag($el->tag);
 		$entry->description($el->description);
 		$entry->annotation($el->annotation);
+		$entry->_rotation($el->_rotation);
 		$todo->add($entry);
 		print STDERR ("\n") if $trace;
 	    }
@@ -790,8 +791,8 @@ sub prepare_images {
 	    if ( $movie ) {
 		$msg->("copy");
 		if ( $prog_mencoder ) {
-		    $msg->("/rotate") if $el->rotation;
-		    $msg->(" (be patient) ");
+		    $msg->("/rotate (be patient)") if $el->rotation;
+		    $msg->(" ");
 		    # Currently. movies have a bad ugly copy routine...
 		    copy_mpg($i_src, $i_large, $time,
 			     $el->rotation, $el->mirror);
@@ -1456,9 +1457,8 @@ sub copy_mpg {
 
     # I'm not sure what this does. The resultant file is about 10% of
     # the original, without missing something...
-    my $cmd = "$prog_mencoder ".
-      "-of mpeg -ovc lavc -lavcopts vcodec=mpeg1video -oac copy ".
-	($rotate ? "-vop rotate=".int($rotate/90)." " : "") .
+    my $cmd = "$prog_mencoder -of mpeg -oac copy -ovc ".
+	($rotate ? "lavc -lavcopts vcodec=mpeg1video -vop rotate=".int($rotate/90)." " : "copy ") .
 	  squote($orig) . " -o ". squote($new);
     warn("\n+ $cmd\n") if $verbose > 2;
 
