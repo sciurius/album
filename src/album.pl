@@ -4,8 +4,8 @@ my $RCS_Id = '$Id$ ';
 # Author          : Johan Vromans
 # Created On      : Tue Sep 15 15:59:04 2002
 # Last Modified By: Johan Vromans
-# Last Modified On: Wed May 26 22:21:12 2004
-# Update Count    : 666
+# Last Modified On: Wed May 26 23:01:19 2004
+# Update Count    : 686
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -32,7 +32,6 @@ use Getopt::Long 2.13;
 my $src_dir;
 my $dest_dir = ".";
 my $image_info;
-my $index_buttons = 0;
 my $clobber = 0;
 my $verbose = 0;		# verbose processing
 
@@ -377,13 +376,21 @@ sub prepare_images {
 	print STDERR ($ii->tostr, " ") if $verbose;
 
 	if ( $clobber || ! -s $i_small ) {
-	    my @t = ( $thumb );
-	    $t[1] = int(0.67 * $t[0]);
-	    system("convert ".
-		   ($verbose ? "-verbose" : "") ." -geometry ".
-		   (( $ii->width > $ii->height )
-		    ? "$t[0]x$t[1]" : "$t[1]x$t[0]") .
-		   " $i_large $i_small");
+	    my @t;
+
+	    if ( $ii->width > $ii->height ) {
+		@t = ( $thumb,
+		       int($thumb * ($ii->height/$ii->width)) );
+	    }
+	    else {
+		@t = ( int($thumb * ($ii->width/$ii->height)),
+		       $thumb );
+	    }
+
+	    system("convert",
+		   $verbose ? "-verbose" : (),
+		   "-geometry", "$t[0]x$t[1]",
+		   $i_large, $i_small);
 	    die("Aborted\n") if $? == 2;
 	    die(sprintf("convert error: 0x%02x%02x\n", $? >> 8, $? & 0xff))
 	      if $?;
@@ -492,35 +499,34 @@ EOD
 sub write_index_page {
     my ($x) = @_;
 
-    my $t = $album_title.": Index";
-    my $tt = $t;
+    my $tt = $album_title.": Index";
 
+    my $t = "";
+    my $b = "";
     if ( $num_indexes > 1) {
-	$t = button("prev", "index.html", 0, 0) . " " . $t unless $x;
-	$t = button("prev", "index.html", 0, 1) . " " . $t if $x == 1;
-	$t = button("prev", "index".($x-1).".html", 0, 1) . " " . $t if $x > 1;
-	$t = button("first", "index.html", 0, $x > 0) . $t;
+	$b .= button("first", "index.html", 0, $x > 0) . "<br>\n";
+	$b .= button("prev", "index.html", 0, 0) . "<br>\n"
+	  unless $x;
+	$b .= button("prev", "index.html", 0, 1) . "<br>\n"
+	  if $x == 1;
+	$b .= button("prev", "index".($x-1).".html", 0, 1) . "<br>\n"
+	  if $x > 1;
+	$b .= button("next", "index.html", 0, 0) . "<br>\n"
+	  if $x == $num_indexes-1;
+	$b .= button("next", "index".($x+1).".html", 0, 1) . "<br>\n"
+	  if $x < $num_indexes-1;
+	$b .= button("last", "index".($num_indexes-1).".html", 0,
+		     $x < $num_indexes - 1) . "<br>\n";
 	$tt .= " " . ($x+1) . " of $num_indexes";
-	if ( $index_buttons ) {
-	    $t .= " " . ($x+1) . " of $num_indexes";
-	}
-	else {
-	    foreach ( 0..$num_indexes-1 ) {
-		if ( $_ == $x ) {
-		    $t .= " " . ($x+1);
-		}
-		else {
-		    $t .= " <a href=\"index".
-		      ($_ ? $_ : ""). ".html\">".($_+1)."</a>";
-		}
+	foreach ( 0..$num_indexes-1 ) {
+	    if ( $_ == $x ) {
+		$t .= " " . ($x+1);
+	    }
+	    else {
+		$t .= " <a href=\"index".
+		  ($_ ? $_ : ""). ".html\">".($_+1)."</a>";
 	    }
 	}
-	$t .= " " . button("next", "index.html", 0, 0)
-	  if $x == $num_indexes-1;
-	$t .= " " . button("next", "index".($x+1).".html", 0, 1)
-	  if $x < $num_indexes-1;
-	$t .= button("last", "index".($num_indexes-1).".html", 0,
-		     $x < $num_indexes - 1);
     }
 
     my $new = <<EOD;
@@ -534,28 +540,20 @@ $css,
 <title>$tt</title>
 </head>
 <body $bodyatts>
-  <center>
-  <h1>$t</h1>
-  <p>
+<table>
+<tr>
+  <td></td>
+  <td align="left">
+    <p class="hd">$tt</p>
+  </td>
+  <td align="right">
+    <p class="hd">$t</p>
+  </td>
+</tr>
+<tr>
+  <td valign="top">$b</td>
+  <td valign="top" colspan="2">
 EOD
-
-    if ( $index_buttons ) {
-	if ( $x > 0 ) {
-	    $new .= button("first", "index.html", 0, 1) . "\n"
-	      if $num_indexes > 2;
-	    $new .= button("prev",
-			   "index".($x > 1 ? $x-1 : "").".html", 0, 1) .
-		    "\n";
-	}
-
-	if ( $x < $num_indexes-1 ) {
-	    $new .= button("next", "index".($x+1).".html", 0) . "\n";
-	    $new .= button("last",
-			   "index".($num_indexes-1).".html", 0, 1) .
-		    "\n"
-	      if $num_indexes > 2;
-	}
-    }
 
     $new .= qq(<table border="2" cellpadding="3" cellspacing="3") .
             qq( bgcolor="$MGREY">\n);
@@ -581,8 +579,8 @@ EOD
 			  "        <tr>\n".
 			  "          <td align=\"center\">\n".
 			  "            <p class=\"ft\">".
-			  (map { $capfun{$_}->($file), "<br>\n" }
-			     split(//, $caption)).
+			  join("", (map { $capfun{$_}->($file), "<br>\n" }
+			     split(//, $caption))).
 			  "</p>\n".
 			  "          </td>\n".
 			  "        </tr>\n".
@@ -590,7 +588,7 @@ EOD
 			  "    </td>\n";
 		}
 		else {
-		    $new .= "    <td bgcolor=\"$DGREY\">&nbsp</td>\n";
+		    $new .= "    <td width=\"$thumb\" bgcolor=\"$DGREY\">&nbsp</td>\n";
 		}
 	    }
 	    $new .= "  </tr>\n";
@@ -598,7 +596,7 @@ EOD
     }
     $new .= "</table>\n";
 
-    $new .= "<p>\n" . "</center></body></html>\n";
+    $new .= "</td>\n" . "</tr></table></body></html>\n";
 
     update_if_needed("$dest_dir/index".($x > 0 ? $x : ""). ".html", $new);
 }
@@ -777,7 +775,6 @@ sub app_options {
 		     'mediumsize=i' => \$medium,
 		     'title=s'	=> \$album_title,
 		     'clobber'	=> \$clobber,
-		     'index-buttons' => \$index_buttons,
 		     'caption=s' => \$caption,
 		     'ident'	=> \$ident,
 		     'verbose'	=> \$verbose,
