@@ -1,4 +1,4 @@
-ALBUM	= perl $(HOME)/src/album/tools/album.pl
+ALBUM	= perl $(HOME)/src/album/src/album.pl
 ISRC	= /spare1/Albums/2004-Ierland/dcim/101msdcf
 
 COPY	= convert

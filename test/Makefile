@@ -1,4 +1,4 @@
-include ../tools/generic.mk
+include ../src/generic.mk
 
 clean ::
 	rm -fr dcim import large journal
