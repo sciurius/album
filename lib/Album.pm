@@ -8,7 +8,7 @@ use strict;
 
 =head1 NAME
 
-Album - Create and maintain HTML based photo albums
+Album - Create and maintain browser based photo albums
 
 =head1 SYNOPSIS
 
@@ -21,6 +21,7 @@ The album will be organised as follows:
   index.html       first or only index page
   indexN.html      subsequent index pages (N = 1, 2, ...)
   icons/           directory with navigation icons
+  css/		   directory with stylesheets
   large/           original (large) images, with HTML pages
   medium/          optional medium sized images, with HTML pages
   thumbnail/       thumbnail images

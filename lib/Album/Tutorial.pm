@@ -15,7 +15,7 @@ Album::Tutorial - How to use the Album program
 =head1 SYNOPSIS
 
 This tutorial describes the basic use of the Album program to create
-and maintain HTML based photo albums.
+and maintain browser based photo albums.
 
 =head1 DESCRIPTION
 
@@ -32,7 +32,9 @@ it as follows:
   Number of entries = 7 (7 added)
   mkdir thumbnails
   mkdir icons
-  Creating icons first-gr.png first.png ... sound.png movie.jpg done
+  mkdir css
+  Creating icons: first-gr.png first.png ... sound.png movie.jpg
+  Creating style sheets: common.css index.css ... journal.css
   im023.jpg: thumbnail OK
   im024.jpg: thumbnail OK
   im025.jpg: thumbnail OK
@@ -47,7 +49,7 @@ it as follows:
 
 Your results will vary, but be similar to this example run. What you
 can see is that 'album' found 7 images in the 'large' directory,
-created thumbnails and icons directories, created thumbnails by
+created thumbnails, icons and css directories, created thumbnails by
 resizing the images, and finally created the HTML pages. You can
 inspect your first photo album by opening file 'index.html' with your
 favorite browser. You can click on any image to see the larger
@@ -70,12 +72,41 @@ this case, all thumbnails and image and index pages are up to date.
 The line of periods shows progress, one period for each image
 processed.
 
+=head2 Protecting your work
+
+'album' not only tries to avoid doing unnecessary work, but it is also
+very careful to not destroy your original images, nor any other
+changes you may have made.
+
+In general, 'album' will I<never> overwrite or modify:
+
+=over 4
+
+=item *
+
+anything in the import directories (see below);
+
+=item *
+
+any images in the 'large' directory (which is considered 'original work');
+
+=item *
+
+any images in the 'medium' and 'thumbnails' directories (but see
+B<--clobber> below);
+
+=item *
+
+any icons or stylesheets, so it is save to customize these;
+
+=back
+
 =head2 Adding medium sized images
 
 The purpose of medium sized images is easy browsing by having a
 consistent and convenient size. The default size shows normal 4:3
 images completely on an 1024x768 screen in the browser's full screen
-mode. 
+mode.
 
 To add medium sized images (and also specify an album title):
 

@@ -5,6 +5,12 @@ clean ::
 
 init ::
 	mkdir -p $(DCIM)
+	for i in dsc00248.jpg dsc00251.jpg dsc00250.jpg dsc00258.jpg; do \
+	  cp /spare1/Albums/2004-Ierland/$(DCIM)/$$i $(DCIM)/$$i; \
+	done
+
+init2 ::
+	mkdir -p $(DCIM)
 	for i in dsc00248.jpg dsc00251.jpg dsc00251.mpg mov00085.mpg; do \
 	  cp /spare1/Albums/2004-Ierland/$(DCIM)/$$i $(DCIM)/$$i; \
 	done

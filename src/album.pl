@@ -4,8 +4,8 @@ my $RCS_Id = '$Id$ ';
 # Author          : Johan Vromans
 # Created On      : Tue Sep 15 15:59:04 2002
 # Last Modified By: Johan Vromans
-# Last Modified On: Sat Nov 20 12:46:11 2004
-# Update Count    : 2366
+# Last Modified On: Sun Nov 21 11:14:57 2004
+# Update Count    : 2368
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -1784,7 +1784,7 @@ sub add_button_images {
         # Otherwise, search for the uudecode 'begin' line.
         if ( /^begin\s+\d+\s+(.+)$/ ) {
 	    next if !$clobber && -s d_icons($1);
-	    print STDERR ("Creating icons ") if $verbose > 1 && !defined($name);
+	    print STDERR ("Creating icons: ") if $verbose > 1 && !defined($name);
 	    $did++;
             $name = d_icons($1);
 	    print STDERR ("$1 ") if $verbose > 1;
@@ -1797,9 +1797,6 @@ sub add_button_images {
     if ( $doing ) {
         die("Error in DATA: still processing $name\n");
         unlink($name);
-    }
-    else {
-	print STDERR ("done\n") if $did && $verbose > 1;
     }
 }
 
@@ -1969,7 +1966,7 @@ sub add_stylesheet {
     return if -e d_css("$css.css");
     print STDERR ("Creating style sheets: ")
       unless $add_stylesheet_msg++;
-    print STDERR ("$css ");
+    print STDERR ("$css.css ");
     $css = d_css("$css.css");
     open(my $out, ">".$css) or die("$css: $!\n");
     binmode($out);
