@@ -227,6 +227,13 @@ sequence of B<f> (file name), B<s> (size, WxH), B<c> (caption), B<t>
 (tag line). If no B<!caption> has been used, the default value is
 B<fct>.
 
+=item B<!dateformat> I<XXX>
+
+Sets the default date format as used for the tag lines for new images.
+I<XXX> must be a valid strftime(2) date format string, for example:
+
+  !dateformat %a %e %B %Y
+
 =back
 
 =head2 Importing new images
