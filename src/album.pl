@@ -4,8 +4,8 @@ my $RCS_Id = '$Id$ ';
 # Author          : Johan Vromans
 # Created On      : Tue Sep 15 15:59:04 2002
 # Last Modified By: Johan Vromans
-# Last Modified On: Wed Aug 25 10:57:38 2004
-# Update Count    : 2059
+# Last Modified On: Sun Aug 29 13:15:15 2004
+# Update Count    : 2069
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -25,6 +25,8 @@ my $my_package = 'Sciurix';
 my ($my_name, $my_version) = $RCS_Id =~ /: (.+).pl,v ([\d.]+)/;
 # Tack '*' if it is not checked in into RCS.
 $my_version .= '*' if length('$Locker$ ') > 12;
+
+my $creator = "Created with <a href=\"http://search.cpan.org/~jv/Album/\">Album</a> $::VERSION";
 
 ################ Command line parameters ################
 
@@ -1041,6 +1043,7 @@ sub write_image_page {
     my $auxright = html($el->dest_name);
     my $s = size_info($el);
     $auxright .= " ($s)" if $s;
+    $auxright .= "&nbsp;&nbsp;&nbsp;$creator" if $creator;
     my $auxleft  = html($el->tag || "");
 
     my $it2 = $it;
