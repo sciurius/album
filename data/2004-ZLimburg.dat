@@ -6,7 +6,7 @@
 200409111819200672.jpg  Noorbeek
 200409111827480674.jpg  Noorbeek
 
-../20040911/index.html -i:../20040911/thumbnails/200409111822550673.jpg Herdenking 12 sept 1944
+../20040911/index.html  Herdenking 12 sept 1944
 
 !tag zo 12, gele wandeling
 200409121134300702.jpg  Gezicht op Noorbeek
@@ -41,4 +41,7 @@
 200409141134140726.jpg -O:1 Holle weg 
 200409141149390727.jpg  Taalstrijd
 200409141209580728.jpg  Gezicht op Fouron St Martin
+
+!tag wo 15, rode wandeling Mh
+200409151252590729.jpg -O:1  
 
