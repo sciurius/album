@@ -6,8 +6,8 @@ my $RCS_Id = '$Id$ ';
 # Author          : Johan Vromans
 # Created On      : Tue Sep 15 15:59:04 1992
 # Last Modified By: Johan Vromans
-# Last Modified On: Thu Sep 12 13:59:13 2002
-# Update Count    : 431
+# Last Modified On: Sun Sep 15 18:00:10 2002
+# Update Count    : 470
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -69,13 +69,18 @@ my $target_is_source = do {
 
 my $TMPDIR = $ENV{TMPDIR} || $ENV{TEMP} || '/usr/tmp';
 
+my $LGREY = "#E0E0E0";
+my $MGREY = "#D0D0D0";
+my $DGREY = "#C0C0C0";
+
 my $css = <<EOD;
 body  { font-size: 80%; font-family: Verdana, Arial, Helvetica; }
 td    { font-size: 80%; font-family: Verdana, Arial, Helvetica; }
 EOD
 my $bodyatts = "text=\"#000000\" link=\"#000000\" vlink=\"#000000\"".
-               " alink=\"#FF0000\" bgcolor=\"#C0C0C0\"";
+               " alink=\"#FF0000\" bgcolor=\"$DGREY\"";
 my $suffixpat = qr{\.(?:jpe?g|png|gif)}i;
+
 
 ################ The Process ################
 
@@ -345,6 +350,27 @@ sub write_image_page {
 
     my $t = "$album_title: Image " . ($i+1);
     $t .= " of " . $num_entries if $num_entries > 1;
+    my $tt = $t;
+
+    ($base = $filelist[$i-1]) =~ s/$suffixpat$/.html/;
+    $t = button("prev", $base, $i > 0) . " " . $t;
+    # Link to first image.
+    ($base = $filelist[0]) =~ s/$suffixpat$/.html/;
+    $t = button("first", $base, $i > 0) . $t;
+
+    $t = "<a href=\"../index" .
+      (($i >= $entries_per_page) ? int($i / $entries_per_page) : "") .
+	".html\">" .
+	  "<img align=\"top\" src=\"../index.png\" border=\"0\" alt=\"[Index]\"></a>" . $t;
+
+    # Link to next image.
+    ($base = $filelist[$i+1]) =~ s/$suffixpat$/.html/
+      if $i < $num_entries-1;
+    $t .= " " . button("next", $base, $i < $num_entries-1);
+    ($base = $filelist[-1]) =~ s/$suffixpat$/.html/;
+    $t .= button("last", $base, $i < $num_entries-1);
+
+
     print $html ("<style type=\"text/css\">\n",
 		 "<!--\n",
 		 $css,
@@ -352,31 +378,13 @@ sub write_image_page {
 		 "</style>\n",
 		 "<html>\n",
 		 "<head>\n",
-		 "<title>$t</title>\n",
+		 "<title>$tt</title>\n",
 		 "</head>\n",
 		 "<body $bodyatts>\n",
-		 "<center><h1>$t</h1>\n",
-		 "<br>\n",
-		 "<a href=\"../index",
-		 ($i >= $entries_per_page) ? int($i / $entries_per_page) : "",
-		 ".html\">",
-		 "<img src=\"../index.png\" border=\"0\" alt=\"[Index]\"></a>\n");
-
-    # Link to first image.
-    ($base = $filelist[0]) =~ s/$suffixpat$/.html/;
-    print $html (button("first", $base, $i > 0), "\n");
-    ($base = $filelist[$i-1]) =~ s/$suffixpat$/.html/;
-    print $html (button("prev", $base, $i > 0), "\n");
-    # Link to next image.
-    ($base = $filelist[$i+1]) =~ s/$suffixpat$/.html/
-      if $i < $num_entries-1;
-    print $html (button("next", $base, $i < $num_entries-1), "\n");
-    ($base = $filelist[-1]) =~ s/$suffixpat$/.html/;
-    print $html (button("last", $base, $i < $num_entries-1), "\n");
+		 "<center><h1>$t</h1>\n");
 
     ($base = $file) =~ s/$suffixpat$/.html/;
-    print $html ("<br><br>\n",
-		 "<h2>", html($captions{$file}), "</h2><p>\n",
+    print $html ("<h2>", html($captions{$file}), "</h2><p>\n",
 		 ($dir eq "medium") ?
 		 "<a href=\"../large/$base\"><img src=\"$file\" alt=\"[Click for bigger image]\">" : "<img src=\"$file\"></a>",
 		 "<br>\n",
@@ -390,6 +398,138 @@ sub write_image_page {
 }
 
 sub write_index_page {
+    my ($x) = @_;
+
+    # Open the page for writing
+    my $html = do { local *H; *H };
+    if ( $x > 0 ) {
+	open($html, ">$dest_dir/index$x.html")
+	  or die("index$x.html (create): $!\n");
+    }
+    else {
+	open($html, ">$dest_dir/index.html")
+	  or die("index.html (create): $!\n");
+    }
+
+    my $t = $album_title.": Index";
+    my $tt = $t;
+
+    if ( $num_indexes > 1) {
+	$t = button1("prev", "index.html", 0) . " " . $t unless $x;
+	$t = button1("prev", "index.html") . " " . $t if $x == 1;
+	$t = button1("prev", "index".($x-1).".html") . " " . $t if $x > 1;
+	$t = button1("first", "index.html") . $t;
+	$tt .= " " . ($x+1) . " of $num_indexes";
+	if ( $index_buttons ) {
+	    $t .= " " . ($x+1) . " of $num_indexes";
+	}
+	else {
+	    foreach ( 0..$num_indexes-1 ) {
+		if ( $_ == $x ) {
+		    $t .= " " . ($x+1);
+		}
+		else {
+		    $t .= " <a href=\"index".
+		      ($_ ? $_ : ""). ".html\">".($_+1)."</a>";
+		}
+	    }
+	}
+	$t .= " " . button1("next", "index.html", 0) if $x == $num_indexes-1;
+	$t .= " " . button1("next", "index".($x+1).".html") if $x < $num_indexes-1;
+	$t .= button1("last", "index".($num_indexes-1).".html");
+    }
+
+    print $html ("<style type=\"text/css\">\n",
+		 "<!--\n",
+		 $css,
+		 "-->\n",
+		 "</style>\n",
+		 "<html>\n",
+		 "<head>\n",
+		 "<title>$tt</title>\n",
+		 "</head>\n",
+		 "<body $bodyatts>\n",
+		 "<center>\n",
+		 "<h1>$t</h1>\n",
+		 "<p>\n");
+
+    if ( $index_buttons ) {
+	if ( $x > 0 ) {
+	    print $html (button("first"), "\n")
+	      if $num_indexes > 2;
+	    print $html (button("prev",
+				"index".($x > 1 ? $x-1 : "").".html"), "\n");
+	}
+
+	if ( $x < $num_indexes-1 ) {
+	    print $html (button("next", "index".($x+1).".html"), "\n");
+	    print $html (button("last", "index".($num_indexes-1).".html"), "\n")
+	      if $num_indexes > 2;
+	}
+    }
+
+    print $html (qq(<table border="2" cellpadding="3" cellspacing="3"),
+		 qq( bgcolor="$MGREY">\n));
+
+    my $first_in_row = $x * $entries_per_page;
+
+    for ( my $i = 0; $i < $index_rows; $i++, $first_in_row += $index_columns ) {
+	# First row is the image thumbnails.
+	if ( $first_in_row < $num_entries ) {
+	    print $html (qq(  <tr bgcolor="$LGREY">\n));
+	    for ( my $j = 0; $j < $index_columns; $j++ ) {
+		my $this = $first_in_row + $j;
+		if ( $this < $num_entries ) {
+		    my $file = $filelist[$this];
+		    my $base = $medium ? "medium/" : "large/";
+		    $base .= $file;
+		    $base =~ s/$suffixpat$/.html/;
+		    print $html ("    <td align=\"center\" valign=\"bottom\">\n",
+				 "      <table border=\"0\" cellpadding=\"0\" cellspacing=\"0\" bgcolor=\"$LGREY\">\n",
+				 "        <tr>\n",
+				 "          <td align=\"center\">",
+				 "<a href=\"$base\"><img src=\"thumbnails/$file\" alt=\"[Click for bigger image]\" border=\"0\"></a>",
+				 "</td>\n",
+				 "        </tr>\n",
+				 "        <tr>\n",
+				 "          <td align=\"center\">");
+		    foreach ( split(//, $caption) ) {
+			print $html ($file) if $_ eq 'f';
+			print $html (join("x", @{$info->{$file}}[2,3]),
+				     ", ", bytes($info->{$file}->[$medium ? 1 : 0]))
+			  if $_ eq 's';
+			if ( $_ eq 'c' ) {
+			    my $t = $captions{$file} || "";
+			    $t =~ s/\n.*//;
+			    print $html (html($t));
+			}
+			if ( $_ eq 't' ) {
+			    print $html (html($tag{$file})) if $tag{$file};
+			    next;
+			}
+			print $html ("<br>");
+		    }
+		    print $html ("\n",
+				 "          </td>\n",
+				 "        </tr>\n",
+				 "      </table>\n",
+				 "    </td>\n");
+		}
+		else {
+		    print $html ("    <td bgcolor=\"$DGREY\">&nbsp</td>\n");
+		}
+	    }
+	    print $html ("  </tr>\n");
+	}
+    }
+    print $html ("</table>\n");
+
+    print $html ("<p>\n",
+		 "</center></body></html>\n");
+    close($html);
+}
+
+sub write_alt_index_page {
     my ($x) = @_;
 
     # Open the page for writing
@@ -454,7 +594,7 @@ sub write_index_page {
     }
 
     print $html ("<table border=\"2\" cellpadding=\"0\" cellspacing=\"3\"",
-		 " bgcolor=\"#E0E0E0\">\n");
+		 " bgcolor=\"$MGREY\">\n");
 
     my $first_in_row = $x * $entries_per_page;
 
@@ -522,10 +662,22 @@ sub button {
 
     if ( $active ) {
 	return "<a href=\"$index\" alt=\"[$Tag]\">".
-	  "<img src=\"../$tag.png\" border=\"0\" alt=\"[$Tag]\">".
+	  "<img align=\"top\" src=\"../$tag.png\" border=\"0\" alt=\"[$Tag]\">".
 	    "</a>";
     }
-    "<img src=\"../$tag.png\" border=\"0\" alt=\"[$Tag]\">";
+    "<img align=\"top\" src=\"../$tag.png\" border=\"0\" alt=\"[$Tag]\">";
+}
+
+sub button1 {
+    my ($tag, $index, $active) = (@_, 1);
+    my $Tag = ucfirst($tag);
+
+    if ( $active ) {
+	return "<a href=\"$index\" alt=\"[$Tag]\">".
+	  "<img align=\"top\" src=\"$tag.png\" border=\"0\" alt=\"[$Tag]\">".
+	    "</a>";
+    }
+    "<img align=\"top\" src=\"$tag.png\" border=\"0\" alt=\"[$Tag]\">";
 }
 
 sub html {
