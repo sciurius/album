@@ -4,8 +4,8 @@ my $RCS_Id = '$Id$ ';
 # Author          : Johan Vromans
 # Created On      : Tue Sep 15 15:59:04 2002
 # Last Modified By: Johan Vromans
-# Last Modified On: Thu Jul 15 18:55:13 2004
-# Update Count    : 2036
+# Last Modified On: Wed Aug  4 13:45:12 2004
+# Update Count    : 2040
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -45,6 +45,7 @@ my $index_columns;
 my $index_rows;
 my $thumb;
 my $medium;			# medium size, between large and small
+my $mediumonly;			# only medium size (for web export)
 my $album_title;
 my $caption;
 
@@ -1011,7 +1012,10 @@ sub write_image_page {
 
     my $imglink;
     if ( $dir eq "medium" ) {
-	if ( $movie ) {
+	if ( $mediumonly ) {
+	    $imglink = img($file, alt => "[Image]", border => 2);
+	}
+	elsif ( $movie ) {
 	    $imglink = "<a href='../large/" . $el->dest_name . "'>" .
 	      img($file, alt => "[Click to play movie]", border => 2) .
 		"</a>";
@@ -1787,6 +1791,7 @@ sub app_options {
 		     'rows=i'	=> \$index_rows,
 		     'thumbsize=i' => \$thumb,
 		     'mediumsize:i' => \$medium,
+		     'mediumonly' => \$mediumonly,
 		     'title=s'	=> \$album_title,
 		     'clobber'	=> \$clobber,
 		     'link!'	=> \$linkthem,
@@ -1810,7 +1815,7 @@ sub app_options {
     app_ident() if $ident;
     $dest_dir = @ARGV ? shift(@ARGV) : ".";
     $dest_dir =~ s;^\./;;;
-    $medium = DEFAULTS->{mediumsize} if defined($medium) && !$medium;
+    $medium = DEFAULTS->{mediumsize} if defined($medium) && !$medium || $mediumonly;
     if ( $import_dir ) {
 	die("$import_dir: Not a directory\n")
 	  unless -d $import_dir;
