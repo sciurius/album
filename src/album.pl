@@ -4,8 +4,8 @@ my $RCS_Id = '$Id$ ';
 # Author          : Johan Vromans
 # Created On      : Tue Sep 15 15:59:04 2002
 # Last Modified By: Johan Vromans
-# Last Modified On: Fri Sep 17 20:00:42 2004
-# Update Count    : 2275
+# Last Modified On: Fri Sep 17 20:18:56 2004
+# Update Count    : 2278
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -1505,17 +1505,16 @@ sub write_journal {
 			"</tr>\n";
 		next;
 	    }
-	    next if $e->type == T_REF; #### TODO
 
 	    # We cannot use $el->seq, since that's the info.dat order
 	    # which and includes the skipped entries.
-	    my $dst = $e->type == T_MPG ? $e->assoc_name : $e->dest_name;
+	    my $dst = ($e->type == T_MPG || $e->type == T_REF) ? $e->assoc_name : d_thumbnails($e->dest_name);
 	    my $img = "<a name='" . sprintf("img%04d", $seq) . "' " .
 		      "href='../" .
 		      d_medium(sprintf("img%04d.html", $seq)) .
 		      "' border='0'>" .
 		      "<img src='../" .
-		      d_thumbnails($dst) . "'></a>";
+		      $dst . "'></a>";
 
 	    $jnl .= "<tr>\n".
 	            "  <td valign='middle' align='left'>\n".
