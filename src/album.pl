@@ -4,8 +4,8 @@ my $RCS_Id = '$Id$ ';
 # Author          : Johan Vromans
 # Created On      : Tue Sep 15 15:59:04 2002
 # Last Modified By: Johan Vromans
-# Last Modified On: Fri Jun 25 17:31:13 2004
-# Update Count    : 1535
+# Last Modified On: Sat Jun 26 20:04:58 2004
+# Update Count    : 1542
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -108,6 +108,7 @@ my $br = br();
 use File::Path;
 use File::Basename;
 use Time::Local;
+use Image::Info;
 use Data::Dumper;
 
 # The files already there, if any.
@@ -824,11 +825,8 @@ sub prepare_images {
 		print STDERR ("(known) ") if $verbose;
 	    }
 	    else {
-		my $inf = `identify -verbose -format "%w %h" $i_large`;
-		die("Aborted\n") if $? == 2;
-		die(sprintf("identify error: 0x%02x%02x\n", $? >> 8, $? & 0xff))
-		  if $? || $inf !~ /^(\d+)\s+(\d+)/;
-		($w, $h) = ($1, $2);
+		my $ii = Image::Info::image_info($i_large);
+		($w, $h) = Image::Info::dim($ii);
 	    }
 
 	    $ii->width($w);
