@@ -243,6 +243,10 @@ lookalike of the first index page.
 B<!icon> may be followed by a something true or false (B<--noicon>).
 Default is true.
 
+=item B<!locale> I<XXX>
+
+Set the locales for sorting and date formats to I<XXX>.
+
 =back
 
 B<album> can read values for settings from configuration files.
