@@ -4,8 +4,8 @@ my $RCS_Id = '$Id$ ';
 # Author          : Johan Vromans
 # Created On      : Sun May  9 17:49:55 2004
 # Last Modified By: Johan Vromans
-# Last Modified On: Tue May 25 19:53:41 2004
-# Update Count    : 60
+# Last Modified On: Fri May 28 22:08:41 2004
+# Update Count    : 62
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -97,7 +97,7 @@ foreach my $dir ( @ARGV ) {
 	# Note: it is better to have jhead handle this since it clears
 	# the rotation info after rotation.
 	if ( ($exif->{orientation}||"") =~ /^rotate (\d+)$/i  ) {
-	    system("jhead", "-autorot", "$dir/$file");
+	    system("jhead -autorot $dir/$file >&2");
 	    $exif = get_exif("$dir/$file");
 	}
 	if ( ($exif->{orientation}||"") =~ /^rotate (\d+)$/i  ) {
