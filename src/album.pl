@@ -4,8 +4,8 @@ my $RCS_Id = '$Id$ ';
 # Author          : Johan Vromans
 # Created On      : Tue Sep 15 15:59:04 2002
 # Last Modified By: Johan Vromans
-# Last Modified On: Sat Jun 26 21:30:40 2004
-# Update Count    : 1544
+# Last Modified On: Wed Jun 30 10:56:00 2004
+# Update Count    : 1591
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -453,7 +453,7 @@ sub do_exif {
 	my ($type, $seq, $ext) = ($1, $2, $3);
 	my $exif = get_exif("$import_dir/$file");
 	my $el;
-	my $fd = $exif->{"date/time"} || "";
+	my $fd = $exif->{"DateTime"} || "";
 	if ( $fd =~ /(\d\d\d\d):(\d\d):(\d\d) (\d\d):(\d\d):(\d\d)/ ) {
 	    my $time = timelocal($6,$5,$4,$3,$2-1,$1);
 	    my $new = "$1$2$3$4$5$6$seq";
@@ -475,8 +475,18 @@ sub do_exif {
 	    $el = new FileEntry (type => T_JPG, orig_name => $file,
 				 dest_name => $file, exif => $exif);
 	}
-	if ( ($exif->{orientation}||"") =~ /^rotate (\d+)$/i  ) {
-	    $el->orientation(int($1/90));
+	if ( exists $exif->{Orientation} ) {
+	    my $map = { top_left   => 0,
+			top_right  => 1,
+			bot_right  => 2,
+			bot_left   => 3,
+			left_top   => 0,
+			right_top  => 1,
+			right_bot  => 2,
+			left_bot   => 3,
+		      };
+
+	    $el->orientation($map->{$exif->{Orientation}});
 	}
 	if ( $next && $next eq "$type$seq.mpg" ) {
 	    warn("$file: Changed to VOICE\n");
@@ -916,7 +926,7 @@ sub write_image_page {
     }
 
     my $exif = "";
-    if ( $el->exif ) {
+    if ( $el->exif && exists($el->exif->{Make}) ) {
 	$exif = "<table border='1' width='100%' bgcolor='$MGREY'>\n" . restyle_exif($el->exif) . "</table>\n";
     }
 
@@ -1154,24 +1164,37 @@ sub restyle_exif {
     my ($exif) = @_;
     my $ret = "";
     my $v;
-    $ret .= "<tr><td>Date</td><td>".html($v)."</td></tr>\n"
-      if $v = $exif->{"date/time"};
-    $ret .= "<tr><td>Exposure</td><td>".html(ucfirst $exif->{"exposure"})."  ".
-      html($exif->{"exposure time"})."</td></tr>\n";
-    $ret .= "<tr><td>Aperture</td><td>".html($v)."</td></tr>\n"
-      if $v = $exif->{"aperture"};
-    if ( $v = $exif->{"focal length"} ) {
-	if ( $exif->{"camera model"} eq "DSC-V1" && $v =~ /(\d+\.\d+)mm/ ) {
-	    $v .= sprintf("  (%.1fmm equiv.)", $1*4.857);
-	}
-	$ret .= "<tr><td>Focal length</td><td>".html($v)."</td></tr>\n"
+    my $app = sub {
+	$ret .= "<tr><td>".html($_[0])."</td>".
+	            "<td>".html($_[1])."</td></tr>\n";
+    };
+    $app->("Date", $v) if $v = $exif->{DateTime};
+    my $t = $exif->{ExposureTime};
+    if ( $t <= 0.5 ) {
+	$t = "1/".int(0.5 + 1/$t)."s";
     }
-    $ret .= "<tr><td>ISO</td><td>".html($v)."</td></tr>\n"
-      if $v = $exif->{"iso equiv."};
-    $ret .= "<tr><td>Flash</td><td>".html(ucfirst $v)."</td></tr>\n"
-      if ($v = $exif->{"flash used"}) && $v ne "No";
-    $ret .= "<tr><td>Metering</td><td>".html(ucfirst $v)."</td></tr>\n"
-      if ($v = $exif->{"metering mode"}) && $v ne "No";
+    $app->("Exposure",
+	   join(" ", $exif->{ExposureMode} || "",
+		$exif->{ExposureProgram} || "", $t));
+    $app->("Aperture", sprintf("%.1f", $v))
+      if $v = $exif->{FNumber};
+    if ( $v = $exif->{FocalLength} ) {
+	if ( $exif->{Model} eq "DSC-V1" ) {
+	    $v .= sprintf("mm  (%.1fmm equiv.)", $v*4.857);
+	}
+	else {
+	    $v .= "mm";
+	}
+	$app->("Focal length", $v);
+    }
+    $app->("ISO", $v) if $v = $exif->{ISOSpeedRatings};
+    $app->("Flash", $v)
+      if ($v = $exif->{Flash}) && $v ne "Flash did not fire";
+    $app->("Metering", $v) if $v = $exif->{MeteringMode};
+    $app->("Scene", $v) if $v = $exif->{SceneCaptureType};
+    $app->("Camera",
+	   join(" ", $v, $exif->{Model}))
+      if $v = $exif->{Make};
 }
 
 #### Caption helpers.
@@ -1179,7 +1202,7 @@ sub restyle_exif {
 sub f_caption {
     my ($el) = @_;
     my $s = html($el->dest_name);
-    if ( $el->exif ) {
+    if ( $el->exif && exists($el->exif->{Make}) ) {
 	$s = "<a href='#' class='info'>$s<span>".
 	  "<table border='1' bgcolor='$MGREY' width='100%'>\n".
 	    restyle_exif($el->exif) . "</table>\n".
@@ -1208,8 +1231,8 @@ sub c_caption {
 #### Persistent info (cache) helpers.
 
 sub load_cache {
-    $info = new ImageInfo;
-    $info->load(d_dest(".cache")) if !$clobber && -s d_dest(".cache");
+    $info = new ImageInfo
+      ((!$clobber && -s d_dest(".cache")) ? d_dest(".cache") : undef);
 }
 
 sub update_cache {
@@ -1426,10 +1449,37 @@ sub get_exif {
 
     # Use cached info.
     my $ii = $info->entry($file);
-    if ( $ii ) {
+    if ( $ii && $info->version >= 2 ) {
 	my $e = $ii->exif;
 	return $e if $e;
     }
+
+    my $exif = Image::Info::image_info($file);
+    return $exif if exists($exif->{error});
+
+    my %h;
+    for my $key ( qw(DateTime ExifImageLength ExifImageWidth
+		     ExposureMode ExposureProgram ExposureTime
+		     FNumber Flash FocalLength ISOSpeedRatings
+		     ImageDescription Make Model
+		     MeteringMode Orientation SceneCaptureType
+		     height width
+		    ) ) {
+	my $val = $exif->{$key};
+	next unless defined $val;
+	$val = $val->as_float if UNIVERSAL::can($val,"as_float");
+	$h{$key} = $val;
+    }
+
+    $ii ||= new ImageInfo::Entry;
+    $ii->width($exif->{width});
+    $ii->height($exif->{height});
+    $ii->exif(\%h);
+    $info->entry($file, $ii);
+
+    return \%h;
+
+=begin obsolete
 
     # Run jhead to collect the EXIF data.
     open(my $p, "-|", "jhead " . squote($file)) or die("$file: $!\n");
@@ -1450,6 +1500,9 @@ sub get_exif {
 
     # Return.
     \%h;
+
+=cut
+
 }
 
 ################ Subroutines ################
@@ -1610,7 +1663,10 @@ sub new {
     my ($pkg, $file) = @_;
     $pkg = ref($pkg) || $pkg;
     my $self = bless({}, $pkg);
-    $self->load($file) if defined($file);
+    if ( defined($file) ) {
+	$self->load($file);
+warn("loaded cache v" . $self->version . "\n");
+    }
     $self;
 }
 
@@ -1623,7 +1679,7 @@ sub load {
     foreach my $f ( keys(%$info) ) {
 	my $entry = $info->{$f};
 	bless $entry, "ImageInfo::Entry"
-	  unless UNIVERSAL::isa($entry, "ImageInfo::Entry");
+	  unless $f eq "_version" || UNIVERSAL::isa($entry, "ImageInfo::Entry");
 	$self->{info}->{$f} = $entry;
     }
 }
@@ -1631,6 +1687,7 @@ sub load {
 sub store {
     my ($self, $file) = @_;
     my $info = $self->{info};
+    $info->{_version} = 2;
     $Data::Dumper::Indent = 1;
     $Data::Dumper::Sortkeys = 1;
     $Data::Dumper::Sortkeys = 1; # avoid warnings
@@ -1656,6 +1713,11 @@ sub entry {
 sub entries {
     my ($self) = @_;
     [ sort(keys(%{$self->{info}})) ];
+}
+
+sub version {
+    my ($self) = @_;
+    $self->{info}->{_version} || 1;
 }
 
 use Class::Struct "ImageInfo::Entry" =>
