@@ -6,8 +6,8 @@ my $RCS_Id = '$Id$ ';
 # Author          : Johan Vromans
 # Created On      : Tue Sep 15 15:59:04 1992
 # Last Modified By: Johan Vromans
-# Last Modified On: Sat Apr 26 13:46:53 2003
-# Update Count    : 500
+# Last Modified On: Sun Apr 27 18:28:07 2003
+# Update Count    : 508
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -36,6 +36,7 @@ my $dest_dir = ".";
 my $image_info;
 my $index_buttons = 0;
 my $multi = 0;			# multi-level image names
+my $noritsu = 0;		# write noritsu info
 my $clobber = 0;
 my $verbose = 0;		# verbose processing
 
@@ -166,6 +167,8 @@ for ( $i = 0; $i < $num_indexes; $i++ ) {
 
 # Copy the button images over to the target directory.
 add_button_images();
+
+write_noritsu_info() if $noritsu;
 
 exit 0;
 
@@ -683,6 +686,38 @@ sub write_alt_index_page {
     close($html);
 }
 
+sub write_noritsu_info {
+    my $fd = do { local *H; *H };
+    open($fd, ">$dest_dir/noritsu.dat");
+    my @tm = localtime(time);
+
+    print $fd ("[CDINFO]\n",
+	       "CD_SERIAL_NUMBER=20030425105800\n",
+	       "MACHINE_NAME=QSS-3001\n",
+	       "MACHINE_SERIAL_NUMBER=20311500,20311500,00000000\n",
+	       "SOFT_VER=Golden Hawk Technology 3.8G\n",
+	       "DATE=", sprintf("%04d%02d%02d", 1900+$tm[5], 1+$tm[4], $tm[3]), "\n",
+	       "ORDER=1\n",
+	       "NUMBER_OF_IMAGES=", $num_entries, "\n",
+	       "\n",
+	       "[ORDER01]\n",
+	       "ORDER_NUMBER=0001\n",
+	       "CID=000-000\n",
+	       "IMG_CNT=", $num_entries, "\n",
+	       "IMG_QUALITY=0\n",
+	       "IMG_FOLDER=LARGE\n",
+	       "THM_FOLDER=LARGE\n");
+    foreach ( 1 .. $num_entries ) {
+	printf $fd ("IMG%d=%s,%d,%d,0,135F,0,0,,%d\n",
+		    $_,
+		    $filelist[$_-1],
+		    $info->{$filelist[$_-1]}->[2],
+		    $info->{$filelist[$_-1]}->[3],
+		    $_ - 1);
+    }
+    close($fd);
+}
+
 sub button {
     my ($tag, $index, $active) = (@_, 1);
     my $Tag = ucfirst($tag);
@@ -799,6 +834,7 @@ sub app_options {
 		     'mediumsize=i' => \$medium,
 		     'title=s'	=> \$album_title,
 		     'clobber'	=> \$clobber,
+		     'noritsu'	=> \$noritsu,
 		     'multi'	=> \$multi,
 		     'index-buttons' => \$index_buttons,
 		     'caption=s' => \$caption,
@@ -834,6 +870,7 @@ Usage: $0 [options] [file ...]
     -captions XXX	f: filename s: size c: description t: tag
     -multi		force multi-level image names
     -clobber		recreate everything
+    -noritsu		wite noritsu info
     -index-buttons	use index buttons instead of links
     -help		this message
     -ident		show identification
