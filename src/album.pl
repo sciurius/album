@@ -6,8 +6,8 @@ my $RCS_Id = '$Id$ ';
 # Author          : Johan Vromans
 # Created On      : Tue Sep 15 15:59:04 1992
 # Last Modified By: Johan Vromans
-# Last Modified On: Sat May  3 16:47:21 2003
-# Update Count    : 526
+# Last Modified On: Sat May  3 17:18:22 2003
+# Update Count    : 533
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -371,37 +371,33 @@ sub write_image_page {
     my ($i, $dir) = @_;
 
     my $file = $filelist[$i];
-    my $base = $htmllist[$i];
     my $html = do { local *H; *H };
-    open($html, ">$dest_dir/$dir/$base" )
-      or die("$base (create): $!\n");
+    open($html, ">$dest_dir/$dir/".$htmllist[$i] )
+      or die($htmllist[$i]." (create): $!\n");
 
     my $t = "$album_title: Image " . ($i+1);
     $t .= " of " . $num_entries if $num_entries > 1;
     my $tt = $t;
 
-    $base = $htmllist[$i-1];
-    $t = button("prev", $base, 1, $i > 0) . " " . $t;
-    # Link to first image.
-    $base = $htmllist[0];
-    $t = button("first", $base, 1, $i > 0) . $t;
+    # Link to first/prev image.
+    $t = button("first", $htmllist[0],    1, $i > 0)
+       . button("prev",  $htmllist[$i-1], 1, $i > 0) . " " . $t;
 
     if ( $dir eq "large" && $medium ) {
 	$t = "<a href=\"../medium/".$htmllist[$i]."\">" .
-	      "<img align=\"top\" src=\"../index.png\" border=\"0\" alt=\"[Medium size]\"></a>" . $t;
+	      "<img align=\"top\" src=\"../images/index.png\" border=\"0\" alt=\"[Medium size]\"></a>" . $t;
     }
     else {
 	$t = "<a href=\"../index" .
 	  (($i >= $entries_per_page) ? int($i / $entries_per_page) : "") .
 	    ".html\">" .
-	      "<img align=\"top\" src=\"../index.png\" border=\"0\" alt=\"[Index]\"></a>" . $t;
+	      "<img align=\"top\" src=\"../images/index.png\" border=\"0\" alt=\"[Index]\"></a>" . $t;
     }
 
-    # Link to next image.
-    $base = $htmllist[$i+1] if $i < $num_entries-1;
-    $t .= " " . button("next", $base, 1, $i < $num_entries-1);
-    $base = $htmllist[-1];
-    $t .= button("last", $base, 1, $i < $num_entries-1);
+    # Link to next/last image.
+    $t .= " "
+       . button("next", $htmllist[$i+1], 1, $i < $num_entries-1)
+       . button("last", $htmllist[-1],   1, $i < $num_entries-1);
 
 
     print $html ("<style type=\"text/css\">\n",
@@ -416,10 +412,9 @@ sub write_image_page {
 		 "<body $bodyatts>\n",
 		 "<center><h1>$t</h1>\n");
 
-    $base = $htmllist[$i];
     print $html ("<h2>", html($captions{$file}), "</h2><p>\n",
 		 ($dir eq "medium") ?
-		 "<a href=\"../large/$base\"><img src=\"$file\" alt=\"[Click for bigger image]\">" : "<img src=\"$file\"></a>",
+		 "<a href=\"../large/".$htmllist[$i]."\"><img src=\"$file\" alt=\"[Click for bigger image]\">" : "<img src=\"$file\"></a>",
 		 "<br>\n",
 		 $file, " ", $tag{$file}||"", " (",
 		 join("x", @{$info->{$file}}[2,3]), ", ",
@@ -449,8 +444,8 @@ sub write_index_page {
 
     if ( $num_indexes > 1) {
 	$t = button("prev", "index.html", 0, 0) . " " . $t unless $x;
-	$t = button("prev", "index.html") . " " . $t if $x == 1;
-	$t = button("prev", "index".($x-1).".html") . " " . $t if $x > 1;
+	$t = button("prev", "index.html", 0, 1) . " " . $t if $x == 1;
+	$t = button("prev", "index".($x-1).".html", 0, 1) . " " . $t if $x > 1;
 	$t = button("first", "index.html", 0, $x > 0) . $t;
 	$tt .= " " . ($x+1) . " of $num_indexes";
 	if ( $index_buttons ) {
@@ -467,8 +462,10 @@ sub write_index_page {
 		}
 	    }
 	}
-	$t .= " " . button("next", "index.html", 0, 0) if $x == $num_indexes-1;
-	$t .= " " . button("next", "index".($x+1).".html") if $x < $num_indexes-1;
+	$t .= " " . button("next", "index.html", 0, 0)
+	  if $x == $num_indexes-1;
+	$t .= " " . button("next", "index".($x+1).".html", 0, 1)
+	  if $x < $num_indexes-1;
 	$t .= button("last", "index".($num_indexes-1).".html", 0,
 		     $x < $num_indexes - 1);
     }
@@ -492,12 +489,15 @@ sub write_index_page {
 	    print $html (button("first", "index.html", 0, 1), "\n")
 	      if $num_indexes > 2;
 	    print $html (button("prev",
-				"index".($x > 1 ? $x-1 : "").".html", 0), "\n");
+				"index".($x > 1 ? $x-1 : "").".html", 0, 1),
+			 "\n");
 	}
 
 	if ( $x < $num_indexes-1 ) {
 	    print $html (button("next", "index".($x+1).".html", 0), "\n");
-	    print $html (button("last", "index".($num_indexes-1).".html", 0), "\n")
+	    print $html (button("last",
+				"index".($num_indexes-1).".html", 0, 1),
+			 "\n")
 	      if $num_indexes > 2;
 	}
     }
