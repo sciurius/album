@@ -24,16 +24,13 @@ Helper programs
 This program requires some helper programs for certain tasks.
 
   jpegtrans   will be used to rotate JPEG files loslessly.
-	      If missing, JPEG files will be rotated with possible loss
-	      of information.
+	      If missing, JPEG files will be rotated by ImageMagick,
+	      with possible loss of information.
   mencoder    is needed to manipulate MPEG files.
 	      If missing, MPEG files will be copied without
 	      processing. They cannot be rotated, and may not be
 	      playable on your mpeg player.
-  mplayer     is needed extract audio from VOICE files.
-	      If missing, VOICE files will remain silent.
-  mpegstill   is used to extract a still image from MPEG files.
-	      mpegstill comes with this kit.
-	      If missing, ImageMagick will be used, which will be
-	      painfully slow.
-  mpeg2decode is used by ImageMagick to extract MPEG files.
+  mplayer     is needed to extract a still from MPEG movies, and to 
+	      extract audio from VOICE files.
+	      If missing, no stills will be produced, and VOICE files
+	      will remain silent.
