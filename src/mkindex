@@ -2,10 +2,4 @@
 
 cd /spare1/Albums
 
-for dir in 200x
-do
-    perl tools/mkdata.pl --full $dir > $dir.dat
-    perl tools/album.pl --dest $dir --info $dir.dat
-done
-
 perl tools/mkindex.pl > index.html
