@@ -1,8 +1,10 @@
 package Album::Tutorial;
 
-# $Id$
+( $VERSION ) = '$Revision$ ' =~ /\$Revision:\s+([^\s]+)/;
 
 # NOTE: This is a documentation-only module.
+
+use strict;
 
 =pod
 
@@ -278,3 +280,5 @@ GNU General Public License or the Artistic License for more details.
 =cut
 
 1;
+
+# $Id$

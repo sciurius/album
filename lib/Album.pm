@@ -1,8 +1,10 @@
 package Album;
 
-# $Id$
+( $VERSION ) = '$Revision$ ' =~ /\$Revision:\s+([^\s]+)/;
 
 # NOTE: This is a documentation-only module.
+
+use strict;
 
 =head1 NAME
 
@@ -58,3 +60,5 @@ GNU General Public License or the Artistic License for more details.
 =cut
 
 1;
+
+# $Id$
