@@ -6,8 +6,8 @@ my $RCS_Id = '$Id$ ';
 # Author          : Johan Vromans
 # Created On      : Tue Sep 15 15:59:04 1992
 # Last Modified By: Johan Vromans
-# Last Modified On: Wed Jul 10 15:40:22 2002
-# Update Count    : 53
+# Last Modified On: Fri May  7 09:50:58 2004
+# Update Count    : 54
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -71,7 +71,7 @@ print STDOUT ("<html><title>Foto Albums</title>\n",
 	      "<body bgcolor=\"#C0C0C0\">\n",
 	      "<h1>Foto Albums</h1>\n",
 	      "<ul>\n");
-foreach my $file ( sort(keys(%index)) ) {
+foreach my $file ( reverse sort(keys(%index)) ) {
     my $title = $index{$file};
     $file =~ s/^\.\///;
     print STDOUT ("  <li><a href=\"$file\">$title</a></li><p>\n");
