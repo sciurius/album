@@ -4,8 +4,8 @@ my $RCS_Id = '$Id$ ';
 # Author          : Johan Vromans
 # Created On      : Tue Sep 15 15:59:04 2002
 # Last Modified By: Johan Vromans
-# Last Modified On: Sat Jul  3 21:59:35 2004
-# Update Count    : 1730
+# Last Modified On: Sun Jul  4 19:35:24 2004
+# Update Count    : 1731
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -1563,8 +1563,11 @@ sub new {
 	# Else, get image info.
 	else {
 	    my $ii = Image::Info::image_info($file);
-	    unless ( exists($ii->{error}) ) {
-
+	    if ( exists($ii->{error}) ) {
+		$self->{file_size} = -s _;
+		$self->{timestamp} = (stat(_))[9];
+	    }
+	    else {
 		for my $key ( @exif_fields ) {
 		    my $val = $ii->{$key};
 		    next unless defined $val;
