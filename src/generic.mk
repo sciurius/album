@@ -7,6 +7,8 @@ DCIM	= dcim/101msdcf
 DSC	= $(CAMERA)/$(DCIM)
 RAW	= $(HERE)/$(DCIM)
 
+IMPORT	= $(shell test -d $(DCIM) && echo "--dcim=$(DCIM)")
+
 default : update
 
 fetch :	mountc _fetch umountc
@@ -23,10 +25,10 @@ umountc :
 	-umount $(CAMERA)
 
 update :
-	perl -w $(TOOLS)/album.pl --verbose --update --dcim=$(RAW) $(HERE)
+	perl -w $(TOOLS)/album.pl --verbose --update $(IMPORT) $(HERE)
 
 clobber :
-	perl -w $(TOOLS)/album.pl --verbose --clobber --update --dcim=$(RAW) $(HERE)
+	perl -w $(TOOLS)/album.pl --verbose --clobber --update $(IMPORT) $(HERE)
 
 .PHONY : journal
 journal : journal/index.html
