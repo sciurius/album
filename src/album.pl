@@ -4,8 +4,8 @@ my $RCS_Id = '$Id$ ';
 # Author          : Johan Vromans
 # Created On      : Tue Sep 15 15:59:04 2002
 # Last Modified By: Johan Vromans
-# Last Modified On: Fri Jun 25 16:39:19 2004
-# Update Count    : 1523
+# Last Modified On: Fri Jun 25 17:24:31 2004
+# Update Count    : 1534
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -123,15 +123,15 @@ my $filelist = new FileList;
 # Load cached info, if possible.
 load_cache();
 
-# Gather files.
-load_files()  if -d d_large();
-#print STDERR Data::Dumper->Dump([$gotlist],[qw(gotlist)]);
-load_import() if $import_dir && -d $import_dir;
-#print STDERR Data::Dumper->Dump([$implist],[qw(implist)]);
-
 # Load image names and info from the info file, if any.
 load_info();
 #print STDERR Data::Dumper->Dump([$filelist],[qw(filelist)]);
+
+# Gather files.
+load_files()  if -d d_large();
+print STDERR Data::Dumper->Dump([$gotlist],[qw(gotlist)]);
+load_import() if $import_dir && -d $import_dir;
+#print STDERR Data::Dumper->Dump([$implist],[qw(implist)]);
 
 # Apply defaults to unset parameters.
 set_defaults();
@@ -224,6 +224,8 @@ use constant T_VOICE => 3;	# still image + sound
 # Storage for image info. Will be cached.
 my $info;
 
+my @subdirs;
+
 # Note: the HTML generators use the file names relatively.
 sub d_large      { unshift(@_, "large");      goto &d_dest; }
 sub d_medium     { unshift(@_, "medium");     goto &d_dest; }
@@ -280,6 +282,7 @@ sub load_info {
       unless open($fh, $image_info);
 
     my $el;
+    my %dirs;
     local($/) = $/;
     while ( <$fh> ) {
 	chomp;
@@ -355,21 +358,32 @@ sub load_info {
 	    $el->assoc_name($t);
 	}
 	$filelist->add($el);
+	$dirs{$1} = 1 if $file =~ m;^(.+)/[^/]+$;;
     }
     close($fh);
     die("Aborted\n") if $err;
+    @subdirs = sort(keys(%dirs));
 }
 
 sub load_files {
     my $dh = do { local *DH; *DH; };
     opendir($dh, d_large())
       or die("Cannot opendir " . d_large() . ": $!\n");
-
     my @files = sort grep { !/^\./ && /$suffixpat$/ } readdir($dh);
     closedir($dh);
 
+    foreach my $dir ( @subdirs ) {
+	opendir($dh, d_large($dir))
+	  or die("Cannot opendir " . d_large($dir) . ": $!\n");
+	push(@files,
+	     map { "$dir/$_" }
+	         sort grep { !/^\./ && /$suffixpat$/ } readdir($dh));
+	closedir($dh);
+    }
+
     while ( @files ) {
 	my $f = shift(@files);
+	next unless -f d_large($f);
 	my $el = new FileEntry
 	  (type => T_JPG, dest_name => $f);
 	if ( $f =~ /^(.+)\.jpg$/ ) {
