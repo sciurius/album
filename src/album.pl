@@ -4,8 +4,8 @@ my $RCS_Id = '$Id$ ';
 # Author          : Johan Vromans
 # Created On      : Tue Sep 15 15:59:04 2002
 # Last Modified By: Johan Vromans
-# Last Modified On: Mon Jul 12 22:55:46 2004
-# Update Count    : 2026
+# Last Modified On: Mon Jul 12 23:13:52 2004
+# Update Count    : 2027
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -1228,7 +1228,7 @@ sub write_journal {
 	foreach my $e ( @ann ) {
 	    if ( $e->type == T_ANN ) {
 		$jnl .= "<tr>\n".
-			"  <td colspan='2' valign='middle' align='left'>",
+			"  <td colspan='2' valign='middle' align='left'>".
 			"    " . indent($e->annotation, 4) . "\n".
 			"  </td>\n".
 			"</tr>\n";
