@@ -4,8 +4,8 @@ my $RCS_Id = '$Id$ ';
 # Author          : Johan Vromans
 # Created On      : Tue Sep 15 15:59:04 2002
 # Last Modified By: Johan Vromans
-# Last Modified On: Mon Jun 21 22:26:52 2004
-# Update Count    : 1292
+# Last Modified On: Tue Jun 22 11:11:52 2004
+# Update Count    : 1313
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -148,10 +148,10 @@ die("Nothing to do?\n") unless $num_entries > 0;
 
 # Clean up and create directories.
 if ( $clobber ) {
-    rmtree(["$dest_dir/thumbnails", "$dest_dir/medium"], 1);
+    rmtree([d_thumbnails(), d_medium()], 1);
 }
-mkpath(["$dest_dir/large", "$dest_dir/thumbnails", "$dest_dir/icons"], 1);
-mkpath(["$dest_dir/medium"], 1) if $medium;
+mkpath([d_large(), d_thumbnails(), d_icons()], 1);
+mkpath([d_medium()], 1) if $medium;
 
 # Copy the button images over to the target directory.
 add_button_images();
@@ -169,8 +169,8 @@ my $fn = "img0000";
 # Cleanup excess files.
 for ( 0 ) {
     my $excess = $fn++ . ".html";
-    unlink("$dest_dir/medium/$excess");
-    unlink("$dest_dir/large/$excess") or last;
+    unlink(d_medium($excess));
+    unlink(d_large($excess)) or last;
 }
 
 # Map file names to html pages. Start with 1 to match "image N of M".
@@ -182,8 +182,8 @@ for my $i ( 0 .. $num_entries-1 ) {
 # Cleanup excess files.
 for (my $i = $num_entries ; ; $i++ ) {
     my $excess = $fn++ . ".html";
-    unlink("$dest_dir/medium/$excess");
-    unlink("$dest_dir/large/$excess") or last;
+    unlink(d_medium($excess));
+    unlink(d_large($excess)) or last;
 }
 
 # Write the individual pages.
@@ -208,12 +208,20 @@ uptodate("index", $mod) if $verbose;
 
 # Cleanup excess indices.
 for (my $i = $num_indexes ; ; $i++ ) {
-    unlink("$dest_dir/index$i.html") or last;
+    unlink(d_dest("index$i.html")) or last;
 }
 
 exit 0;
 
 ################ Subroutines ################
+
+# Note: the HTML generators use the file names relatively.
+sub d_large      { unshift(@_, "large");      goto &d_dest; }
+sub d_medium     { unshift(@_, "medium");     goto &d_dest; }
+sub d_thumbnails { unshift(@_, "thumbnails"); goto &d_dest; }
+sub d_icons      { unshift(@_, "icons");      goto &d_dest; }
+sub d_journal    { unshift(@_, "journal");    goto &d_dest; }
+sub d_dest       { join("/", $dest_dir, @_); }
 
 sub set_parameter_defaults {
 
@@ -242,13 +250,13 @@ sub load_image_info {
     }
     else {
 	# Try default.
-	$image_info = "$dest_dir/" . DEFAULTS->{info};
+	$image_info = d_dest(DEFAULTS->{info});
 	unless ( -s $image_info ) {
 	    $add_new++ if $import_dir;
-	    $add_src++ if -d "$dest_dir/large";
+	    $add_src++ if -d d_large();
 	    print STDERR ("No ", DEFAULTS->{info});
 	    print STDERR (", adding images from ") if $add_src || $add_new;
-	    print STDERR ("$dest_dir/large")       if $add_src;
+	    print STDERR (d_large())               if $add_src;
 	    print STDERR (" and ")                 if $add_src && $add_new;
 	    print STDERR ($import_dir)             if $add_new;
 	    print STDERR ("\n");
@@ -345,7 +353,7 @@ sub load_image_info {
 	    (my $t = $file) =~ s/\.jpg$/.mp3/i;
 	    $el->assoc_name($t);
 	}
-	unless ( -s "$dest_dir/large/$file" ) {
+	unless ( -s d_large($file) ) {
 	    warn("$file (info): Missing\n");
 	    $missing{$file} = $el;
 	}
@@ -360,15 +368,15 @@ sub load_image_info {
 
 sub load_src_files {
     my $dh = do { local *DH; *DH; };
-    opendir($dh, "$dest_dir/large")
-      or die("Cannot opendir $dest_dir/large: $!\n");
+    opendir($dh, d_large())
+      or die("Cannot opendir " . d_large() . ": $!\n");
 
     foreach my $f ( sort grep { !/^\./ && /$suffixpat$/ } readdir($dh) ) {
 	my $el = new FileEntry
 	  (type => T_JPG, orig_name => $f, dest_name => $f);
 	if ( $f =~ /^(.+)\.jpg$/ ) {
 	    my $m = "$1.mp3";
-	    if ( -s "$dest_dir/large/$m" ) {
+	    if ( -s d_large($m) ) {
 		$el->type(T_VOICE);
 		$el->assoc_name($m);
 		warn("$f: Changed to VOICE\n");
@@ -636,11 +644,11 @@ sub prepare_images {
 	# Check for directory names, e.g. f01/p01.jpg.
 	my $dn = dirname($file);
 	if ( $dn && $dn ne "." ) { # we have a dir name.
-	    mkpath(["$dest_dir/thumbnails/$dn", "$dest_dir/large/$dn"], 1);
-	    mkpath(["$dest_dir/medium/$dn"], 1) if $medium;
+	    mkpath([d_thumbnails($dn), d_large($dn)], 1);
+	    mkpath([d_medium($dn)], 1) if $medium;
 	}
 
-	my $i_large   = "$dest_dir/large/$file";
+	my $i_large = d_large($file);
 	my $w;
 	my $h;
 	my $i_src;
@@ -651,7 +659,7 @@ sub prepare_images {
 	    $i_src = "$import_dir/" . $newfiles{$file}->orig_name;
 	    if ( $movie ) {
 		copy_mpg($i_src, $i_large,
-			 "$dest_dir/large/".$el->assoc_name,
+			 d_large($el->assoc_name),
 			 $newfiles{$file}->timestamp,
 			 $el->orientation);
 	    }
@@ -696,7 +704,7 @@ sub prepare_images {
 		print STDERR ("[", bytes(-s $i_large), "] ") if $verbose > 1;
 	    }
 	    if ( $el->type == T_VOICE ) {
-		copy_voice($i_src, "$dest_dir/large/".$el->assoc_name,
+		copy_voice($i_src, d_large($el->assoc_name),
 			   $newfiles{$file}->timestamp);
 	    }
 	}
@@ -707,11 +715,11 @@ sub prepare_images {
 			  large_size => -s $i_large));
 	    $movie = $file;
 	    $file = $el->assoc_name;
-	    $i_large = "$dest_dir/large/$file";
+	    $i_large = d_large($file);
 	}
 
-	my $i_medium  = "$dest_dir/medium/$file";
-	my $i_small   = "$dest_dir/thumbnails/$file";
+	my $i_medium = d_medium($file);
+	my $i_small  = d_thumbnails($file);
 
 	if ( $medium && ! -s $i_medium ) {
 	    print STDERR ("medium ") if $verbose;
@@ -753,7 +761,7 @@ sub prepare_images {
 	    $ii->width(0);
 	    $ii->height(0);
 	    $ii->medium_size(0);
-	    $ii->large_size(-s "$dest_dir/large/$movie");
+	    $ii->large_size(-s d_large($movie));
 	    $ii->orig_name($i_src) if $i_src;
 	    print STDERR ($ii->tostr, " ") if $verbose > 1;
 	}
@@ -856,7 +864,7 @@ sub write_image_page {
     $auxright .= " ($s)" if $s;
     my $auxleft  = html($el->tag || "");
 
-    update_if_needed("$dest_dir/$dir/".$htmllist[$i], <<EOD);
+    update_if_needed(d_dest($dir, $htmllist[$i]), <<EOD);
 <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
 <html>
   <head>
@@ -977,7 +985,7 @@ sub write_index_page {
     }
     $cc .= "</table>\n";
 
-    update_if_needed("$dest_dir/".ixname($x), <<EOD);
+    update_if_needed(d_dest(ixname($x)), <<EOD);
 <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
 <html>
   <head>
@@ -1099,11 +1107,11 @@ sub c_caption {
 
 sub load_cache {
     $info = new ImageInfo;
-    $info->load("$dest_dir/.cache") if !$clobber && -s "$dest_dir/.cache";
+    $info->load(d_dest(".cache")) if !$clobber && -s d_dest(".cache");
 }
 
 sub update_cache {
-    $info->store("$dest_dir/.cache");
+    $info->store(d_dest(".cache"));
 }
 
 #### Miscellaneous.
@@ -1174,10 +1182,10 @@ sub add_button_images {
 
         # Otherwise, search for the uudecode 'begin' line.
         if ( /^begin\s+\d+\s+(.+)$/ ) {
-	    next if !$clobber && -s "$dest_dir/$1";
-	    print STDERR ("Creating ") if $verbose && !defined($name);
+	    next if !$clobber && -s d_icons($1);
+	    print STDERR ("Creating icons ") if $verbose && !defined($name);
 	    $did++;
-            $name = "$dest_dir/$1";
+            $name = d_icons($1);
 	    print STDERR ("$1... ") if $verbose;
             open($out, ">$name");
             $doing = 1;         # Doing
@@ -1562,7 +1570,7 @@ package main;
 
 __END__
 
-begin 644 icons/first-gr.png
+begin 644 first-gr.png
 MB5!.1PT*&@H````-24A$4@```"$````A"`,```!@.C)=````8U!,5$4```"R
 MK[*QK[&?FY^5E95U=W4O+R\I*2DF)R8A(2'.SL[*RLK#PL.^PKZ\O+R[NKL'
 M!P>XMKBTN+2JJJJHK*BIIJF>FIZ6EI8P,C`H*"C-S<W+R\O"P<*_O[^[O[N[
@@ -1574,7 +1582,7 @@ M`7L:<"X!9^ON#W^/^?LTH-=I7LIK]GFAF7-FFSF:6U?VN0W[._#Y`1,--!>D
 /,0GZ`````$E%3D2N0F""
 `
 end
-begin 644 icons/first.png
+begin 644 first.png
 MB5!.1PT*&@H````-24A$4@```"$````A"`,```!@.C)=````;U!,5$4```"5
 ME95U=W5O;V]555534U,]/3T[.SLO+R\I*2DF)R8A(2'.SL[,S,S*RLJ^PKZ\
 MO+P'!P>TN+0#`P.JJJJHK*BBHJ*@H*">GIZ6EI9P<'!86%A45%0P,C`H*"C-
@@ -1586,7 +1594,7 @@ M@!MTPOP,BW58?(O%?ECLJ?E<;,Y6W1_F'C/WJ46OT[SDQVSS0C.GS#IS-+>J
 <;'-K]W?0YPL&.S)%W$I>4`````!)14Y$KD)@@@``
 `
 end
-begin 644 icons/index.png
+begin 644 index.png
 MB5!.1PT*&@H````-24A$4@```"$````A"`,```!@.C)=````=5!,5$4```"M
 MK:VKJZN5E963DY-U=W4[.SLW-S<O+R\I*2DF)R8A(2$='1W.SL[,S,S*RLK(
 MR,@5%14/#P^^PKZ\O+P'!P>TN+2JJJJHK*B6EI9\?'QJ:FI86%@P,C`H*"@B
@@ -1598,7 +1606,7 @@ MIURQ8[:*]M18X:MW;#EU\U[^Y=0_S8=YQLQSNF'6L2_1G+$OV+E%5.>PMTN,
 ;O=UV.ZSS!'/7.?2F!-OE`````$E%3D2N0F""
 `
 end
-begin 644 icons/journal.png
+begin 644 journal.png
 MB5!.1PT*&@H````-24A$4@```"$````A"`,```!@.C)=````L5!,5$4```"Q
 ML;&OKZ^GIZ>EI:6CHZ.AH:&?GY^5E963DY.-C8V'AX>!@8%U=W5'1T<U-34O
 M+R\I*2DF)R8C(R,A(2'.SL[,S,S*RLK(R,C$Q,3"PL*^PKZ^OKZ\O+P'!P>V
@@ -1613,7 +1621,7 @@ MLGKLV(<PC$0P[\"YJ!ZUP3?V;PZ^4SOEG>YPZ]R7L$W=%^Z<%=TY[JV-NK>[
 9_1W^Y@<C5%E2*SL"I@````!)14Y$KD)@@@``
 `
 end
-begin 644 icons/last-gr.png
+begin 644 last-gr.png
 MB5!.1PT*&@H````-24A$4@```"$````A"`,```!@.C)=````=5!,5$4```"O
 MK:^LJ:REH:6AG:&?FY^5E95U=W4O+R\I*2DF)R8A(2'.SL[,S,S*RLJ^PKZ_
 MOK^\O+P'!P>TN+2TLK2SL+.JJJJHK*BGI*>BGJ*AGJ&@G*">FIZ6EI8P,C`H
@@ -1625,7 +1633,7 @@ MRA@-\6AMQF<O:"C%:(CRINK^].\<Y#[(;R'/@SQ3\E[HN[7W!]UC=)]NZ'7,
 H2[)FR0MFSLB<.<RMB26WV_X.=M[O[#PGJ]"<S`````!)14Y$KD)@@@``
 `
 end
-begin 644 icons/last.png
+begin 644 last.png
 MB5!.1PT*&@H````-24A$4@```"$````A"`,```!@.C)=````;U!,5$4```"5
 ME95U=W5O;V]555534U,]/3T[.SLO+R\I*2DF)R8A(2'.SL[,S,S*RLJ^PKZ\
 MO+P'!P>TN+0#`P.JJJJHK*BBHJ*@H*">GIZ6EI9P<'!86%A45%0P,C`H*"C-
@@ -1637,7 +1645,7 @@ MV`U<39D>?[]#_`[Q7\3]$/=4/!?Q;/G^D'M,[M,=O4YY2;<L>:',69DS1[FU
 <L>1VW^W`\P$(+S)%*AO?S0````!)14Y$KD)@@@``
 `
 end
-begin 644 icons/medium.png
+begin 644 medium.png
 MB5!.1PT*&@H````-24A$4@```"$````A"`,```!@.C)=````:5!,5$4```"G
 MIZ>5E96'AX=Y>7EU=W5U=74O+R\I*2DF)R8A(2'.SL[*RLH1$1$/#P^^PKZ\
 MO+P'!P>TN+0#`P,!`0&JJJJHK*BFIJ:6EI9V=G9T='0P,C`H*"@0$!#!P<&_
@@ -1649,7 +1657,7 @@ M$OX9\\_IBEF7^Y+;Z7V1.^=LVCFYMZ[TWJ[[.RSW!!/T,=8!(V$7`````$E%
 &3D2N0F""
 `
 end
-begin 644 icons/next-gr.png
+begin 644 next-gr.png
 MB5!.1PT*&@H````-24A$4@```"$````A"`,```!@.C)=````6E!,5$4```"E
 MH:6DH:25E95U=W4O+R\I*2DF)R8A(2'.SL[*RLK(R,B^PKZ\O+P'!P>TN+2J
 MJJJKJ*NHK*BIIJFDH*2>FIZ6EI8P,C`H*"C+R\O(Q\B_O[^[O[NUN;7NS3(>
@@ -1660,7 +1668,7 @@ M>OX]!]T'/0N]#WJG]%WXVT;K@]<8K],+M6[STASQ>;&9B[)ESN8VAL_MM=_A
 6G"\3.BJ6%4:2\P````!)14Y$KD)@@@``
 `
 end
-begin 644 icons/next.png
+begin 644 next.png
 MB5!.1PT*&@H````-24A$4@```"$````A"`,```!@.C)=````8U!,5$4```"5
 ME95U=W4Y.3DO+R\I*2DF)R8A(2$='1W.SLX;&QO*RLJ^PKZ\O+P'!P>VMK:T
 MN+2TM+2RLK*JJJJHK*B6EI8P,C`P,#`H*"@<'!P:&AH8&!C!P<&_O[^[O[NU
@@ -1671,7 +1679,7 @@ M+3.\LFD@;YB!V]]ST'W0L]#[H'=*WX6_;;0^>(WQ.MU1ZS8OY1J?%YNY*$OF
 ?;&YC^-SN^QVV^0#@"BB#A-7F#0````!)14Y$KD)@@@``
 `
 end
-begin 644 icons/prev-gr.png
+begin 644 prev-gr.png
 MB5!.1PT*&@H````-24A$4@```"$````A"`,```!@.C)=````6E!,5$4```"?
 MFY^5E95U=W4O+R\I*2DF)R8A(2'.SL[*RLJ^PKZ^O+Z\O+P'!P>TN+2TLK2J
 MJJJHK*B>FIZ6EI8P,C`H*"C+R\O)R<F_O[^_O;^^O;Z[O[NUN;6UL[4C?\V)
@@ -1682,7 +1690,7 @@ M6_#7/1COP?@6QGHPUI2Q+XR]#<Q'>L;2<\J8=>I+[>?H"W4NF+USU-M0CM[R
 9_@Z_\P*'^R8LF<,MN@````!)14Y$KD)@@@``
 `
 end
-begin 644 icons/prev.png
+begin 644 prev.png
 MB5!.1PT*&@H````-24A$4@```"$````A"`,```!@.C)=````:5!,5$4```"5
 ME96+BXN)B8F'AX=U=W4O+R\I*2DF)R8A(2'.SL[*RLJ^PKZ\O+RZNKH'!P<%
 M!06TN+0#`P.JJJJHK*B6EI:*BHJ(B(AD9&1>7EXP,C`H*"C!P<&_O[^[O[L&
@@ -1693,7 +1701,7 @@ M%\)&6R!L'$>$C7820D93(&R<GR`,>@[&/AAG8=P'XTX9[\)X6T]]T#5&URFC
 KUFU>\BUK7FSFO"R9L[GUL>:6]SO\YPUUDRQAT]LVZ@````!)14Y$KD)@@@``
 `
 end
-begin 644 icons/sound2.png
+begin 644 sound2.png
 MB5!.1PT*&@H````-24A$4@```"$````A"`,```!@.C)=````^5!,5$4```"I
 MJ:FGIZ>EI:6AH:&=G9V5E961D9&#@X.!@8%Y>7EU=W5Q<7%E965C8V-=75U9
 M65E!04$]/3TS,S,O+R\M+2TI*2DF)R8A(2$='1W.SL[,S,S*RLH7%Q?(R,C&
@@ -1711,7 +1719,7 @@ MOM=+=<K6>I&\UDF_F.44_4)ZKC)9SY&^K4K1M__[._R=7]$S;]8[D-^%````
 )`$E%3D2N0F""
 `
 end
-begin 644 icons/sound.png
+begin 644 sound.png
 MB5!.1PT*&@H````-24A$4@```"$````A"`,```!@.C)=````^5!,5$4```"I
 MJ:FGIZ>EI:6AH:&=G9V5E961D9&#@X.!@8%Y>7EU=W5Q<7%E965C8V-=75U9
 M65E!04$]/3TS,S,O+R\M+2TI*2DF)R8A(2$='1W.SL[,S,S*RLH7%Q?(R,C&
@@ -1729,7 +1737,7 @@ MOM=+=<K6>I&\UDF_F.44_4)ZKC)9SY&^K4K1M__[._R=7]$S;]8[D-^%````
 )`$E%3D2N0F""
 `
 end
-begin 644 icons/movie.jpg
+begin 644 movie.jpg
 M_]C_X``02D9)1@`!`0$`2`!(``#_VP!#``4#!`0$`P4$!`0%!04&!PP(!P<'
 M!P\+"PD,$0\2$A$/$1$3%AP7$Q0:%1$1&"$8&AT='Q\?$Q<B)"(>)!P>'Q[_
 MVP!#`04%!0<&!PX("`X>%!$4'AX>'AX>'AX>'AX>'AX>'AX>'AX>'AX>'AX>
