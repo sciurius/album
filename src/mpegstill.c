@@ -1,4 +1,7 @@
-/* Quick & Dirty program to fetch the first image from an MPEG file */
+/* Quick & Dirty program to fetch the first image from an MPEG file.
+ *
+ * Requires libmpeg2 (http:/libmpeg2.sourceforge.net).
+ */
 
 #include <stdio.h>
 #include <stdlib.h>
