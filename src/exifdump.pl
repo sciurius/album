@@ -4,8 +4,8 @@
 # Author          : Johan Vromans
 # Created On      : Fri Jun 11 11:24:27 2004
 # Last Modified By: Johan Vromans
-# Last Modified On: Wed Jul 21 14:25:17 2004
-# Update Count    : 2
+# Last Modified On: Wed Jul 21 14:27:08 2004
+# Update Count    : 3
 # Status          : Unknown, Use with caution!
 
 use strict;
@@ -17,7 +17,7 @@ foreach my $img ( @ARGV ) {
     my $ii = image_info($img);
     print("$img:\n") if @ARGV > 1;
     foreach my $key ( sort(keys(%$ii)) ) {
-	my $val = $i->{$key};
+	my $val = $ii->{$key};
 	if ( $val =~ /[\001-\037\177-\377]/ && $key !~ /error/ ) {
 	    print($key, " ->\n", Hexify($val));
 	    next;
