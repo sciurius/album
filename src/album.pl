@@ -4,8 +4,8 @@ my $RCS_Id = '$Id$ ';
 # Author          : Johan Vromans
 # Created On      : Tue Sep 15 15:59:04 2002
 # Last Modified By: Johan Vromans
-# Last Modified On: Fri Jun 25 12:43:44 2004
-# Update Count    : 1517
+# Last Modified On: Fri Jun 25 16:39:19 2004
+# Update Count    : 1523
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -287,7 +287,7 @@ sub load_info {
 	next unless /\S/;
 
 	if ( /^\s+/ && $el ) {
-	    $el->descriptions($el->description . "\n" . $_);
+	    $el->description($el->description . "\n" . $_);
 	    next;
 	}
 
@@ -326,16 +326,6 @@ sub load_info {
 	    next;
 	}
 	($file, my $a) = split(' ', $_, 2);
-
-=begin obsolete
-
-	if ( $file eq "*" ) {
-	    $add_src = 1;
-	    $el = undef;
-	    next;
-	}
-
-=cut
 
 	my $rotate = 0;
 	my $type = T_JPG;
