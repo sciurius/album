@@ -140,6 +140,7 @@
 # 's Morgens lopen horden koeien langs het huisje. Blijkt een
 # dagelijks terugkerend ritueel.
 20040523084400.jpg  Koeien
+20040523084600.mpg  Koeien op de loop
 
 # We willen een stuk Dingle Way doen, via Ferriters Cove naar Dún an
 # Óir. 
@@ -279,9 +280,10 @@
 # Via Lios Póil ...
 20040527134500.jpg  Lios Póil
 # ... naar An Trá Bheag. Genieten van de oceaan op de rotsen.
-20040527154700.jpg  An Trá Bheag
+20040527154200.mpg  An Trá Bheag
+20040527154700.jpg -T:V An Trá Bheag
 # Klots!
-20040527155000.jpg  An Trá Bheag
+20040527155000.jpg -T:V An Trá Bheag
 # Ons huisje heeft een aangebouwde patio/serre waarin het heerlijk
 # toeven is.
 # <br>Joan houdt koe nummer drie in de gaten.
@@ -337,6 +339,8 @@
 20040528160800.jpg  Cill Mhailchéadair
 # De steen boven de ingang.
 20040528161000.jpg  Cill Mhailchéadair
+# Nog even gauw naar de zee.
+20040528164800.mpg  De zee.
 
 !tag 29 mei
 
@@ -484,6 +488,7 @@
 20040602152900.jpg  Rusheen Cove
 # Guibdannan More, zicht op Moyteage Head.
 20040602160400.jpg  Guibdannan More
+20040602160500.mpg  Guibdannan More
 # Idem, zonder storende voorgrond.
 20040602160900.jpg  Guibdannan More
 # Spannende steen, rust slechts op een paar rotsblokjes.
@@ -618,13 +623,15 @@
 
 # Glencar Lough, een mooi meer met een erg mooie waterval. 
 20040606112000.jpg  Glencar Lough, Waterval
+20040606112100.mpg -O:1 Glencar Lough, Waterval
 
 # De zon breekt een beetje door, wat het geheel nog mooier maakt.
 20040606112300.jpg  Glencar Lough, Waterval
+20040606112300.mpg -O:1 Glencar Lough, Waterval
 
 # Overal klatert het kristalheldere water.
 20040606112400.jpg  Glencar Lough, Waterval
-20040606113100.jpg  Glencar Lough, Waterval
+20040606113100.jpg -T:V Glencar Lough, Waterval
 
 # Gezicht op het meer.
 20040606113600.jpg  Glencar Lough
@@ -731,4 +738,3 @@
 
 # Johan heeft weer een teekje, meegebracht vanuit Slane.
 20040608205000.jpg  -- Tekebeet.
-
