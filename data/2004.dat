@@ -52,32 +52,32 @@
 16750033.jpg -O:0 Uffelte
 16750034.jpg -O:0 Uffelte
 
-# Foto's YYYYMMDDHHMM.jpg zijn van onze nieuwe Sony Cybershot DSC-V1
+# Foto's YYYYMMDDHHMMSS.jpg zijn van onze nieuwe Sony Cybershot DSC-V1
 
 !tag 6 mei
 #++ foto's P/M
-200405061217.jpg -O:0 We bekijken P/M's nieuwe huis
-200405061240.jpg -O:0 We bekijken P/M's nieuwe huis
+20040506121700.jpg -O:0 We bekijken P/M's nieuwe huis
+20040506124000.jpg -O:0 We bekijken P/M's nieuwe huis
 #--
-200405061709.jpg -O:0 Smotty
-200405061710.jpg -O:0 Smotty
-200405061753.jpg -O:0 Joan
+20040506170900.jpg -O:0 Smotty
+20040506171000.jpg -O:0 Smotty
+20040506175300.jpg -O:0 Joan
 
 !tag 7 mei
-200405070905.jpg -O:0 Hedy
-200405072315.jpg -O:0 Joan in bed (met poezen)
+20040507090500.jpg -O:0 Hedy
+20040507231500.jpg -O:0 Joan in bed (met poezen)
 
 !tag 8 mei
-200405081141.jpg -O:0 Arvid foto!
-200405081148.jpg -O:0 Arvid
-200405081215.jpg -O:1 Arvid puzzel
-200405081238.jpg -O:0 Moos under cover
+20040508114100.jpg -O:0 Arvid foto!
+20040508114800.jpg -O:0 Arvid
+20040508121500.jpg -O:1 Arvid puzzel
+20040508123800.jpg -O:0 Moos under cover
 
 !tag 9 mei
-200405091230.jpg -O:0 Ma's schaapskooi
-200405091337.jpg -O:0 Ma
-200405091624.jpg -O:0 Joan in de zon
-200405091700.jpg -O:0 Moos bewaakt de boedda
+20040509123000.jpg -O:0 Ma's schaapskooi
+20040509133700.jpg -O:0 Ma
+20040509162400.jpg -O:0 Joan in de zon
+20040509170000.jpg -O:0 Moos bewaakt de boedda
 
 !tag 16 mei
 20040516100700.jpg -O:0 Clematis
@@ -86,3 +86,11 @@
 20040517183700.jpg -O:0 Smotty
 20040517184300.jpg -O:0 Smotty
 20040517184500.jpg -O:3 Testfoto rotatie
+
+!tag 8 juni
+# In de tuin bloeit iets wat nog nooit eerder heeft gebloeid.
+20040608201000.jpg  Bloei
+20040608201100.jpg  Bloei
+
+!tag 10juni
+20040610105100.jpg  Moos in het hoge gras
