@@ -4,8 +4,8 @@ my $RCS_Id = '$Id$ ';
 # Author          : Johan Vromans
 # Created On      : Tue Sep 15 15:59:04 2002
 # Last Modified By: Johan Vromans
-# Last Modified On: Sun Jul 11 22:30:03 2004
-# Update Count    : 1934
+# Last Modified On: Mon Jul 12 22:55:46 2004
+# Update Count    : 2026
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -129,7 +129,10 @@ my $implist = new FileList;
 # This list is initialy filled from info.dat, and (optionally) updated
 # from the other lists.
 my $filelist = new FileList;
-my @filelist;			# for journal
+
+# This is the list of all entries to be journalled (all images, plus
+# possible interspersed loose annotations).
+my @journal;
 
 # Load cached info, if possible.
 load_cache();
@@ -202,7 +205,7 @@ for (my $i = $num_entries ; ; $i++ ) {
 }
 
 # Write the individual pages.
-print STDERR ("Creating pages for ", $num_entries, " image",
+print STDERR ("Creating ", $num_entries, " image page",
 	      $num_entries == 1 ? "" : "s", "\n") if $verbose > 1;
 my $mod = 0;
 
@@ -213,8 +216,8 @@ for my $el ( $filelist->entries ) {
 uptodate("image", $mod) if $verbose > 1;
 
 # Write the index pages.
-print STDERR ("Creating pages for ", $num_indexes, " index",
-	      $num_indexes == 1 ? "" : "es", "\n") if $verbose > 1;
+print STDERR ("Creating ", $num_indexes, " index page",
+	      $num_indexes == 1 ? "" : "s", "\n") if $verbose > 1;
 $mod = 0;
 for my $i ( 0 .. $num_indexes-1 ) {
     write_index_page($i) && $mod++;
@@ -227,7 +230,8 @@ for (my $i = $num_indexes ; ; $i++ ) {
 }
 
 if ( $journal ) {
-    print STDERR ("Creating journal\n");
+    print STDERR ("Creating ", $journal, " journal page",
+		  $journal == 1 ? "" : "s", "\n") if $verbose > 1;
     $mod = write_journal();
     uptodate("journal", $mod) if $verbose > 1;
 }
@@ -239,9 +243,15 @@ exit 0;
 use constant T_JPG   => 1;
 use constant T_MPG   => 2;
 use constant T_VOICE => 3;	# still image + sound
+# Pseudo types.
+use constant T_TAG   => -1;
+use constant T_ANN   => -2;
 
 # List of possible subdirs to process.
 my @subdirs;
+
+# Journal tags
+my %jnltags;
 
 # Note: the HTML generators use the file names relatively.
 sub d_large      { unshift(@_, "large");      goto &d_dest; }
@@ -295,7 +305,9 @@ sub load_info {
     my $err = 0;
     my $file;
     my $tag;
+    my $nexttag = 0;
     my $annotation = "";
+    my $tags = 0;
 
     my $fh = do { local *FH; *FH };
     die("$info_file: $!\n")
@@ -318,8 +330,10 @@ sub load_info {
 	    $el = new ImageInfo;
 	    $el->annotation($annotation);
 	    $el->tag($tag);
-	    push(@filelist, $el);
+	    $el->type(T_ANN);
+	    push(@journal, $el);
 	    $annotation = "";
+	    undef $el;
 	    next;
 	}
 
@@ -350,11 +364,35 @@ sub load_info {
 	    }
 	    elsif ( /^tag\s*(.*)/ ) {
 		$tag = $1;
+		$tag =~ s/\s$//;
+		$tag =~ s/\s+/ /g;
+		if ( $journal ) {
+		    if ( $tag !~ /\S/ ) {
+			warn("Tag may not be empty\n");
+			$err++;
+			next;
+		    }
+		    if ( exists($jnltags{$tag}) ) {
+			warn("Tag \"$tag\" is not unique\n");
+			$err++;
+		    }
+		    $jnltags{$tag} = sprintf("%04d", ++$nexttag);
+		    $el = new ImageInfo;
+		    $el->tag($tag);
+		    $el->type(T_TAG);
+		    push(@journal, $el);
+		    $tags++;
+		    undef $el;
+		}
 	    }
 	    elsif ( /^caption\s*(.*)/ ) {
 		$caption ||= $1;
 	    }
 	    elsif ( /^journal\s*(.*)/ ) {
+		if ( $filelist->tally ) {
+		    warn("\"!journal\" must precede image info\n");
+		    $err++;
+		}
 		$journal++;
 	    }
 	    elsif ( /^subdirs\s*(.*)/ ) {
@@ -403,12 +441,13 @@ sub load_info {
 	    $el->assoc_name($t);
 	}
 	$filelist->add($el);
-	push(@filelist, $el);
+	push(@journal, $el) if $journal && $a !~ /^--/;
 	$dirs{$1} = 1 if $file =~ m;^(.+)/[^/]+$;;
     }
     close($fh);
     die("Aborted\n") if $err;
     @subdirs = sort(keys(%dirs));
+    $journal = $tags;		# no tags -- no journal...
 }
 
 sub load_files {
@@ -628,7 +667,7 @@ sub update_filelist {
 	}
 	$newinfo .= $f . "\n";
 	$todo->add($el);
-	push(@filelist, $el) if $journal;
+	push(@journal, $el) if $journal;
 	$new++;
     }
 
@@ -655,7 +694,7 @@ sub update_filelist {
 	    ($el->type == T_VOICE ? "-T:V " : "") .
 	      " \n";
 	$todo->add($el);
-	push(@filelist, $el) if $journal;
+	push(@journal, $el) if $journal;
 	$new++;
     }
 
@@ -956,7 +995,7 @@ sub write_image_page {
     if ( $journal ) {
 	$b .= "$br\n" .
 	  button("journal",
-		 "../journal/index.html#img".sprintf("%04d", $i+1),
+		 "../journal/jnl" . $jnltags{$el->tag} . ".html#img".sprintf("%04d", $i+1),
 		 1, 1);
     }
     if ( $el->type == T_VOICE ) {
@@ -1024,7 +1063,7 @@ sub write_image_page {
       <tr>
 	<td></td>
 	<td align='left' valign='top'>
-	  <p class='hd'>$it2</p>
+	  <p class='hd'>@{[indent($it2, 12)]}</p>
 	</td>
 	<td align='right' valign='top'>
 	  <p class='hd'>$tt</p>
@@ -1083,7 +1122,9 @@ sub write_index_page {
     if ( $journal ) {
 	$b .= "$br\n" if $b;
 	$b .= button("journal",
-		     "journal/index.html#img".sprintf("%04d", $first_in_row+1),
+		     "journal/jnl".
+		     $jnltags{$filelist->byseq($first_in_row+1)->tag}.
+		     ".html#img".sprintf("%04d", $first_in_row+1),
 		     0, 1);
     }
 
@@ -1172,8 +1213,59 @@ EOD
 
 sub write_journal {
 
-    my $tb = qq(<table width="500" border="0" cellpadding="0" cellspacing="10">);
-    my $jnl = <<EOD;
+    my $jname = sub {
+	sprintf("jnl%04d.html", shift);
+    };
+
+    my @ann;
+    my $seq = 1;
+    my $x = 0;
+    my $tag;
+
+    my $flush = sub {
+	my $jnl = "";
+	my $ix = int($seq / ($index_rows * $index_columns)) || "";
+	foreach my $e ( @ann ) {
+	    if ( $e->type == T_ANN ) {
+		$jnl .= "<tr>\n".
+			"  <td colspan='2' valign='middle' align='left'>",
+			"    " . indent($e->annotation, 4) . "\n".
+			"  </td>\n".
+			"</tr>\n";
+		next;
+	    }
+
+	    # We cannot use $el->seq, since that's the info.dat order
+	    # which and includes the skipped entries.
+	    my $dst = $e->type == T_MPG ? $e->assoc_name : $e->dest_name;
+	    my $img = "<a name='" . sprintf("img%04d", $seq) . "' " .
+		      "href='../" .
+		      d_medium(sprintf("img%04d.html", $seq)) .
+		      "' border='0'>" .
+		      "<img src='../" .
+		      d_thumbnails($dst) . "'></a>";
+
+	    $jnl .= "<tr>\n".
+	            "  <td valign='middle' align='left'>\n".
+		    "    " . indent($e->annotation || "&nbsp;", 4) . "\n".
+		    "  </td>\n".
+		    "  <td valign='top' align='left'>\n".
+		    "    " . indent($img, 4) . "\n".
+		    "  </td>\n".
+		    "</tr>\n";
+	    $seq++;
+	}
+	my $b =
+	  join("",
+	       button("first", $jname->(1),         1, $x > 0         ),
+	       button("prev",  $jname->($x),        1, $x > 0         ),
+	       button("next",  $jname->($x+2),      1, $x < $journal-1),
+	       button("last",  $jname->($journal),  1, $x < $journal-1),
+	       button("index", "../index$ix.html",  1, 1             ),
+	      );
+	$x++;
+
+	update_if_needed(d_journal("jnl" . $jnltags{$tag} . ".html"), <<EOD);
 <html>
   <head>
     <style>
@@ -1186,94 +1278,45 @@ sub write_journal {
     -->
     </style>
   </head>
-<body>
+  <body>
+    <table width="500" border="0" cellpadding="0" cellspacing="10">
+      <tr bgcolor='#C0C0C0'>
+	<td>
+	  <p class='hd'>@{[html($tag)]}</p>
+	</td>
+        <td align='right'>
+          @{[indent($b,10)]}
+        </td>
+      </tr>
+      @{[indent($jnl,6)]}
+      <tr bgcolor='#C0C0C0'>
+	<td>&nbsp;</td>
+        <td align='right'>
+          @{[indent($b,10)]}
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>
 EOD
-
-    my $el;
-    my $havetb = 0;
-    my $pr = sub { $jnl .= "@_" };
-
-    my $indent = sub {
-	# Shift contents to the right so it fits pretty.
-	my ($n, @t) = @_;
-	$n = " " x $n;
-	return $n unless @t && "@t";
-	my $t = join("\n", map { detab($_) } @t);
-	$t =~ s/\n+$//;
-	$t =~ s/\n/\n$n/g;
-	$t;
-    };
-    my $twocol = sub {
-	my ($c1, $c2) = @_;
-	$pr->("  ",
-	      $indent->(2, $tb),
-	      "\n") unless $havetb++;
-	$pr->("    ",
-	      $indent->(4,
-			"<tr>",
-			"  <td valign='middle' align='left'>",
-			"    " . $indent->(4, $c1),
-			"  </td>",
-			"  <td valign='top' align='left'>",
-			"    " . $indent->(4, $c2),
-			"  </td>",
-			"</tr>"),
-	      "\n");
     };
 
-    my $onecol = sub {
-	my ($c1) = @_;
-	$pr->("  ",
-	      $indent->(2, $tb),
-	      "\n") unless $havetb++;
-	$pr->("    ",
-	      $indent->(4,
-			"<tr>",
-			"  <td colspan='2' valign='middle' align='left'>",
-			"    " . $indent->(4, $c1),
-			"  </td>",
-			"</tr>"),
-	      "\n");
-    };
+    my $mod = 0;
 
-    my $tag = "";
-    foreach $el ( @filelist ) {
-	my $t = $el->tag || "";
-	if ( $tag ne $t ) {
-	    $tag = $t;
-	    $pr->("  </table>\n") if $havetb;
-	    $pr->("  ",
-		  $indent->(2, $tb),
-		  "\n");
-	    $havetb = 1;
-	    $pr->("    ",
-		  $indent->(4,
-			    "<tr>",
-			    "  <td bgcolor='#C0C0C0' colspan='2'>",
-			    "    <p class='hd'>" . html($tag) . "</p>",
-			    "  </td>",
-			    "</tr>"),
-		  "\n");
+    foreach my $el ( @journal ) {
+	my $t = $el->type;
+	if ( $t == T_TAG ) {
+	    $flush->() && $mod++ if @ann;
+	    $tag = $el->tag;
+	    @ann = ();
 	}
-
-	unless ( $el->dest_name ) {
-	    $onecol->($el->annotation);
-	    next;
+	else {
+	    push(@ann, $el);
 	}
-
-	$twocol->($el->annotation || "&nbsp;",
-		  "<a name='".sprintf("img%04d",$el->seq)."' ".
-		  "href='../" .
-		  d_medium(sprintf("img%04d.html",$el->seq)) .
-		  "' border='0'>" .
-		  "<img src='../" .
-		  d_thumbnails($el->dest_name) . "'></a>");
     }
+    $flush->() && $mod++ if @ann;
 
-    $pr->("    </table>\n") if $havetb;
-    $pr->(" </body>\n",
-	  "</html>\n");
-    update_if_needed(d_journal("index.html"), $jnl);
+    $mod;
 }
 
 sub button($$;$$) {
@@ -2015,30 +2058,6 @@ package main;
 
 __END__
 
-begin 644 first-gr.png
-MB5!.1PT*&@H````-24A$4@```"$````A"`,```!@.C)=````8U!,5$4```"R
-MK[*QK[&?FY^5E95U=W4O+R\I*2DF)R8A(2'.SL[*RLK#PL.^PKZ\O+R[NKL'
-M!P>XMKBTN+2JJJJHK*BIIJF>FIZ6EI8P,C`H*"C-S<W+R\O"P<*_O[^[O[N[
-MN;NUN;4M,E&?````STE$051XG(W4VPZ#(`P&X.J&HF[.TSK4J;S_4T[*C$9I
-MX+]I(E\\0"L\?8%_G;MSYJ/00F9P3B:%WD2C`*KDG`I`-59H!6D[Y>=,GQ24
-M)B&@+R[K)D4/@H2$U@GR_`[2B#FKKH^P*:WH(#E<'&T91D[4+UOC+R-J7*A&
-MR(@:20PQ,F(%1@P1,L*`51!P"@*K(.`2%N`2(R,>-[OR1D[X[Q'P'@'?$K`?
-M`7L:<"X!9^ON#W^/^?LTH-=I7LIK]GFAF7-FFSF:6U?VN0W[._#Y`1,--!>D
-/,0GZ`````$E%3D2N0F""
-`
-end
-begin 644 first.png
-MB5!.1PT*&@H````-24A$4@```"$````A"`,```!@.C)=````;U!,5$4```"5
-ME95U=W5O;V]555534U,]/3T[.SLO+R\I*2DF)R8A(2'.SL[,S,S*RLJ^PKZ\
-MO+P'!P>TN+0#`P.JJJJHK*BBHJ*@H*">GIZ6EI9P<'!86%A45%0P,C`H*"C-
-MS<W+R\N_O[^[O[NUN;4"`@)5ZT`7````T$E$051XG(W4V0Z",!`%T"N([`@(
-M+L@BR_]_HW9&`BEMVOLR"9Q`:6?`U13\ZU3+F?9B=J(8<N+(F5=1=D`1R"F`
-MKF0Q=PBK,9$SOD)T,PD'?7:X+Y+U<$A$J)0@24Z(A)CBXO@*3LZB1K"[^."2
-MWG7"O7#UWAK1+#[5%FHQN(`0J0>-^`$A/F=H1`,2!)3"74@,+32"`7P&"O%D
-M@!MTPOP,BW58?(O%?ECLJ?E<;,Y6W1_F'C/WJ46OT[SDQVSS0C.GS#IS-+>J
-<;'-K]W?0YPL&.S)%W$I>4`````!)14Y$KD)@@@``
-`
-end
 begin 644 index.png
 MB5!.1PT*&@H````-24A$4@```"$````A"`,```!@.C)=````=5!,5$4```"M
 MK:VKJZN5E963DY-U=W4[.SLW-S<O+R\I*2DF)R8A(2$='1W.SL[,S,S*RLK(
@@ -2049,45 +2068,6 @@ M&0D'B%V=&(`G@R$X>&G'=+J;!UR@0:`*9L\E004$#0II$RGNK%6Q97N@TNC]
 MN`O?_Y<S1T6'18.1@<M">'B2,QJUC+5N'/'+!1J6C-9OC$LA.:!1RECJAFFW
 MIURQ8[:*]M18X:MW;#EU\U[^Y=0_S8=YQLQSNF'6L2_1G+$OV+E%5.>PMTN,
 ;O=UV.ZSS!'/7.?2F!-OE`````$E%3D2N0F""
-`
-end
-begin 644 journal.png
-MB5!.1PT*&@H````-24A$4@```"$````A"`,```!@.C)=````L5!,5$4```"Q
-ML;&OKZ^GIZ>EI:6CHZ.AH:&?GY^5E963DY.-C8V'AX>!@8%U=W5'1T<U-34O
-M+R\I*2DF)R8C(R,A(2'.SL[,S,S*RLK(R,C$Q,3"PL*^PKZ^OKZ\O+P'!P>V
-MMK:TN+2TM+2JJJJHK*B@H*"8F)B6EI:,C(R`@(!\?'QV=G9P<'!L;&QJ:FI>
-M7EY86%A`0$`P,C`H*"C-S<W'Q\?%Q<7!P<&_O[\,#`R[O[NUN;4S?"*<```!
-M$DE$051XG)64VU*#0!!$QVLT"B8L+685$G-1HR9*U"#\_X?)#BS@LDIR7H8J
-M3E%=4]/0;1=4SG1FDC:-S/%\,O$])]/&)":*!B8143PIC"RFX32!2?(PI#AC
-MPZ%-T'JO"#;DL.'1%)_+G$O@=%EPS\H9><I(_2A!J+)]`^LR9I^-L#!F-`"^
-M5CDOP&)5<-@R[#2-F[[F)/^0FEO#"*M%N8!0\]@P1F^:)^!5S?'>.8(><P3<
-M]32!+8<`+JI$X2]#NLP:F+L:N6>.ZX,FTF+4^U`\6XSM59-'B]&=XT,RHWPS
-MLGKLV(<PC$0P[\"YJ!ZUP3?V;PZ^4SOEG>YPZ]R7L$W=%^Z<%=TY[JV-NK>[
-9_1W^Y@<C5%E2*SL"I@````!)14Y$KD)@@@``
-`
-end
-begin 644 last-gr.png
-MB5!.1PT*&@H````-24A$4@```"$````A"`,```!@.C)=````=5!,5$4```"O
-MK:^LJ:REH:6AG:&?FY^5E95U=W4O+R\I*2DF)R8A(2'.SL[,S,S*RLJ^PKZ_
-MOK^\O+P'!P>TN+2TLK2SL+.JJJJHK*BGI*>BGJ*AGJ&@G*">FIZ6EI8P,C`H
-M*"C+R\O$P\3`O\"_O[^_O;^[O[NUN;7'-O7)````UDE$051XG)V4ZQ*"(!!&
-M-\M0-/-26DE>4GG_1RP7S09AUNG\V1'/`,)^PID"ICH4.L.O(1D/0"?@3,Y&
-M5@&DGDX*4&7*D!7X>1?J=$\?*HD&@SI:O1^):F!H<,B-0A@>@8_&$*3K)12)
-M,@KP\+&9AANK<8G5\*ZU&5?WA=6YMS9#N#B+(PZMS1!NC\9761NB[-&8%8,A
-MRA@-\6AMQF<O:"C%:(CRINK^].\<Y#[(;R'/@SQ3\E[HN[7W!]UC=)]NZ'7,
-H2[)FR0MFSLB<.<RMB26WV_X.=M[O[#PGJ]"<S`````!)14Y$KD)@@@``
-`
-end
-begin 644 last.png
-MB5!.1PT*&@H````-24A$4@```"$````A"`,```!@.C)=````;U!,5$4```"5
-ME95U=W5O;V]555534U,]/3T[.SLO+R\I*2DF)R8A(2'.SL[,S,S*RLJ^PKZ\
-MO+P'!P>TN+0#`P.JJJJHK*BBHJ*@H*">GIZ6EI9P<'!86%A45%0P,C`H*"C-
-MS<W+R\N_O[^[O[NUN;4"`@)5ZT`7````T$E$051XG)V4V0Z",!!%KR`"!1$0
-M7)!%EO__1M.I!`.=#/&\3&A/*+1SBXL$OG4HUPR_QNBH"&LBY8RSD3=`%JS)
-M@"8WQM@@+/IX3?\,T8QD.&B3S;PF:>&0H5!8A3@^0&ECB++M$H;4&"4">KR=
-MS?"=-5Z>&3ZYK(&:JC]5K`%/+^0#;L<9.+[)@,L:6M$&*M9`W9$QN:R!F@RC
-MV`U<39D>?[]#_`[Q7\3]$/=4/!?Q;/G^D'M,[M,=O4YY2;<L>:',69DS1[FU
-<L>1VW^W`\P$(+S)%*AO?S0````!)14Y$KD)@@@``
 `
 end
 begin 644 medium.png
@@ -2102,15 +2082,52 @@ M$OX9\\_IBEF7^Y+;Z7V1.^=LVCFYMZ[TWJ[[.RSW!!/T,=8!(V$7`````$E%
 &3D2N0F""
 `
 end
-begin 644 next-gr.png
-MB5!.1PT*&@H````-24A$4@```"$````A"`,```!@.C)=````6E!,5$4```"E
-MH:6DH:25E95U=W4O+R\I*2DF)R8A(2'.SL[*RLK(R,B^PKZ\O+P'!P>TN+2J
-MJJJKJ*NHK*BIIJFDH*2>FIZ6EI8P,C`H*"C+R\O(Q\B_O[^[O[NUN;7NS3(>
-M````LDE$051XG*64V0Z#(!1$1XOB4I?:4JS*__]F(]1@$#,F/2\D<,)Z!]P9
-M^+7+$++L#2-D@9!""K,9G0;:+*0%=.<,HY'W<QDROW-H8PV!L3J,KU0CA#4D
-M^JA0EC?(U5B*]KB$HW'&@,SW?:CQF)B1O&IFJ+T2-U0Z,4,E$S.\<FJHM&:&
-M>OX]!]T'/0N]#WJG]%WXVT;K@]<8K],+M6[STASQ>;&9B[)ESN8VAL_MM=_A
-6G"\3.BJ6%4:2\P````!)14Y$KD)@@@``
+begin 644 first.png
+MB5!.1PT*&@H````-24A$4@```"$````A"`,```!@.C)=````;U!,5$4```"5
+ME95U=W5O;V]555534U,]/3T[.SLO+R\I*2DF)R8A(2'.SL[,S,S*RLJ^PKZ\
+MO+P'!P>TN+0#`P.JJJJHK*BBHJ*@H*">GIZ6EI9P<'!86%A45%0P,C`H*"C-
+MS<W+R\N_O[^[O[NUN;4"`@)5ZT`7````T$E$051XG(W4V0Z",!`%T"N([`@(
+M+L@BR_]_HW9&`BEMVOLR"9Q`:6?`U13\ZU3+F?9B=J(8<N+(F5=1=D`1R"F`
+MKF0Q=PBK,9$SOD)T,PD'?7:X+Y+U<$A$J)0@24Z(A)CBXO@*3LZB1K"[^."2
+MWG7"O7#UWAK1+#[5%FHQN(`0J0>-^`$A/F=H1`,2!)3"74@,+32"`7P&"O%D
+M@!MTPOP,BW58?(O%?ECLJ?E<;,Y6W1_F'C/WJ46OT[SDQVSS0C.GS#IS-+>J
+<;'-K]W?0YPL&.S)%W$I>4`````!)14Y$KD)@@@``
+`
+end
+begin 644 first-gr.png
+MB5!.1PT*&@H````-24A$4@```"$````A"`,```!@.C)=````8U!,5$4```"R
+MK[*QK[&?FY^5E95U=W4O+R\I*2DF)R8A(2'.SL[*RLK#PL.^PKZ\O+R[NKL'
+M!P>XMKBTN+2JJJJHK*BIIJF>FIZ6EI8P,C`H*"C-S<W+R\O"P<*_O[^[O[N[
+MN;NUN;4M,E&?````STE$051XG(W4VPZ#(`P&X.J&HF[.TSK4J;S_4T[*C$9I
+MX+]I(E\\0"L\?8%_G;MSYJ/00F9P3B:%WD2C`*KDG`I`-59H!6D[Y>=,GQ24
+M)B&@+R[K)D4/@H2$U@GR_`[2B#FKKH^P*:WH(#E<'&T91D[4+UOC+R-J7*A&
+MR(@:20PQ,F(%1@P1,L*`51!P"@*K(.`2%N`2(R,>-[OR1D[X[Q'P'@'?$K`?
+M`7L:<"X!9^ON#W^/^?LTH-=I7LIK]GFAF7-FFSF:6U?VN0W[._#Y`1,--!>D
+/,0GZ`````$E%3D2N0F""
+`
+end
+begin 644 last.png
+MB5!.1PT*&@H````-24A$4@```"$````A"`,```!@.C)=````;U!,5$4```"5
+ME95U=W5O;V]555534U,]/3T[.SLO+R\I*2DF)R8A(2'.SL[,S,S*RLJ^PKZ\
+MO+P'!P>TN+0#`P.JJJJHK*BBHJ*@H*">GIZ6EI9P<'!86%A45%0P,C`H*"C-
+MS<W+R\N_O[^[O[NUN;4"`@)5ZT`7````T$E$051XG)V4V0Z",!!%KR`"!1$0
+M7)!%EO__1M.I!`.=#/&\3&A/*+1SBXL$OG4HUPR_QNBH"&LBY8RSD3=`%JS)
+M@"8WQM@@+/IX3?\,T8QD.&B3S;PF:>&0H5!8A3@^0&ECB++M$H;4&"4">KR=
+MS?"=-5Z>&3ZYK(&:JC]5K`%/+^0#;L<9.+[)@,L:6M$&*M9`W9$QN:R!F@RC
+MV`U<39D>?[]#_`[Q7\3]$/=4/!?Q;/G^D'M,[M,=O4YY2;<L>:',69DS1[FU
+<L>1VW^W`\P$(+S)%*AO?S0````!)14Y$KD)@@@``
+`
+end
+begin 644 last-gr.png
+MB5!.1PT*&@H````-24A$4@```"$````A"`,```!@.C)=````=5!,5$4```"O
+MK:^LJ:REH:6AG:&?FY^5E95U=W4O+R\I*2DF)R8A(2'.SL[,S,S*RLJ^PKZ_
+MOK^\O+P'!P>TN+2TLK2SL+.JJJJHK*BGI*>BGJ*AGJ&@G*">FIZ6EI8P,C`H
+M*"C+R\O$P\3`O\"_O[^_O;^[O[NUN;7'-O7)````UDE$051XG)V4ZQ*"(!!&
+M-\M0-/-26DE>4GG_1RP7S09AUNG\V1'/`,)^PID"ICH4.L.O(1D/0"?@3,Y&
+M5@&DGDX*4&7*D!7X>1?J=$\?*HD&@SI:O1^):F!H<,B-0A@>@8_&$*3K)12)
+M,@KP\+&9AANK<8G5\*ZU&5?WA=6YMS9#N#B+(PZMS1!NC\9761NB[-&8%8,A
+MRA@-\6AMQF<O:"C%:(CRINK^].\<Y#[(;R'/@SQ3\E[HN[7W!]UC=)]NZ'7,
+H2[)FR0MFSLB<.<RMB26WV_X.=M[O[#PGJ]"<S`````!)14Y$KD)@@@``
 `
 end
 begin 644 next.png
@@ -2124,15 +2141,15 @@ M+3.\LFD@;YB!V]]ST'W0L]#[H'=*WX6_;;0^>(WQ.MU1ZS8OY1J?%YNY*$OF
 ?;&YC^-SN^QVV^0#@"BB#A-7F#0````!)14Y$KD)@@@``
 `
 end
-begin 644 prev-gr.png
-MB5!.1PT*&@H````-24A$4@```"$````A"`,```!@.C)=````6E!,5$4```"?
-MFY^5E95U=W4O+R\I*2DF)R8A(2'.SL[*RLJ^PKZ^O+Z\O+P'!P>TN+2TLK2J
-MJJJHK*B>FIZ6EI8P,C`H*"C+R\O)R<F_O[^_O;^^O;Z[O[NUN;6UL[4C?\V)
-M````M4E$051XG*74ZQ*"(!`%X&,H8GD/RY3>_S4;EQP+"':F\\<9_<8+[!'G
-M5/`^KH.;]5,8(4NX*:4PNV@UT.1N&D"W5AB-HI^5F_E:0!L2`E/E7=]231`D
-M)/H@4.H$N8FU;/Q'V-16#,B_S]]28GDFQ"/KXF(9Q[BX9`FQ@:@@$!,+@8BX
-M6_#7/1COP?@6QGHPUI2Q+XR]#<Q'>L;2<\J8=>I+[>?H"W4NF+USU-M0CM[R
-9_@Z_\P*'^R8LF<,MN@````!)14Y$KD)@@@``
+begin 644 next-gr.png
+MB5!.1PT*&@H````-24A$4@```"$````A"`,```!@.C)=````6E!,5$4```"E
+MH:6DH:25E95U=W4O+R\I*2DF)R8A(2'.SL[*RLK(R,B^PKZ\O+P'!P>TN+2J
+MJJJKJ*NHK*BIIJFDH*2>FIZ6EI8P,C`H*"C+R\O(Q\B_O[^[O[NUN;7NS3(>
+M````LDE$051XG*64V0Z#(!1$1XOB4I?:4JS*__]F(]1@$#,F/2\D<,)Z!]P9
+M^+7+$++L#2-D@9!""K,9G0;:+*0%=.<,HY'W<QDROW-H8PV!L3J,KU0CA#4D
+M^JA0EC?(U5B*]KB$HW'&@,SW?:CQF)B1O&IFJ+T2-U0Z,4,E$S.\<FJHM&:&
+M>OX]!]T'/0N]#WJG]%WXVT;K@]<8K],+M6[STASQ>;&9B[)ESN8VAL_MM=_A
+6G"\3.BJ6%4:2\P````!)14Y$KD)@@@``
 `
 end
 begin 644 prev.png
@@ -2146,22 +2163,47 @@ M%\)&6R!L'$>$C7820D93(&R<GR`,>@[&/AAG8=P'XTX9[\)X6T]]T#5&URFC
 KUFU>\BUK7FSFO"R9L[GUL>:6]SO\YPUUDRQAT]LVZ@````!)14Y$KD)@@@``
 `
 end
+begin 644 prev-gr.png
+MB5!.1PT*&@H````-24A$4@```"$````A"`,```!@.C)=````6E!,5$4```"?
+MFY^5E95U=W4O+R\I*2DF)R8A(2'.SL[*RLJ^PKZ^O+Z\O+P'!P>TN+2TLK2J
+MJJJHK*B>FIZ6EI8P,C`H*"C+R\O)R<F_O[^_O;^^O;Z[O[NUN;6UL[4C?\V)
+M````M4E$051XG*74ZQ*"(!`%X&,H8GD/RY3>_S4;EQP+"':F\\<9_<8+[!'G
+M5/`^KH.;]5,8(4NX*:4PNV@UT.1N&D"W5AB-HI^5F_E:0!L2`E/E7=]231`D
+M)/H@4.H$N8FU;/Q'V-16#,B_S]]28GDFQ"/KXF(9Q[BX9`FQ@:@@$!,+@8BX
+M6_#7/1COP?@6QGHPUI2Q+XR]#<Q'>L;2<\J8=>I+[>?H"W4NF+USU-M0CM[R
+9_@Z_\P*'^R8LF<,MN@````!)14Y$KD)@@@``
+`
+end
+begin 644 journal.png
+MB5!.1PT*&@H````-24A$4@```"$````A"`,```!@.C)=````MU!,5$4```"Q
+ML;&OKZ^GIZ>EI:6CHZ.AH:&?GY^5E96-C8V!@8%U=W5'1T<U-34O+R\I*2DF
+M)R8C(R,A(2$='1W.SL[,S,S*RLH7%Q?(R,C$Q,3"PL*^PKZ\O+P'!P>VMK:T
+MN+2TM+2JJJJHK*B8F)B6EI:*BHJ(B(B`@(!\?'QP<'!L;&QJ:FID9&1>7EY8
+M6%A24E)`0$`P,C`H*"@<'!S-S<W)R<G'Q\?%Q<7!P<&_O[\,#`R[O[NUN;6:
+M;P.+```!'4E$051XG)64[5:"0!"&IP]-@Y3%B=1`4\M0LL+*(+C_ZVIWEE5:
+M=LN>/\,Y/&?.N\L,</L74-5BKE/4C=+Q?-#Q/:=4QC0%B'HZ$4`ZE4:90G^6
+MHTY^WX>T),.!;=!X+PBVX)#AP0QW,><2L1U+[DCI@">,PH]R#$6V+\1-%;-+
+M1BB-.?00/Q/."G&12$X;AIFZ,>PJ6KR1J)EFA/N+<A&9J.>:,7I6/"*N19W\
+M.T=P09S9C2H'LQMCE]CP;JYB8<DQW)\J_F%<GT@R;MQ0I!?-4/>QXL:`>B6:
+MD5U)EE:CGL-LO(^)D3#>Z/')G(/9SY(SXA7Q@RD>E$$S]NMWH3DU4\WI$;-.
+J^Q(V.>P+[9P1M7.TMR8.>WO<W\'.-U^06#7=M;9;`````$E%3D2N0F""
+`
+end
 begin 644 sound.png
-MB5!.1PT*&@H````-24A$4@```"$````A"`,```!@.C)=````^5!,5$4```"I
-MJ:FGIZ>EI:6AH:&=G9V5E961D9&#@X.!@8%Y>7EU=W5Q<7%E965C8V-=75U9
-M65E!04$]/3TS,S,O+R\M+2TI*2DF)R8A(2$='1W.SL[,S,S*RLH7%Q?(R,C&
-MQL;$Q,3`P,"^PKZ^OKZ\O+P)"0D'!P>XN+@%!06VMK:TN+0#`P.TM+0!`0&R
-MLK*JJJJHK*BDI*2<G)R6EI:,C(R$A(1\?'QX>'AJ:FI<7%Q86%A.3DY(2$A&
-M1D9$1$1"0D)`0$`T-#0P,C`L+"PH*"@F)B8<'!S-S<W)R<D4%!02$A+!P<&_
-MO[^]O;V[O[L&!@:UN;6UM;4"`@)(U\([```!04E$051XG(W4:5>"0!0&X&N[
-M80L&`XT4E$2A%;;37J268D3]_Q\3#-LXT-C[A3EG'LXLW`OLSPJDSZ#')J!%
-M*"@JL%$5(<Q$QP.P)#86@-=)1.@!<B:8S>0"@1<2(4!?HV9:^4CK@T"$`@X%
-M](=BO`1*+`+5HI9PU'$R^#C$V$Q$#Z0"G(^`B(6-[8%6)5:[$(NU871:V2\+
-M[?D'B'@#N?'=FEIE-YJQ3YODIB)1LY-7&+&\`YG(PH@LD3AVW7N$+CEBOAL/
-MGC@"UZ]73-/GB9G[P)]FFR_L+SB2I%N..$,H.GJ#?Q^&;1NTT$11;.M-2K`[
-M3;^+FWZ7%[2Y:%0)C*]&1,@G``=WU?51VR*KS-V\CM=S,5UC^F.ZCST_%TR=
-MOM=+=<K6>I&\UDF_F.44_4)ZKC)9SY&^K4K1M__[._R=7]$S;]8[D-^%````
-)`$E%3D2N0F""
+MB5!.1PT*&@H````-24A$4@```"$````A"`,```!@.C)=````]E!,5$4```"G
+MIZ>;FYN5E96-C8V'AX=[>WMY>7EU=W5S<W-M;6UK:VMC8V-/3T\[.SLY.3DW
+M-S<O+R\I*2DF)R8C(R,A(2$='1W.SL[,S,P9&1G*RLK(R,@5%17&QL;`P,"^
+MPKZ^OKZ\O+P'!P<%!06VMK:TN+0#`P.PL+"NKJZLK*RJJJJHK*BHJ*B>GIZ8
+MF)B6EI:4E)22DI*0D)"&AH9\?'QX>'AT='1P<'!J:FIF9F9D9&1>7EY86%A4
+M5%1$1$1"0D(^/CXZ.CHP,C`L+"PH*"@F)B;+R\O)R<G'Q\<4%!00$!"_O[\,
+M#`R[O[L("`BUN;4$!`2SL[/L_AE0```!,4E$051XG+W4:5.#,!`&X/6HHO6B
+M"*G$*VBKMM[BA7@AI6J+V/__9X0TH8$FZHPSOE_(9)\9$F87V/HIP)YQNYQ8
+M%(EFF%".:6@)%XT`P-'+<0""QE`D`=1:/51.[Z0&04*%!J$]5D?=\PH.0:/"
+M@%:Q:)-3;ZD/@*?`R$1L.L(K!I/73QUV5DR&H@UZ7I]9;0JWD8F;PGW_))K]
+MY?OI-Y5XM_S9B6QM*<3")E^KA(O^36R30V)_(_:?=](;=QRE./J0?['=2__!
+MOUI,Q:/\FUZLLUVW'DK%7K[KHBI?OM0%,2>([MTG7:T,D"#.<E%)SW10]3SO
+M&",NLAZ+=`;"#22$"=JGK_-66E^[+0#$^I3U>H0QC@IU9/->I_-"QC.:%SIS
+CTO"9HW,KRVAN?_=W4.<+?R9D,6RK%5X`````245.1*Y"8((`
 `
 end
 begin 644 movie.jpg
