@@ -4,8 +4,8 @@ my $RCS_Id = '$Id$ ';
 # Author          : Johan Vromans
 # Created On      : Tue Sep 15 15:59:04 2002
 # Last Modified By: Johan Vromans
-# Last Modified On: Sat Aug  7 19:52:19 2004
-# Update Count    : 2051
+# Last Modified On: Thu Aug 19 21:12:57 2004
+# Update Count    : 2053
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -1571,6 +1571,7 @@ sub add_button_images {
             $name = d_icons($1);
 	    print STDERR ("$1 ") if $verbose > 1;
             open($out, ">$name");
+	    binmode($out);
             $doing = 1;         # Doing
             next;
         }
