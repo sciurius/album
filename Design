@@ -1,0 +1,61 @@
+Directory structure:
+
+  dir/
+    raw/
+      XXX.jpg	  original image, will not be touched
+    large/
+      NNNN.html	  image page
+      XXX.jpg	  Copy of original (possibly rotated)
+    medium/
+      NNNN.html	  image page
+      XXX.jpg	  generated from large/XXX.jpg
+    thumbnails/
+      XXX.jpg	  generated from large/XXX.jpg
+    images/	  images for buttons
+    index.html	  first (or only) index page
+    indexN.html	  other index pages
+    info.dat	  control data
+    .cache	  image information cache
+
+Process:
+
+  Process info.dat, if it exists.
+  Copy or copy/rotate	from <raw>    to <large> unless it exists.
+  Generate <medium>	from <large>		 unless it exists.
+  Generate <thumbnails> from <large>		 unless it exists.
+  Generate image pages.
+  Generate index pages.
+
+Notes:
+
+  <dir> defaults to current directory unless specified with --dest option.
+  <raw> may be specified with --source option (e.g., to copy from CD).
+  An alternate info.dat can be specified with --info option.
+  "unless it exists" will be ignored with --clobber option.
+  With no <raw>, the <large> is taken as source, and rotation is disabled.
+
+Format of Control/Info file:
+
+  #-lines and empty lines are ignored.
+
+  Lines starting with ! indicate settings
+
+    !title XXX	     set the title to XXX, override with --title
+    !page NxM	     set the layout to N rows (--rows) and 
+		     M columns (--columns)
+    !thumbsize NNN   desired width of thumbnails (--thumbsize)
+    !mediumsize NNN  desired width of medium sized images (--mediumsize)
+    !tag	     tagline for all following images
+    !caption	     caption code for index pages (--caption)
+		     a sequence of f (file name), s (WxH),
+		     c (caption), t (tag line); default "fct".
+
+  Other lines contain image info:
+
+    XXX.jpg [ -O:n ] [ caption ]
+      -O:n controls orientation (n x 90 degrees)
+
+    If the image name contains a directory, multi mode is enabled.
+
+    If the name is "*", all files found in the source directory are
+    processed. 

@@ -1,13 +1,11 @@
 #!/usr/bin/perl -w
 my $RCS_Id = '$Id$ ';
 
-# Skeleton for Getopt::Long.
-
 # Author          : Johan Vromans
-# Created On      : Tue Sep 15 15:59:04 1992
+# Created On      : Tue Sep 15 15:59:04 2002
 # Last Modified By: Johan Vromans
-# Last Modified On: Sun May  9 17:33:06 2004
-# Update Count    : 535
+# Last Modified On: Tue May 25 23:21:05 2004
+# Update Count    : 591
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -35,8 +33,6 @@ my $src_dir;
 my $dest_dir = ".";
 my $image_info;
 my $index_buttons = 0;
-my $multi = 0;			# multi-level image names
-my $noritsu = 0;		# write noritsu info
 my $clobber = 0;
 my $verbose = 0;		# verbose processing
 
@@ -59,11 +55,14 @@ app_options();
 # Post-processing.
 $trace |= ($debug || $test);
 
-$src_dir = "$dest_dir/large" unless $src_dir;
-mkpath(["$dest_dir"], 1);
+unless ( $src_dir ) {
+    $src_dir = "$dest_dir/raw";
+    $src_dir = "$dest_dir/large" unless -d $src_dir;
+}
+mkpath(["$dest_dir/large"], 1);
 my $target_is_source = do {
     my @src = stat($src_dir);
-    my @dst = stat($dest_dir);
+    my @dst = stat("$dest_dir/large");
     $src[0] == $dst[0] && $src[1] == $dst[1];
 };
 
@@ -92,9 +91,10 @@ use File::Basename;
 
 # The list of files, in the order to be processed.
 my @filelist;
+my @htmllist;			# map fn to html name
 
 # Individual file properties:
-my %captions;			# descriptions
+my %description;			# descriptions
 my %rotate;			# rotate info (degrees clockwise)
 my %tag;			# tag info
 my %seen;			# to keep track
@@ -102,7 +102,7 @@ my %seen;			# to keep track
 my $add_from_src = 0;		# no info file, or wildcard seen
 
 # Storage for image info. Will be cached.
-our $info;
+my $info;
 
 # Load image names and info from the info file, if any.
 load_image_info();
@@ -120,7 +120,7 @@ die("Nothing to do?\n") unless $num_entries > 0;
 if ( $clobber ) {
     rmtree(["$dest_dir/thumbnails", "$dest_dir/medium"], 1);
 }
-mkpath(["$dest_dir/thumbnails", "$dest_dir/large", "$dest_dir/images"], 1);
+mkpath(["$dest_dir/thumbnails", "$dest_dir/images"], 1);
 mkpath(["$dest_dir/medium"], 1) if $medium;
 
 # Load cached info, if possible.
@@ -135,40 +135,28 @@ update_cache();
 my $entries_per_page = $index_columns*$index_rows;
 my $num_indexes = int(($num_entries - 1) / $entries_per_page) + 1;
 
-# Map file indices to basenames, or 4-digit numbers.
-my $i;
-my @htmllist;
-if ( $multi ) {
-    my $fn = "0000";
-    for ( $i = 0; $i < $num_entries; $i++ ) {
-	$htmllist[$i] = $fn++ . ".html";
-    }
-}
-else {
-    for ( $i = 0; $i < $num_entries; $i++ ) {
-	($htmllist[$i] = $filelist[$i]) =~ s/$suffixpat$/.html/;
-    }
+# Map file names to html pages.
+{ my $fn = "img0000";
+  for my $i ( 0 .. $num_entries-1 ) {
+    $htmllist[$i] = $fn++ . ".html";
+  }
 }
 
 # Write the individual pages.
 print STDERR ("Creating pages for ", $num_entries, " images\n") if $verbose;
-for ( $i = 0; $i < $num_entries; $i++ ) {
+for my $i ( 0 .. $num_entries-1 ) {
     write_image_page($i, "large");
     write_image_page($i, "medium") if $medium;
 }
 
-# Number of pages.
-print STDERR ("Creating pages for ", $num_indexes, " indexes\n") if $verbose;
-
 # Write the index pages.
-for ( $i = 0; $i < $num_indexes; $i++ ) {
+print STDERR ("Creating pages for ", $num_indexes, " indexes\n") if $verbose;
+for my $i ( 0 .. $num_indexes-1 ) {
     write_index_page($i);
 }
 
 # Copy the button images over to the target directory.
 add_button_images();
-
-write_noritsu_info() if $noritsu;
 
 exit 0;
 
@@ -194,7 +182,14 @@ sub set_parameter_defaults {
 }
 
 sub load_image_info {
-    $add_from_src++, return unless $image_info;
+
+    if ( $image_info ) {
+	die("$image_info: $!\n") unless -s $image_info;
+    }
+    else {
+	$image_info = "$dest_dir/info.dat";
+    }
+    $add_from_src++, return unless -s $image_info;
 
     my $err = 0;
     my $file;
@@ -210,7 +205,7 @@ sub load_image_info {
 	next unless /\S/;
 
 	if ( /^\s+/ && $file ) {
-	    $captions{$file} .= "\n" . $_;
+	    $description{$file} .= "\n" . $_;
 	    next;
 	}
 
@@ -248,7 +243,7 @@ sub load_image_info {
 	    $rotate = 90 * ($1 % 4);
 	    $a = $2;
 	}
-	$captions{$file} = $a || "";
+	$description{$file} = $a || "";
 	$rotate{$file} = $rotate unless $target_is_source;
 	$tag{$file} = $tag if $tag;
 	next if $file eq "*";
@@ -257,7 +252,7 @@ sub load_image_info {
 	    $err++;
 	}
 	$seen{$file}++;
-	push(@filelist, $file) unless $captions{$file} =~ /^--/;
+	push(@filelist, $file) unless $description{$file} =~ /^--/;
     }
     close($fh);
     die("Aborted\n") if $err;
@@ -271,11 +266,11 @@ sub get_image_names {
       or die("Cannot opendir $src_dir: $!\n");
 
     foreach ( sort grep { !/^\./ && /$suffixpat$/
-			    && !/^(first|last|next|prev|index)\.png$/
+			    && !/^(first|last|next|prev|index)(-gr)?\.png$/
 			      && $_ ne "thumbnails" } readdir($dh) ) {
 	next if $seen{$_}++;
 	push(@filelist, $_);
-	$captions{$_} = $captions{"*"};
+	$description{$_} = $description{"*"};
 	$rotate{$_} = $rotate{"*"};
     }
 
@@ -290,7 +285,6 @@ sub prepare_images {
 	# Check for directory names, e.g. f01/p01.jpg.
 	my $dn = dirname($file);
 	if ( $dn && $dn ne "." ) { # we have a dir name.
-	    $multi++;
 	    mkpath(["$dest_dir/thumbnails/$dn", "$dest_dir/large/$dn"], 1);
 	    mkpath(["$dest_dir/medium/$dn"], 1) if $medium;
 	}
@@ -301,7 +295,7 @@ sub prepare_images {
 	my $i_small   = "$dest_dir/thumbnails/$file";
 
 	# Copy the file into place. Rotate if needed.
-	if ( $clobber || ! -s $i_large ) {
+	if ( !$target_is_source and $clobber || ! -s $i_large ) {
 	    if ( $rotate{$file} ) {
 		print STDERR ("rotating... ") if $verbose;
 		system("convert", "-rotate", "$rotate{$file}",
@@ -316,8 +310,9 @@ sub prepare_images {
 	    }
 	}
 
-	# Get info.
-	if ( $info->{$file} ) {
+	# Get image info.
+	my $ii = $info->entry($file);
+	if ( $ii ) {
 	    print STDERR ("cached... ") if $verbose;
 	}
 	else {
@@ -325,7 +320,11 @@ sub prepare_images {
 	    die("Aborted\n") if $? == 2;
 	    die(sprintf("identify error: 0x%02x%02x\n", $? >> 8, $? & 0xff))
 	      if $? || $inf !~ /^(\d+)\s+(\d+)/;
-	    $info->{$file} = [ -s $i_large, 0, $1, $2 ];
+	    $ii = new ImageInfo::Entry
+	      (large_size   => -s $i_large,
+	       medium_size  => 0,
+	       width	    => $1,
+	       height	    => $2);
 	}
 
 	my $neednl = 0;
@@ -334,7 +333,7 @@ sub prepare_images {
 	    $t[1] = int(0.67 * $t[0]);
 	    system("convert ".
 		   ($verbose ? "-verbose" : "") ." -geometry ".
-		   (( $info->{$file}->[2] > $info->{$file}->[3] )
+		   (( $ii->width > $ii->height )
 		    ? "$t[0]x$t[1]" : "$t[1]x$t[0]") .
 		   " $i_large $i_medium");
 	    die("Aborted\n") if $? == 2;
@@ -344,15 +343,18 @@ sub prepare_images {
 	else {
 	    $neednl++;
 	}
-	$info->{$file}->[1] = -s $i_medium if $medium;
-	print STDERR ("@{$info->{$file}} ") if $verbose;
+	$ii->medium_size(-s $i_medium) if $medium;
+
+	# Update image info.
+	$info->entry($file, $ii);
+	print STDERR ($ii->tostr, " ") if $verbose;
 
 	if ( $clobber || ! -s $i_small ) {
 	    my @t = ( $thumb );
 	    $t[1] = int(0.67 * $t[0]);
 	    system("convert ".
 		   ($verbose ? "-verbose" : "") ." -geometry ".
-		   (( $info->{$file}->[2] > $info->{$file}->[3] )
+		   (( $ii->width > $ii->height )
 		    ? "$t[0]x$t[1]" : "$t[1]x$t[0]") .
 		   " $i_large $i_small");
 	    die("Aborted\n") if $? == 2;
@@ -374,6 +376,7 @@ sub write_image_page {
     my $html = do { local *H; *H };
     open($html, ">$dest_dir/$dir/".$htmllist[$i] )
       or die($htmllist[$i]." (create): $!\n");
+    select($html);
 
     my $t = "$album_title: Image " . ($i+1);
     $t .= " of " . $num_entries if $num_entries > 1;
@@ -400,27 +403,27 @@ sub write_image_page {
        . button("last", $htmllist[-1],   1, $i < $num_entries-1);
 
 
-    print $html ("<style type=\"text/css\">\n",
-		 "<!--\n",
-		 $css,
-		 "-->\n",
-		 "</style>\n",
-		 "<html>\n",
-		 "<head>\n",
-		 "<title>$tt</title>\n",
-		 "</head>\n",
-		 "<body $bodyatts>\n",
-		 "<center><h1>$t</h1>\n");
+    print("<style type=\"text/css\">\n",
+	  "<!--\n",
+	  $css,
+	  "-->\n",
+	  "</style>\n",
+	  "<html>\n",
+	  "<head>\n",
+	  "<title>$tt</title>\n",
+	  "</head>\n",
+	  "<body $bodyatts>\n",
+	  "<center><h1>$t</h1>\n");
 
-    print $html ("<h2>", html($captions{$file}), "</h2><p>\n",
-		 ($dir eq "medium") ?
-		 "<a href=\"../large/".$htmllist[$i]."\"><img src=\"$file\" alt=\"[Click for bigger image]\">" : "<img src=\"$file\"></a>",
-		 "<br>\n",
-		 $file, " ", $tag{$file}||"", " (",
-		 join("x", @{$info->{$file}}[2,3]), ", ",
-		 bytes($info->{$file}->[0]), ")\n",
-		 "<p>\n",
-		 "</center></body></html>\n");
+    my $ii = $info->entry($file);
+    print("<h2>", html($description{$file}), "</h2><p>\n",
+	  ($dir eq "medium") ?
+	  "<a href=\"../large/".$htmllist[$i]."\"><img src=\"$file\" alt=\"[Click for bigger image]\">" : "<img src=\"$file\"></a>",
+	  "<br>\n",
+	  $file, " ", $tag{$file}||"", " (",
+	  s_caption($file), ")\n",
+	  "<p>\n",
+	  "</center></body></html>\n");
 
     close($html);
 }
@@ -438,6 +441,7 @@ sub write_index_page {
 	open($html, ">$dest_dir/index.html")
 	  or die("index.html (create): $!\n");
     }
+    select($html);
 
     my $t = $album_title.": Index";
     my $tt = $t;
@@ -470,255 +474,87 @@ sub write_index_page {
 		     $x < $num_indexes - 1);
     }
 
-    print $html ("<style type=\"text/css\">\n",
-		 "<!--\n",
-		 $css,
-		 "-->\n",
-		 "</style>\n",
-		 "<html>\n",
-		 "<head>\n",
-		 "<title>$tt</title>\n",
-		 "</head>\n",
-		 "<body $bodyatts>\n",
-		 "<center>\n",
-		 "<h1>$t</h1>\n",
-		 "<p>\n");
+    print("<style type=\"text/css\">\n",
+	  "<!--\n",
+	  $css,
+	  "-->\n",
+	  "</style>\n",
+	  "<html>\n",
+	  "<head>\n",
+	  "<title>$tt</title>\n",
+	  "</head>\n",
+	  "<body $bodyatts>\n",
+	  "<center>\n",
+	  "<h1>$t</h1>\n",
+	  "<p>\n");
 
     if ( $index_buttons ) {
 	if ( $x > 0 ) {
-	    print $html (button("first", "index.html", 0, 1), "\n")
+	    print(button("first", "index.html", 0, 1), "\n")
 	      if $num_indexes > 2;
-	    print $html (button("prev",
-				"index".($x > 1 ? $x-1 : "").".html", 0, 1),
-			 "\n");
+	    print(button("prev",
+			 "index".($x > 1 ? $x-1 : "").".html", 0, 1),
+		  "\n");
 	}
 
 	if ( $x < $num_indexes-1 ) {
-	    print $html (button("next", "index".($x+1).".html", 0), "\n");
-	    print $html (button("last",
-				"index".($num_indexes-1).".html", 0, 1),
-			 "\n")
+	    print(button("next", "index".($x+1).".html", 0), "\n");
+	    print(button("last",
+			 "index".($num_indexes-1).".html", 0, 1),
+		  "\n")
 	      if $num_indexes > 2;
 	}
     }
 
-    print $html (qq(<table border="2" cellpadding="3" cellspacing="3"),
-		 qq( bgcolor="$MGREY">\n));
+    print(qq(<table border="2" cellpadding="3" cellspacing="3"),
+	  qq( bgcolor="$MGREY">\n));
 
     my $first_in_row = $x * $entries_per_page;
 
     for ( my $i = 0; $i < $index_rows; $i++, $first_in_row += $index_columns ) {
 	# First row is the image thumbnails.
 	if ( $first_in_row < $num_entries ) {
-	    print $html (qq(  <tr bgcolor="$LGREY">\n));
+	    print(qq(  <tr bgcolor="$LGREY">\n));
 	    for ( my $j = 0; $j < $index_columns; $j++ ) {
 		my $this = $first_in_row + $j;
 		if ( $this < $num_entries ) {
 		    my $file = $filelist[$this];
+		    my $ii = $info->entry($file);
 		    my $base = $medium ? "medium/" : "large/";
 		    $base .= $htmllist[$this];
-		    print $html ("    <td align=\"center\" valign=\"bottom\">\n",
-				 "      <table border=\"0\" cellpadding=\"0\" cellspacing=\"0\" bgcolor=\"$LGREY\">\n",
-				 "        <tr>\n",
-				 "          <td align=\"center\">",
-				 "<a href=\"$base\"><img src=\"thumbnails/$file\" alt=\"[Click for bigger image]\" border=\"0\"></a>",
-				 "</td>\n",
-				 "        </tr>\n",
-				 "        <tr>\n",
-				 "          <td align=\"center\">");
+		    print("    <td align=\"center\" valign=\"bottom\">\n",
+			  "      <table border=\"0\" cellpadding=\"0\" cellspacing=\"0\" bgcolor=\"$LGREY\">\n",
+			  "        <tr>\n",
+			  "          <td align=\"center\">",
+			  "<a href=\"$base\"><img src=\"thumbnails/$file\" alt=\"[Click for bigger image]\" border=\"0\"></a>",
+			  "</td>\n",
+			  "        </tr>\n",
+			  "        <tr>\n",
+			  "          <td align=\"center\">");
 		    foreach ( split(//, $caption) ) {
-			print $html ($file) if $_ eq 'f';
-			print $html (join("x", @{$info->{$file}}[2,3]),
-				     ", ", bytes($info->{$file}->[$medium ? 1 : 0]))
-			  if $_ eq 's';
-			if ( $_ eq 'c' ) {
-			    my $t = $captions{$file} || "";
-			    $t =~ s/\n.*//;
-			    print $html (html($t));
-			}
-			if ( $_ eq 't' ) {
-			    print $html (html($tag{$file})) if $tag{$file};
-			    next;
-			}
-			print $html ("<br>");
+			print(f_caption($file)) if $_ eq 'f';
+			print(s_caption($file, $medium)) if $_ eq 's';
+			print(c_caption($file)) if $_ eq 'c';
+			print(t_caption($file)) if $_ eq 't';
+			print("<br>");
 		    }
-		    print $html ("\n",
-				 "          </td>\n",
-				 "        </tr>\n",
-				 "      </table>\n",
-				 "    </td>\n");
+		    print("\n",
+			  "          </td>\n",
+			  "        </tr>\n",
+			  "      </table>\n",
+			  "    </td>\n");
 		}
 		else {
-		    print $html ("    <td bgcolor=\"$DGREY\">&nbsp</td>\n");
+		    print("    <td bgcolor=\"$DGREY\">&nbsp</td>\n");
 		}
 	    }
-	    print $html ("  </tr>\n");
+	    print("  </tr>\n");
 	}
     }
-    print $html ("</table>\n");
+    print("</table>\n");
 
-    print $html ("<p>\n",
-		 "</center></body></html>\n");
+    print("<p>\n", "</center></body></html>\n");
     close($html);
-}
-
-sub write_alt_index_page {
-    my ($x) = @_;
-
-    # Open the page for writing
-    my $html = do { local *H; *H };
-    if ( $x > 0 ) {
-	open($html, ">$dest_dir/index$x.html")
-	  or die("index$x.html (create): $!\n");
-    }
-    else {
-	open($html, ">$dest_dir/index.html")
-	  or die("index.html (create): $!\n");
-    }
-
-    my $t = $album_title.": Index";
-    my $tt = $t;
-
-    if ( $num_indexes > 1) {
-	$tt .= " " . ($x+1) . " of $num_indexes";
-	if ( $index_buttons ) {
-	    $t .= " " . ($x+1) . " of $num_indexes";
-	}
-	else {
-	    foreach ( 0..$num_indexes-1 ) {
-		if ( $_ == $x ) {
-		    $t .= " " . ($x+1);
-		}
-		else {
-		    $t .= " <a href=\"index".
-		      ($_ ? $_ : ""). ".html\">".($_+1)."</a>";
-		}
-	    }
-	}
-    }
-
-    print $html ("<style type=\"text/css\">\n",
-		 "<!--\n",
-		 $css,
-		 "-->\n",
-		 "</style>\n",
-		 "<html>\n",
-		 "<head>\n",
-		 "<title>$tt</title>\n",
-		 "</head>\n",
-		 "<body $bodyatts>\n",
-		 "<center>\n",
-		 "<h1>$t</h1>\n",
-		 "<p>\n");
-
-    if ( $index_buttons ) {
-	if ( $x > 0 ) {
-	    print $html (button("first", "index.html", 1), "\n")
-	      if $num_indexes > 2;
-	    print $html (button("prev",
-				"index".($x > 1 ? $x-1 : "").".html", 1), "\n");
-	}
-
-	if ( $x < $num_indexes-1 ) {
-	    print $html (button("next", "index".($x+1).".html"), "\n", 1);
-	    print $html (button("last", "index".($num_indexes-1).".html", 1), "\n")
-	      if $num_indexes > 2;
-	}
-    }
-
-    print $html ("<table border=\"2\" cellpadding=\"0\" cellspacing=\"3\"",
-		 " bgcolor=\"$MGREY\">\n");
-
-    my $first_in_row = $x * $entries_per_page;
-
-    for ( my $i = 0; $i < $index_rows; $i++, $first_in_row += $index_columns ) {
-	# First row is the image thumbnails.
-	if ( $first_in_row < $num_entries ) {
-	    print $html ("  <tr>\n");
-	    for ( my $j = 0; $j < $index_columns; $j++ ) {
-		my $this = $first_in_row + $j;
-		if ( $this < $num_entries ) {
-		    my $file = $filelist[$this];
-		    my $base = $medium ? "medium/" : "large/";
-		    $base .= $file;
-		    $base =~ s/$suffixpat$/.html/;
-		    print $html ("    <td><center><a href=\"$base\"><img src=\"thumbnails/$file\" alt=\"[Click for bigger image]\" border=\"0\"></a></center></td>\n");
-		}
-		else {
-		    print $html ("    <td>&nbsp</td>\n");
-		}
-	    }
-	    print $html ("  </tr>\n");
-
-	    # Second row is the image stats and caption text.
-	    print $html ("  <tr>\n");
-	    for ( my $j = 0; $j < $index_columns; $j++ ) {
-		my $this = $first_in_row + $j;
-		if ( $this < $num_entries ) {
-		    my $file = $filelist[$this];
-		    print $html ("    <td align=\"center\">");
-		    foreach ( split(//, $caption) ) {
-			print $html ($file) if $_ eq 'f';
-			print $html (join("x", @{$info->{$file}}[2,3]),
-				     ", ", bytes($info->{$file}->[$medium ? 1 : 0]))
-			  if $_ eq 's';
-			if ( $_ eq 'c' ) {
-			    my $t = $captions{$file} || "";
-			    $t =~ s/\n.*//;
-			    print $html (html($t));
-			}
-			if ( $_ eq 't' ) {
-			    print $html (html($tag{$file})) if $tag{$file};
-			    next;
-			}
-			print $html ("<br>\n");
-		    }
-		    print $html ("</td>\n");
-		}
-		else {
-		    print $html ("    <td>&nbsp</td>\n");
-		}
-	    }
-	    print $html ("  </tr>\n");
-	}
-    }
-    print $html ("</table>\n");
-
-    print $html ("<p>\n",
-		 "</center></body></html>\n");
-    close($html);
-}
-
-sub write_noritsu_info {
-    my $fd = do { local *H; *H };
-    open($fd, ">$dest_dir/noritsu.dat");
-    my @tm = localtime(time);
-
-    print $fd ("[CDINFO]\n",
-	       "CD_SERIAL_NUMBER=20030425105800\n",
-	       "MACHINE_NAME=QSS-3001\n",
-	       "MACHINE_SERIAL_NUMBER=20311500,20311500,00000000\n",
-	       "SOFT_VER=Golden Hawk Technology 3.8G\n",
-	       "DATE=", sprintf("%04d%02d%02d", 1900+$tm[5], 1+$tm[4], $tm[3]), "\n",
-	       "ORDER=1\n",
-	       "NUMBER_OF_IMAGES=", $num_entries, "\n",
-	       "\n",
-	       "[ORDER01]\n",
-	       "ORDER_NUMBER=0001\n",
-	       "CID=000-000\n",
-	       "IMG_CNT=", $num_entries, "\n",
-	       "IMG_QUALITY=0\n",
-	       "IMG_FOLDER=LARGE\n",
-	       "THM_FOLDER=LARGE\n");
-    foreach ( 1 .. $num_entries ) {
-	printf $fd ("IMG%d=%s,%d,%d,0,135F,0,0,,%d\n",
-		    $_,
-		    $filelist[$_-1],
-		    $info->{$filelist[$_-1]}->[2],
-		    $info->{$filelist[$_-1]}->[3],
-		    $_ - 1);
-    }
-    close($fd);
 }
 
 sub button($$;$$) {
@@ -741,7 +577,34 @@ sub button($$;$$) {
 sub html {
     my $t = shift;
     return '' unless $t;
+    $t =~ s/\&/&amp;/g;
+    $t =~ s/\</&lt;/g;
+    $t =~ s/\>/&gt;/g;
     $t =~ s/\n+/<br>/g;
+    $t;
+}
+
+sub f_caption {
+    my ($file) = @_;
+    html($file);
+}
+
+sub s_caption {
+    my ($file, $med) = @_;
+    my $ii = $info->entry($file);
+    $ii->width . "x" . $ii->height . ", " .
+      bytes($med ? $ii->medium_size : $ii->large_size);
+}
+
+sub t_caption {
+    my ($file) = @_;
+    $tag{$file} ? html($tag{$file}) : "";
+}
+
+sub c_caption {
+    my ($file) = @_;
+    my $t = $description{$file} || "";
+    $t =~ s/\n.*//;
     $t;
 }
 
@@ -753,20 +616,17 @@ sub bytes {
 }
 
 sub load_cache {
-    do "$dest_dir/.cache" if !$clobber && -s "$dest_dir/.cache";
+    $info = new ImageInfo;
+    $info->load("$dest_dir/.cache") if !$clobber && -s "$dest_dir/.cache";
 }
 
 sub update_cache {
-    use Data::Dumper;
-    my $cache = do { local *C; *C };
-    open($cache, ">$dest_dir/.cache")
-      and print $cache (Data::Dumper->Dump([$info],[qw(info)]), "\n1\n")
-	and close($cache);
+    $info->store("$dest_dir/.cache");
 }
 
 sub add_button_images {
 
-    # Extract button images form DATA section.
+    # Extract button images from DATA section.
 
     my $out = do { local *OUT; *OUT };
     my $name;
@@ -822,7 +682,6 @@ sub app_options {
 
     if ( !GetOptions(
 		     'source=s'	=> \$src_dir,
-		     'dest=s'	=> \$dest_dir,
 		     'info=s'	=> \$image_info,
 		     'cols=i'	=> \$index_columns,
 		     'rows=i'	=> \$index_rows,
@@ -830,8 +689,6 @@ sub app_options {
 		     'mediumsize=i' => \$medium,
 		     'title=s'	=> \$album_title,
 		     'clobber'	=> \$clobber,
-		     'noritsu'	=> \$noritsu,
-		     'multi'	=> \$multi,
 		     'index-buttons' => \$index_buttons,
 		     'caption=s' => \$caption,
 		     'ident'	=> \$ident,
@@ -839,11 +696,16 @@ sub app_options {
 		     'trace'	=> \$trace,
 		     'help|?'	=> \$help,
 		     'debug'	=> \$debug,
-		    ) or $help )
+		    )
+	 or $help
+	 or @ARGV > 1
+	 or @ARGV && ! -d $ARGV[0]
+       )
     {
 	app_usage(2);
     }
     app_ident() if $ident;
+    $dest_dir = shift(@ARGV) if @ARGV;
 }
 
 sub app_ident {
@@ -854,19 +716,16 @@ sub app_usage {
     my ($exit) = @_;
     app_ident();
     print STDERR <<EndOfUsage;
-Usage: $0 [options] [file ...]
+Usage: $0 [options] [ directory ]
     -info XXX		description and control file
     -title XXX		album title
-    -dest XXX		where to place all files
     -source XXX		where the original images reside
     -cols NN		number of columns per page
     -rows NN		number of rows per page
     -thumbsize NNN	the max size of thumbnail images
-    -medium NNN		the max size of moderate sized images
+    -medium NNN		the max size of medium sized images
     -captions XXX	f: filename s: size c: description t: tag
-    -multi		force multi-level image names
     -clobber		recreate everything
-    -noritsu		wite noritsu info
     -index-buttons	use index buttons instead of links
     -help		this message
     -ident		show identification
@@ -874,6 +733,79 @@ Usage: $0 [options] [file ...]
 EndOfUsage
     exit $exit if defined $exit && $exit != 0;
 }
+
+################ Modules ################
+
+package ImageInfo;
+
+sub new {
+    my ($pkg, $file) = @_;
+    $pkg = ref($pkg) || $pkg;
+    my $self = bless({}, $pkg);
+    $self->load($file) if defined($file);
+    $self;
+}
+
+sub load {
+    my ($self, $file) = @_;
+    our $info;
+    $info = undef;
+    require $file;
+
+    foreach my $f ( keys(%$info) ) {
+	my $entry = $info->{$f};
+	bless $entry, "ImageInfo::Entry"
+	  unless UNIVERSAL::isa($entry, "ImageInfo::Entry");
+	$self->{info}->{$f} = $entry;
+    }
+}
+
+sub store {
+    my ($self, $file) = @_;
+    my $info = $self->{info};
+    use Data::Dumper;
+    $Data::Dumper::Indent = 1;
+    $Data::Dumper::Sortkeys = 1;
+    my $cache = do { local *C; *C };
+    open($cache, ">$file")
+      and print $cache (Data::Dumper->Dump([$info],[qw(info)]), "\n1;\n")
+	and close($cache);
+}
+
+sub entry {
+    my ($self, $file, $entry) = @_;
+    if ( defined $entry ) {
+	$self->{info}->{$file} = $entry;
+    }
+    else {
+	$entry = $self->{info}->{$file};
+    }
+    $entry;
+}
+
+sub entries {
+    my ($self) = @_;
+    [ sort(keys(%{$self->{info}})) ];
+}
+
+use Class::Struct "ImageInfo::Entry" =>
+  [ large_size	 => '$',
+    medium_size	 => '$',
+    width	 => '$',
+    height	 => '$',
+  ];
+
+sub ImageInfo::Entry::tostr {
+    my ($self) = @_;
+    "[ " . join(" ",
+		$self->large_size,
+		$self->medium_size,
+		$self->width,
+		$self->height,
+	       ) . " ]";
+}
+
+package main;
 
 __END__
 begin 644 images/first.png

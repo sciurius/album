@@ -4,7 +4,7 @@ cvs update -P -d
 for i in *
 do
     if [ -d $i ]; then
-        perl -w album.pl --dest $i --info data/$i.dat
+        perl -w album.pl --info data/$i.dat $i
     fi
 done
 perl -w mkindex.pl > index.html

@@ -4,8 +4,8 @@ my $RCS_Id = '$Id$ ';
 # Author          : Johan Vromans
 # Created On      : Sun May  9 17:49:55 2004
 # Last Modified By: Johan Vromans
-# Last Modified On: Tue May 18 12:31:17 2004
-# Update Count    : 37
+# Last Modified On: Tue May 25 19:53:41 2004
+# Update Count    : 60
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -22,6 +22,8 @@ $my_version .= '*' if length('$Locker$ ') > 12;
 ################ Command line parameters ################
 
 my $full = 0;			# include header
+my $title = "Unsorted";		# title
+my $mediumsize = 0;		# mediumsize
 my $verbose = 0;		# more verbosity
 
 # Development options (not shown with --help).
@@ -37,34 +39,44 @@ $trace |= ($debug || $test);
 
 ################ Presets ################
 
-use constant MONTHS => [qw(januari februari maart april mei juni juli augustus september oktober november december)];
+use constant MONTHS => [qw(januari februari maart april
+			   mei juni juli augustus
+			   september oktober november december)];
 
 my $TMPDIR = $ENV{TMPDIR} || $ENV{TEMP} || '/usr/tmp';
 
 ################ The Process ################
 
 if ( $full ) {
-    print STDOUT <<EOD;
-!title Onuitgezocht
-
-!mediumsize 1024
-EOD
+    print STDOUT ("!title $title\n\n");
+    print STDOUT ("!mediumsize $mediumsize\n\n") if $mediumsize;
 }
+
+my $pdate = qr/(\d{4})(\d\d)(\d\d)\d{4}(?:\d\d|\w)/;
 
 foreach my $dir ( @ARGV ) {
     warn("$dir: Not a directory\n"), next unless -d $dir;
+
+    # Get list of possible files.
+    # dsc0nnn.jpg       - images from digital still camera
+    # yyyymmddhhmm*.jpg - already renamed files
     opendir(my $dh, $dir);
-    my @files = grep { /^(dsc0\d+|\d{14})\.jpg/i } readdir($dh);
+    my @files = grep { /^(dsc0\d+|$pdate)\.jpg/i } readdir($dh);
     closedir($dh);
     warn("$dir: ", scalar(@files), " files\n") if $verbose;
 
-    my %f;
+    # Gather the info for each file.
+    my %info;
     foreach my $f ( @files ) {
-	my $file = $f;
+	my $file = $f;		# file name for now
 	my $exif = get_exif("$dir/$file");
+
+	# Rename files from DSC.
 	if ( $file =~ /^dsc/i ) {
 	    my $fd = $exif->{"date/time"} || "";
 	    if ( $fd =~ /(\d\d\d\d):(\d\d):(\d\d) (\d\d):(\d\d):(\d\d)/ ) {
+		# YYYYMMDDhhmmSS (SS = sequence, not seconds).
+		# Note: jhead uses YYYYMMDDhhssX, where X is empty, a, b, ...
 		my $new = "$1$2$3$4$5"."00";
 		while ( -e "$dir/$new.jpg" ) {
 		    $new++;
@@ -80,27 +92,37 @@ foreach my $dir ( @ARGV ) {
 		warn("$file: Missing or unparsable file date [$fd]\n");
 	    }
 	}
-	if ( $exif->{orientation} && $exif->{orientation} =~ /^rotate (\d+)$/i  ) {
-	    $f{$file} = "-O:" . int($1/90) . " ";
+
+	# Handle orientation.
+	# Note: it is better to have jhead handle this since it clears
+	# the rotation info after rotation.
+	if ( ($exif->{orientation}||"") =~ /^rotate (\d+)$/i  ) {
+	    system("jhead", "-autorot", "$dir/$file");
+	    $exif = get_exif("$dir/$file");
+	}
+	if ( ($exif->{orientation}||"") =~ /^rotate (\d+)$/i  ) {
+	    $info{$file} = "-O:" . int($1/90) . " ";
 	}
 	else {
-	    $f{$file} = "-O:0 ";
+	    $info{$file} = "-O:0 ";
 	}
+
+	# Add JPEG comment ad description.
 	if ( $exif->{comment} ) {
-	    $f{$file} .= $exif->{comment} . " ";
+	    $info{$file} .= $exif->{comment} . " ";
 	}
     }
 
-
+    # Create the list, interspersed with !tag commands to set the date.
     my $date = "";
-    foreach my $file ( sort(keys(%f) ) ) {
-	my ($y,$m,$d) = $file =~ /^(\d{4})(\d\d)(\d\d)\d{4,6}\.jpg/i;
+    foreach my $file ( sort(keys(%info) ) ) {
+	my ($y,$m,$d) = $file =~ /^$pdate\.jpg/io;
 	if ( "$y$m$d" ne $date ) {
 	    $date = "$y$m$d";
 	    print "\n!tag ", 0+$d, " ",
 	      MONTHS->[$m-1], "\n";
 	}
-	print "$file $f{$file}\n";
+	print "$file $info{$file}\n";
     }
 }
 
@@ -119,6 +141,7 @@ sub get_exif {
 	$h{lc($1)} = $2 if /^(.*?): (.*)/;
     }
     close($p) or die("$file: $!\n");
+    $h{exposure} ||= "manual";
     \%h;
 }
 
@@ -132,6 +155,8 @@ sub app_options {
 	       verbose	   => \$verbose,
 	       # application specific options go here
 	       full	   => \$full,
+	       "title=s"   => sub { $title = $_[1]; $full++; },
+	       "mediumsize:i" => sub { $mediumsize = $_[1]||1024; $full++; },
 	       # development options
 	       test	   => \$test,
 	       trace	   => \$trace,
@@ -156,6 +181,8 @@ mkdata [options] [dir ...]
 Options:
 
    --full		include data preamble
+   --title XXX		title, implies --full
+   --mediumsize [ NNN ] medium images, implies --full, size defaults to 1024
    --ident		show identification
    --help		brief help message
    --verbose		verbose information
@@ -167,6 +194,14 @@ Options:
 =item B<--full>
 
 Include data preamble.
+
+=item B<--title> I<XXX>
+
+Album title. Implies --full.
+
+=item B<--mediumsize> [ I<NNN> ]
+
+Include medium size images. Size defaults to 1024. Implies --full.
 
 =item B<--verbose>
 
@@ -195,6 +230,9 @@ Input file(s).
 B<This program> will read the given input directory(ies) and write to
 standard output a piece of data suitable for processing with the album
 program.
+
+Also, it will rename files from digital still camera (DSC0nnn.JPG) to
+a more convenient YYYYMMDDHHMM.jpg using the EXIF info.
 
 =head1 AUTHOR
 
