@@ -4,8 +4,8 @@ my $RCS_Id = '$Id$ ';
 # Author          : Johan Vromans
 # Created On      : Tue Sep 15 15:59:04 2002
 # Last Modified By: Johan Vromans
-# Last Modified On: Fri Sep 17 20:18:56 2004
-# Update Count    : 2278
+# Last Modified On: Fri Sep 17 21:53:15 2004
+# Update Count    : 2283
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -612,6 +612,7 @@ sub load_info_journal {
 	$el->type($type);
 	$el->description($a) if $a;
 	$el->tag($tag) if $tag;
+	# $annotation ||= $a;
 	if ( $annotation ) {
 	    $annotation =~ s/^\s+//;
 	    $annotation =~ s/\s+$//;
@@ -1510,8 +1511,9 @@ sub write_journal {
 	    # which and includes the skipped entries.
 	    my $dst = ($e->type == T_MPG || $e->type == T_REF) ? $e->assoc_name : d_thumbnails($e->dest_name);
 	    my $img = "<a name='" . sprintf("img%04d", $seq) . "' " .
+	              ($e->type == T_REF ? " target=\"_blank\"" : "").
 		      "href='../" .
-		      d_medium(sprintf("img%04d.html", $seq)) .
+		      ($e->type == T_REF ? $e->dest_name : d_medium(sprintf("img%04d.html", $seq))) .
 		      "' border='0'>" .
 		      "<img src='../" .
 		      $dst . "'></a>";
