@@ -6,8 +6,8 @@ my $RCS_Id = '$Id$ ';
 # Author          : Johan Vromans
 # Created On      : Tue Sep 15 15:59:04 1992
 # Last Modified By: Johan Vromans
-# Last Modified On: Fri May  7 09:50:58 2004
-# Update Count    : 54
+# Last Modified On: Sun Jun 13 22:17:49 2004
+# Update Count    : 55
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -60,7 +60,7 @@ find(sub {
 	 return unless $_ eq "index.html";
 	 open(I, $_) or die("$File::Find::name: $!\n");
 	 while ( <I>) {
-	     if ( /^\<title\>(.*?): Index/ ) {
+	     if ( /^\s*\<title\>(.*?): Index/ ) {
 		 $index{$File::Find::name} = $1;
 		 return;
 	     }
