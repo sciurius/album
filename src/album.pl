@@ -4,8 +4,8 @@ my $RCS_Id = '$Id$ ';
 # Author          : Johan Vromans
 # Created On      : Tue Sep 15 15:59:04 2002
 # Last Modified By: Johan Vromans
-# Last Modified On: Wed Jun  9 19:24:57 2004
-# Update Count    : 1021
+# Last Modified On: Sun Jun 13 17:54:22 2004
+# Update Count    : 1036
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -34,6 +34,7 @@ my $import_dir;
 my $add_new = 0;		# add new from import
 my $dest_dir = ".";
 my $image_info;
+my $linkthem = 1;		# link orig to large, if possible
 my $clobber = 0;
 my $verbose = 0;		# verbose processing
 
@@ -461,7 +462,7 @@ sub get_image_names {
 	print $fh ("!title $album_title\n") if $album_title;
 	print $fh ("!medium\n") if $medium;
 	print $fh ("!mediumsize $medium\n")
-	  if $medium != DEFAULTS->{mediumsize};
+	  if $medium && $medium != DEFAULTS->{mediumsize};
 	print $fh ("!thumbsize $thumb\n")
 	  if $thumb != DEFAULTS->{thumbsize};
 	print $fh ("!page ${index_rows}x${index_columns}\n")
@@ -501,9 +502,20 @@ sub prepare_images {
 	    if ( $import_exif ) {
 		# Unfortunately, jhead cannot rotate from->to, so
 		# we need to copy first and rotate later.
-		print STDERR ("copy ") if $verbose;
 		my $time = $newfiles{$file}->[1];
-		copy($i_src, $i_large, $time);
+
+		if ( $linkthem && !$newfiles{$file}->[2] ) {
+		    print STDERR ("link ") if $verbose;
+		    unless ( link($i_src, $i_large) == 1 ) {
+			unlink($i_large); # just in case
+			print STDERR ("copy ") if $verbose;
+			copy($i_src, $i_large, $time);
+		    }
+		}
+		else {
+		    print STDERR ("copy ") if $verbose;
+		    copy($i_src, $i_large, $time);
+		}
 		if ( $newfiles{$file}->[2] ) {
 		    print STDERR ("rotate ") if $verbose;
 		    my $cmd = "jhead -autorot ".squote($i_large);
@@ -603,6 +615,11 @@ sub write_image_page {
     my ($i, $dir) = @_;
     my $file = $filelist[$i];
 
+    # Try movie.
+    my $movie = $file;
+    $movie =~ s/\.jpg$/.mpg/;
+    $movie = 0 unless -s "large/$movie";
+
     my $tt = "$album_title: Image " . ($i+1);
     $tt .= " of " . $num_entries if $num_entries > 1;
     $tt = html($tt);
@@ -619,11 +636,26 @@ sub write_image_page {
 
     my $imglink;
     if ( $dir eq "medium" ) {
-	$imglink = "<a href='../large/".$htmllist[$i]."'>" .
-	  img($file, alt => "[Click for bigger image]", border => 2) . "</a>";
+	if ( $movie ) {
+	    $imglink = "<a href='../large/$movie'>" .
+	      img($file, alt => "[Click to play movie]", border => 2) .
+		"</a>";
+	}
+	else {
+	    $imglink = "<a href='../large/".$htmllist[$i]."'>" .
+	      img($file, alt => "[Click for bigger image]", border => 2) .
+		"</a>";
+	}
     }
     else {
-	$imglink = img($file, alt => "[Image]", border => 2);
+	if ( $movie ) {
+	    $imglink = "<a href='$movie'>" .
+	      img($file, alt => "[Click to play movie]", border => 2) .
+		"</a>";
+	}
+	else {
+	    $imglink = img($file, alt => "[Image]", border => 2);
+	}
     }
 
     my $auxright = html($file . " (" . size_info($file) . ")");
@@ -1073,6 +1105,7 @@ sub app_options {
 		     'mediumsize:i' => \$medium,
 		     'title=s'	=> \$album_title,
 		     'clobber'	=> \$clobber,
+		     'link!'	=> \$linkthem,
 		     'caption=s' => \$caption,
 		     'ident'	=> \$ident,
 		     'verbose+'	=> \$verbose,
@@ -1124,6 +1157,7 @@ Usage: $0 [options] [ directory ]
     --exif		use w/ EXIF info, if possible
     --dcim XXX		as --import with --exif
     --update		add new entries from import, if needed
+    --[no]link		do [not] link large to original. Default is link.
   Miscellaneous:
     --clobber		recreate everything (except large)
     --help		this message
