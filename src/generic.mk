@@ -8,6 +8,8 @@ DCIM	= dcim/101msdcf
 DSC	= $(CAMERA)/$(DCIM)
 RAW	= $(HERE)/$(DCIM)
 OPTS	=
+ENV	= LANG=nl_NL.iso88591
+PERL	= $(ENV) perl
 
 IMPORT	= $(shell test -d $(DCIM) && echo "--dcim=$(DCIM)")
 
@@ -28,34 +30,28 @@ umountc :
 	-umount $(CAMERA)
 
 update :
-	perl -w $(TOOLS)/album.pl $(OPTS) --verbose --update $(IMPORT) $(HERE)
+	$(PERL) -w $(TOOLS)/album.pl $(OPTS) --verbose --update $(IMPORT) $(HERE)
 
 clobber :
-	perl -w $(TOOLS)/album.pl $(OPTS) --verbose --clobber --update $(IMPORT) $(HERE)
+	$(PERL) -w $(TOOLS)/album.pl $(OPTS) --verbose --clobber --update $(IMPORT) $(HERE)
 
 export-web :
-	perl -w $(TOOLS)/album.pl $(OPTS) --verbose --mediumonly $(HERE)
+	$(PERL) -w $(TOOLS)/album.pl $(OPTS) --verbose --mediumonly $(HERE)
 	rm -f web.zip
 	zip -r web.zip index*.html icons medium thumbnails journal
-
-.PHONY : journal
-journal : journal/index.html
-
-journal/index.html : info.dat $(TOOLS)/journal.pl
-	test -d journal || mkdir journal
-	perl $(TOOLS)/journal.pl info.dat > journal/index.html
 
 init ::
 	mkdir -p $(DCIM)
 	ln -s $(TOOLS)/shellrun.exe .
 	ln -s $(TOOLS)/autorun.inf .
-	test -f Makfile || ln -s $(TOOLS)/generic.mk Makefile
+	test -f Makefile || ln -s $(TOOLS)/generic.mk Makefile
 	test -f info.dat || { \
 		dir="`basename \`pwd\``"; \
 		touch $(DATA)/$$dir.dat; \
 		ln -s $(DATA)/$$dir.dat info.dat; \
 		echo "!title $$dir" > info.dat; \
 		echo "!medium" >>info.dat; \
+		echo "!dateformat %a %e %B" >>info.dat; \
 	}
 
 clean ::
