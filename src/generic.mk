@@ -19,6 +19,7 @@ mountc :
 
 _fetch :
 	rsync -av --modify-window=1 \
+	    --exclude=dsc00000.jpg \
 	    $(DSC)/ $(RAW)/
 	find $(RAW) -type f -perm +333 -print -exec chmod 0444 {} \;
 
