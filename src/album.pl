@@ -4,8 +4,8 @@ my $RCS_Id = '$Id$ ';
 # Author          : Johan Vromans
 # Created On      : Tue Sep 15 15:59:04 2002
 # Last Modified By: Johan Vromans
-# Last Modified On: Wed Jul  7 16:38:01 2004
-# Update Count    : 1736
+# Last Modified On: Fri Jul  9 15:31:38 2004
+# Update Count    : 1807
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -110,6 +110,7 @@ use File::Path;
 use File::Basename;
 use Time::Local;
 use Image::Info;
+use Image::Magick;
 use Data::Dumper;
 
 # The files already there, if any.
@@ -406,7 +407,7 @@ sub load_files {
 	    $el->type(T_MPG);
 	    my $assoc = $1."s.jpg";
 	    $el->assoc_name($assoc);
-	    if ( $files[0] eq $assoc ) {
+	    if ( @files && $files[0] eq $assoc ) {
 		shift(@files);
 		warn(d_large($assoc).": Skipped still\n") if $verbose;
 	    }
@@ -667,10 +668,68 @@ sub prepare_images {
     my $ddot = 0;
     my $tdot = 0;
     my $fmt = "[%" . length($filelist->tally) . "d]\n";
+    my $msgfile;
+    my $msg = sub {
+	return unless $verbose > 1;
+
+	if ( $verbose > 2 ) {
+	    if ( $msgfile ) {
+		print STDERR ("$msgfile: ");
+		$msgfile = "";
+	    }
+
+	    print STDERR (@_ ? @_ : "OK\n");
+	}
+
+	unless ( @_ ) {
+	    unless ( $msgfile ) {
+		print STDERR ("OK\n");
+		return;
+	    }
+	    print STDERR (".");
+	    $tdot++;
+	    if ( ++$ddot >= 50 ) {
+		printf STDERR ($fmt, $tdot);
+		$ddot = 0;
+	    }
+	    return;
+	}
+
+	printf STDERR ($fmt, $tdot) if $ddot;
+	$tdot++;
+	$ddot = 0;
+
+	if ( $msgfile ) {
+	    print STDERR ("$msgfile: ");
+	    $msgfile = "";
+	}
+
+	print STDERR (@_);
+    };
+
+    my $image;
+    my $i_large;
+
+    my $readimage = sub {
+	my ($file) = (@_, $i_large);
+	$image = new Image::Magick;
+	my $t = $image->Read($file);
+	warn("read($file): $t\n") if $t;
+#	$image->Profile(name => "*", profile => undef);
+    };
+
+    my $resize = sub {
+	 my ($n) = @_;
+	 my ($origx, $origy) = $image->Get(qw(width height));
+	 my $ratio = $origx > $origy ? $origx / $n : $origy / $n;
+	 my $t = $image->Resize(width => $origx/$ratio, height => $origy/$ratio);
+	 warn("resize: $t\n") if $t;
+    };
 
     foreach my $el ( $filelist->entries ) {
 	my $file = $el->dest_name;
-	my $msg = "";
+	$msgfile = $file;
+	$image = undef;
 
 	# Check for directory names, e.g. f01/p01.jpg.
 	my $dn = dirname($file);
@@ -679,135 +738,103 @@ sub prepare_images {
 	    mkpath([d_medium($dn)], 1) if $medium;
 	}
 
-	my $i_large = d_large($file);
-	my $w;
-	my $h;
+	$i_large = d_large($file);
 	my $movie = $el->type == T_MPG;
 
-	# Copy the file into place. Rotate if needed.
+	# Copy the file into place.
 	if ( ! -s $i_large && $el->orig_name ) {
 	    my $i_src = $el->orig_name;
+	    my $time = $el->timestamp;
+
 	    if ( $movie ) {
+		$msg->("copy");
+		$msg->("/rotate") if $el->rotation;
+		$msg->(" (be patient) ");
+		# Currently. movies have a bad ugly copy routine...
 		copy_mpg($i_src, $i_large,
-			 d_large($el->assoc_name),
 			 $el->timestamp,
 			 $el->rotation, $el->mirror);
 	    }
-	    elsif ( $import_exif ) {
-		# Unfortunately, jhead cannot rotate from->to, so
-		# we need to copy first and rotate later.
-		my $time = $el->timestamp;
+	    elsif ( $el->rotation || $el->mirror ) {
+		$msg->("copy");
+		$msg->("/rotate") if $el->rotation;
+		$msg->("/mirror") if $el->mirror;
+		$msg->(" ");
 
-		if ( $linkthem && !$el->rotation && !$el->mirror) {
-		    $msg .= "link ";
-		    unless ( link($i_src, $i_large) == 1 ) {
-			unlink($i_large); # just in case
-			substr($msg,-5) = "copy ";
-			copy($i_src, $i_large, $time);
-		    }
-		}
-		else {
-		    $msg .= "copy ";
-		    copy($i_src, $i_large, $time);
-		}
-		if ( $el->rotation || $el->mirror ) {
-		    $msg .= "rotate ";
-		    my $cmd = "jhead -autorot ".squote($i_large);
+		# Use jpegtran to rotate jpg files.
+		if ( ($el->file_ext || "") eq "jpg" ) {
+		    my $cmd = "jpegtran -rotate " . $el->rotation . " ";
+		    $cmd .= $el->mirror eq 'h' ? "-transpose " : "-transverse "
+		      if $el->mirror;
+		    $cmd .= "-outfile " . squote($i_large) .
+		      " " . squote($i_src);
 		    my $t = `$cmd 2>&1`;
-		    print STDERR $t if $?;
+		    $msg->($t) if $t;
 		    utime($time, $time, $i_large);
 		}
-		$msg .= "[" . bytes(-s $i_large) . "] " if $verbose > 2;
+		# Otherwise, let Image::Magick handle it.
+		else {
+		    $readimage->($i_src);
+		    $image->Rotate();
+		    if ( $el->mirror ) {
+			$image->Flip if $el->mirror eq 'h';
+			$image->Flop if $el->mirror eq 'v';
+		    }
+		    my $t = $image->Write($i_large);
+		    $msg->($t) if $t;
+		    utime($time, $time, $i_large);
+		}
 	    }
-	    elsif ( $el->rotation || $el->mirror ) {
-		$msg .= "mirror " if $verbose && $el->mirror;
-		$msg .= "rotate " if $verbose && $el->rotation;
-		my $t = convert
-		  ($i_src, $i_large,
-		   $verbose > 1 ? "-verbose" : (),
-		   $el->mirror ?
-		     ($el->mirror eq 'h' ? "-flip" : "-flop") : (),
-		   "-rotate", 90 * $el->rotation);
-		$msg .= "[$t] " if $verbose > 2;
-		($w, $h) = $t =~ /^(\d+)x(\d+)/ unless $w && $h;
+	    elsif ( $linkthem ) {
+		$msg->("link ");
+		unless ( link($i_src, $i_large) == 1 ) {
+		    unlink($i_large); # just in case
+		    substr($msg,-5) = "copy ";
+		    copy($i_src, $i_large, $time);
+		}
 	    }
 	    else {
-		$msg .= "copy ";
-		copy($i_src, $i_large);
-		$msg .= "[" . bytes(-s $i_large) . "] " if $verbose > 2;
+		$msg->("copy ");
+		copy($i_src, $i_large, $time);
 	    }
 	    if ( $el->type == T_VOICE ) {
 		copy_voice($i_src, d_large($el->assoc_name),
-			   $el->timestamp);
+			   $time);
 	    }
 	}
 	if ( $movie ) {
 	    $movie = $file;
 	    $file = $el->assoc_name;
 	    $i_large = d_large($file);
+	    unless ( -s $i_large ) {
+		$msg->("still (be very patient) ");
+		$image = still($el);
+	    }
 	}
 
 	my $i_medium = d_medium($file);
 	my $i_small  = d_thumbnails($file);
 
 	if ( $medium && ! -s $i_medium ) {
-	    $msg .= "medium ";
-	    my $t = convert
-	      ($i_large, $i_medium,
-	       $verbose > 1 ? "-verbose" : (),
-	       "-size", "${medium}x$medium", "-resize", "${medium}x$medium",
-	       # Remove unnecessary stuff.
-	       "+profile", "*");
-	    $msg .= "[$t] " if $verbose > 2;
-	    ($w, $h) = $t =~ /^(\d+)x(\d+)/ unless $w && $h;
+	    $readimage->() unless $image;
+	    $msg->("medium ");
+	    $resize->($medium);
+	    my $t = $image->Write($i_medium);
+	    $msg->($t) if $t;
 	}
 	$el->medium_size(-s $i_medium) if $medium && !$movie;
 
 	if ( ! -s $i_small ) {
-	    $msg .= "thumbnail ";
-	    my $t = convert
-	      ($i_large, $i_small,
-	       $verbose > 1 ? "-verbose" : (),
-	       "-size", "${thumb}x$thumb", "-resize", "${thumb}x$thumb",
-	       "+profile", "*");
-	    $msg .= "[$t] " if $verbose > 2;
-	    ($w, $h) = $t =~ /^(\d+)x(\d+)/ unless $w && $h;
+	    $readimage->() unless $image;
+	    $msg->("thumbnail ");
+	    $resize->($thumb);
+	    my $t = $image->Write($i_small);
+	    $msg->($t) if $t;
 	}
 
-	if ( $el->width && $el->height ) {
-	}
-	elsif ( $movie ) {
-	}
-	elsif ( $h && $w ) {
-	    $msg .= "size (known) ";
-	    $el->width($w) if $w;
-	    $el->height($h) if $h;
-	}
-	else {
-	    $msg .= "size (unknown) ";
-	}
+#	$msg->("test ") if $ddot == 47;
+	$msg->(); 		# flush
 
-#	$msg = "test " if $ddot == 47;
-
-	if ( $verbose > 1 ) {
-	    if ( $verbose > 2 ) {
-		print STDERR ("$file: $msg", "OK\n");
-	    }
-	    elsif ( $msg ) {
-		printf STDERR ($fmt, $tdot) if $ddot;
-		print STDERR ("$file: $msg", "OK\n");
-		$tdot++;
-		$ddot = 0;
-	    }
-	    else {
-		print STDERR (".");
-		$tdot++;
-		if ( ++$ddot >= 50 ) {
-		    printf STDERR ($fmt, $tdot);
-		    $ddot = 0;
-		}
-	    }
-	}
     }
     printf STDERR ($fmt, $tdot) if $ddot && $tdot;
 }
@@ -1224,17 +1251,6 @@ sub squote {
     "'".$t."'";
 }
 
-sub convert {
-    my ($from, $to, @args) = @_;
-    my $cmd = "convert ".
-      join(" ", map { squote($_) } @args, $from, $to);
-    my $res = `$cmd 2>&1`;
-    die("${res}Aborted\n") if $? == 2;
-    die(sprintf("${res}convert error: 0x%02x%02x\n", $? >> 8, $? & 0xff))
-      if $?;
-    $res =~ /\d+x\d+=>\d+x\d+/ ? $& : $res;
-}
-
 sub update_if_needed {
     my ($fname, $new) = @_;
 
@@ -1379,10 +1395,8 @@ sub copy {
 }
 
 sub copy_mpg {
-    my ($orig, $new, $still, $time, $rotate, $mirror) = @_;
+    my ($orig, $new, $time, $rotate, $mirror) = @_;
     $time = (stat($orig))[9] unless defined($time);
-
-    print STDERR ($rotate ? "copy/rotate " : "copy ") if $verbose > 1;
 
     # I'm not sure what this does. The resultant file is about 10% of
     # the original, without missing something...
@@ -1396,11 +1410,65 @@ sub copy_mpg {
     die("${res}Aborted\n") if $?;
 
     utime($time, $time, $new);
-    print STDERR ("still ") if $verbose > 1;
+}
 
-    unless ( -s $still ) {
-	copy("icons/movie.jpg", $still, $time);
+sub still {
+    my ($el) = @_;
+
+    my $new = d_large($el->assoc_name);
+    # This works, but is very slow...
+    my $still = new Image::Magick;
+    $still->Read(d_large($el->dest_name)."[0]");
+
+    # Get still dimensions.
+    my ($hs, $ws) = $still->Get(qw(height width));
+    # Scale to 640x480 if needed.
+    my $r = $hs > $ws ? 640 / $hs : 640 / $ws;
+    if ( abs($r - 1) > 0.05 ) {
+	$still->Resize(width => $r*$ws, height => $r*$hs);
+	($hs, $ws) = $still->Get(qw(height width));
     }
+
+    # Create black canvas.
+    my $canvas = new Image::Magick;
+    $canvas->Set(size => ($ws+240).'x'.($hs+180));
+    $canvas->ReadImage('xc:black');
+    my ($hc, $wc) = $canvas->Get(qw(height width));
+
+    # Place the still on top of it.
+    # Center image
+    $canvas->Composite(image => $still, compose => 'Atop', x => 120, 'y' => 90);
+    # Bottom slice.
+    $canvas->Composite(image => $still, compose => 'Atop', x => 120, 'y' => $hs+135);
+    # Top slice. Cannot place at negative offsets, so crop the still first.
+    $still->Crop(width => $ws, height => 45, x => 0, 'y' => $hs-45);
+    $canvas->Composite(image => $still, compose => 'Atop', x => 120, 'y' => 0);
+    undef $still;
+
+    # Drill spocket holes.
+    my $hole = new Image::Magick;
+    $hole->Set(size => '60x40');
+    $hole->ReadImage("xc:grey90");
+    $hole->Draw(primitive => 'polygon', fill => "black",
+		points => " 0,0   5,0   0,5");
+    $hole->Draw(primitive => 'polygon', fill => "black",
+		points => "60,0  55,0  60,5");
+    $hole->Draw(primitive => 'polygon', fill => "black",
+		points => "60,40 55,40 60,35");
+    $hole->Draw(primitive => 'polygon', fill => "black",
+		points => " 0,40  5,40  0,35");
+
+    for ( my $v = 0; $v < $hc;  $v += 80 ) {
+	for my $h ( 30, $wc-90 ) {
+	    $canvas->Composite(image => $hole, compose => 'Atop',
+			    geometry => "+$h+$v");
+	}
+    }
+
+    $canvas->Write($new);
+    my $time = $el->timestamp;
+    utime($time, $time, $new);
+    $canvas;
 }
 
 sub copy_voice {
@@ -1529,14 +1597,14 @@ INIT {
 		      MeteringMode SceneCaptureType Orientation
 		      height width file_ext);
 
-    $exif_rot = { top_left   => [   0, ''  ],    # corr. needed
-		  top_right  => [   0, 'v' ],    # flop (V)
-		  bot_right  => [ 180, ''  ],    # 180
-		  bot_left   => [   0, 'h' ],    # flip (H)
-		  left_top   => [  90, 'h' ],    # flip 90
-		  right_top  => [  90, ''  ],    # 90
-		  right_bot  => [  90, 'v' ],    # flop 90
-		  left_bot   => [ 270, ''  ],    # 270
+    $exif_rot = { top_left   => [   0, ''  ],    # 1: corr. needed
+		  top_right  => [   0, 'v' ],    # 2: flop (V)
+		  bot_right  => [ 180, ''  ],    # 3: 180
+		  bot_left   => [   0, 'h' ],    # 4: flip (H)
+		  left_top   => [  90, 'h' ],    # 5: flip 90
+		  right_top  => [  90, ''  ],    # 6: 90
+		  right_bot  => [  90, 'v' ],    # 7: flop 90
+		  left_bot   => [ 270, ''  ],    # 8: 270
 		};
 }
 

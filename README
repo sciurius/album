@@ -33,13 +33,13 @@ it as follows:
   mkdir thumbnails
   mkdir icons
   Creating icons first-gr.png first.png ... sound.png movie.jpg done
-  im023.jpg: thumbnail size (known) OK
-  im024.jpg: thumbnail size (known) OK
-  im025.jpg: thumbnail size (known) OK
-  im026.jpg: thumbnail size (known) OK
-  im027.jpg: thumbnail size (known) OK
-  im028.jpg: thumbnail size (known) OK
-  im029.jpg: thumbnail size (known) OK
+  im023.jpg: thumbnail OK
+  im024.jpg: thumbnail OK
+  im025.jpg: thumbnail OK
+  im026.jpg: thumbnail OK
+  im027.jpg: thumbnail OK
+  im028.jpg: thumbnail OK
+  im029.jpg: thumbnail OK
   Creating pages for 7 images
   (Needed to write 7 image pages)
   Creating pages for 1 index
