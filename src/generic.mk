@@ -2,6 +2,7 @@
 
 HERE	= .
 TOOLS	= $(HOME)/src/album/src
+DATA	= $(HOME)/src/album/data
 CAMERA	= /mnt/camera
 DCIM	= dcim/101msdcf
 DSC	= $(CAMERA)/$(DCIM)
@@ -48,6 +49,14 @@ init ::
 	mkdir -p $(DCIM)
 	ln -s $(TOOLS)/shellrun.exe .
 	ln -s $(TOOLS)/autorun.inf .
+	test -f Makfile || ln -s $(TOOLS)/generic.mk Makefile
+	test -f info.dat || { \
+		dir="`basename \`pwd\``"; \
+		touch $(DATA)/$$dir.dat; \
+		ln -s $(DATA)/$$dir.dat info.dat; \
+		echo "!title $$dir" > info.dat; \
+		echo "!medium" >>info.dat; \
+	}
 
 clean ::
 	rm -f .cache *png index*html large/*html *~
