@@ -4,8 +4,8 @@ my $RCS_Id = '$Id$ ';
 # Author          : Johan Vromans
 # Created On      : Tue Sep 15 15:59:04 2002
 # Last Modified By: Johan Vromans
-# Last Modified On: Sat Jun 26 20:04:58 2004
-# Update Count    : 1542
+# Last Modified On: Sat Jun 26 21:30:40 2004
+# Update Count    : 1544
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -826,11 +826,17 @@ sub prepare_images {
 	    }
 	    else {
 		my $ii = Image::Info::image_info($i_large);
-		($w, $h) = Image::Info::dim($ii);
+		if ( exists($ii->{error}) ) {
+		    warn("i_large: ",
+			 $ii->{error}, "\n");
+		}
+		else {
+		    ($w, $h) = Image::Info::dim($ii);
+		}
 	    }
 
-	    $ii->width($w);
-	    $ii->height($h);
+	    $ii->width($w) if $w;
+	    $ii->height($h) if $h;
 	    $ii->medium_size(-s $i_medium) if $medium;
 	    $ii->orig_name($i_src) if $i_src;
 	    print STDERR ($ii->tostr, " ") if $verbose > 1;
