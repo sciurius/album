@@ -75,6 +75,11 @@ mencoder, to manipulate MPEG movies
 
 =back
 
+=head1 BUGS AND PROBLEMS
+
+Some versions of Perl may exhibit Data::Dumper problems with non-ASCII
+data. Perl 5.6.x and 5.8.3 and later should be fine.
+
 =head1 AUTHOR AND CREDITS
 
 Johan Vromans (jvromans@squirrel.nl) wrote this module.
