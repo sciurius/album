@@ -4,13 +4,13 @@ my $RCS_Id = '$Id$ ';
 # Author          : Johan Vromans
 # Created On      : Tue Sep 15 15:59:04 2002
 # Last Modified By: Johan Vromans
-# Last Modified On: Thu Aug  5 23:14:18 2004
-# Update Count    : 2047
+# Last Modified On: Fri Aug  6 16:27:27 2004
+# Update Count    : 2049
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
 
-$VERSION = 0.04;
+$VERSION = 0.05;
 
 use strict;
 
@@ -889,7 +889,7 @@ sub prepare_images {
 
 		# Use jpegtran to rotate jpg files.
 		if ( ($el->file_ext || "") eq "jpg" && $prog_jpegtran ) {
-		    my $cmd = "$prog_jpegtran -rotate " . $el->rotation . " ";
+		    my $cmd = "$prog_jpegtran -copy all -rotate " . $el->rotation . " ";
 		    $cmd .= $el->mirror eq 'h' ? "-transpose " : "-transverse "
 		      if $el->mirror;
 		    $cmd .= "-outfile " . squote($i_large) .
