@@ -31,6 +31,11 @@ update :
 clobber :
 	perl -w $(TOOLS)/album.pl $(OPTS) --verbose --clobber --update $(IMPORT) $(HERE)
 
+export-web :
+	perl -w $(TOOLS)/album.pl $(OPTS) --verbose --mediumonly $(HERE)
+	rm -f web.zip
+	zip -r web.zip index*.html icons medium thumbnails journal
+
 .PHONY : journal
 journal : journal/index.html
 
