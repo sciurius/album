@@ -4,8 +4,8 @@ my $RCS_Id = '$Id$ ';
 # Author          : Johan Vromans
 # Created On      : Tue Sep 15 15:59:04 2002
 # Last Modified By: Johan Vromans
-# Last Modified On: Fri Jul  9 18:08:09 2004
-# Update Count    : 1827
+# Last Modified On: Fri Jul  9 21:16:45 2004
+# Update Count    : 1828
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -2003,24 +2003,6 @@ M;,0<"XESU@LSL(;KV>!$@4\[U"[#MV&$3."22&$6H]2`BEP4H,O9,!IQU:<N
 M_36&-M80Z++-^$3605A#HO(*:;J#G(PA4=LE9O+9J!']]C\HXW`CC/WE'C::
 M%\)&6R!L'$>$C7820D93(&R<GR`,>@[&/AAG8=P'XTX9[\)X6T]]T#5&URFC
 KUFU>\BUK7FSFO"R9L[GUL>:6]SO\YPUUDRQAT]LVZ@````!)14Y$KD)@@@``
-`
-end
-begin 644 sound2.png
-MB5!.1PT*&@H````-24A$4@```"$````A"`,```!@.C)=````^5!,5$4```"I
-MJ:FGIZ>EI:6AH:&=G9V5E961D9&#@X.!@8%Y>7EU=W5Q<7%E965C8V-=75U9
-M65E!04$]/3TS,S,O+R\M+2TI*2DF)R8A(2$='1W.SL[,S,S*RLH7%Q?(R,C&
-MQL;$Q,3`P,"^PKZ^OKZ\O+P)"0D'!P>XN+@%!06VMK:TN+0#`P.TM+0!`0&R
-MLK*JJJJHK*BDI*2<G)R6EI:,C(R$A(1\?'QX>'AJ:FI<7%Q86%A.3DY(2$A&
-M1D9$1$1"0D)`0$`T-#0P,C`L+"PH*"@F)B8<'!S-S<W)R<D4%!02$A+!P<&_
-MO[^]O;V[O[L&!@:UN;6UM;4"`@)(U\([```!04E$051XG(W4:5>"0!0&X&N[
-M80L&`XT4E$2A%;;37J268D3]_Q\3#-LXT-C[A3EG'LXLW`OLSPJDSZ#')J!%
-M*"@JL%$5(<Q$QP.P)#86@-=)1.@!<B:8S>0"@1<2(4!?HV9:^4CK@T"$`@X%
-M](=BO`1*+`+5HI9PU'$R^#C$V$Q$#Z0"G(^`B(6-[8%6)5:[$(NU871:V2\+
-M[?D'B'@#N?'=FEIE-YJQ3YODIB)1LY-7&+&\`YG(PH@LD3AVW7N$+CEBOAL/
-MGC@"UZ]73-/GB9G[P)]FFR_L+SB2I%N..$,H.GJ#?Q^&;1NTT$11;.M-2K`[
-M3;^+FWZ7%[2Y:%0)C*]&1,@G``=WU?51VR*KS-V\CM=S,5UC^F.ZCST_%TR=
-MOM=+=<K6>I&\UDF_F.44_4)ZKC)9SY&^K4K1M__[._R=7]$S;]8[D-^%````
-)`$E%3D2N0F""
 `
 end
 begin 644 sound.png
