@@ -6,8 +6,8 @@ my $RCS_Id = '$Id$ ';
 # Author          : Johan Vromans
 # Created On      : Tue Sep 15 15:59:04 1992
 # Last Modified By: Johan Vromans
-# Last Modified On: Sun Sep 15 18:00:10 2002
-# Update Count    : 470
+# Last Modified On: Fri Apr 25 16:46:33 2003
+# Update Count    : 496
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -35,6 +35,7 @@ my $src_dir;
 my $dest_dir = ".";
 my $image_info;
 my $index_buttons = 0;
+my $multi = 0;			# multi-level image names
 my $clobber = 0;
 my $verbose = 0;		# verbose processing
 
@@ -86,6 +87,7 @@ my $suffixpat = qr{\.(?:jpe?g|png|gif)}i;
 
 use File::Path;
 use File::Copy;
+use File::Basename;
 
 # The list of files, in the order to be processed.
 my @filelist;
@@ -132,9 +134,23 @@ update_cache();
 my $entries_per_page = $index_columns*$index_rows;
 my $num_indexes = int(($num_entries - 1) / $entries_per_page) + 1;
 
+# Map file indices to basenames, or 4-digit numbers.
+my $i;
+my @htmllist;
+if ( $multi ) {
+    my $fn = "0000";
+    for ( $i = 0; $i < $num_entries; $i++ ) {
+	$htmllist[$i] = $fn++ . ".html";
+    }
+}
+else {
+    for ( $i = 0; $i < $num_entries; $i++ ) {
+	($htmllist[$i] = $filelist[$i]) =~ s/$suffixpat$/.html/;
+    }
+}
+
 # Write the individual pages.
 print STDERR ("Creating pages for ", $num_entries, " images\n") if $verbose;
-my $i;
 for ( $i = 0; $i < $num_entries; $i++ ) {
     write_image_page($i, "large");
     write_image_page($i, "medium") if $medium;
@@ -266,6 +282,14 @@ sub prepare_images {
     foreach my $file ( @filelist ) {
 	print STDERR ("$file... ") if $verbose;
 
+	# Check for directory names, e.g. f01/p01.jpg.
+	my $dn = dirname($file);
+	if ( $dn && $dn ne "." ) { # we have a dir name.
+	    $multi++;
+	    mkpath(["$dest_dir/thumbnails/$dn", "$dest_dir/large/$dn"], 1);
+	    mkpath(["$dest_dir/medium/$dn"], 1) if $medium;
+	}
+
 	my $i_src     = "$src_dir/$file";
 	my $i_large   = "$dest_dir/large/$file";
 	my $i_medium  = "$dest_dir/medium/$file";
@@ -342,8 +366,7 @@ sub write_image_page {
     my ($i, $dir) = @_;
 
     my $file = $filelist[$i];
-    my $base = $file;
-    $base =~ s/$suffixpat$/.html/;
+    my $base = $htmllist[$i];
     my $html = do { local *H; *H };
     open($html, ">$dest_dir/$dir/$base" )
       or die("$base (create): $!\n");
@@ -352,10 +375,10 @@ sub write_image_page {
     $t .= " of " . $num_entries if $num_entries > 1;
     my $tt = $t;
 
-    ($base = $filelist[$i-1]) =~ s/$suffixpat$/.html/;
+    $base = $htmllist[$i-1];
     $t = button("prev", $base, $i > 0) . " " . $t;
     # Link to first image.
-    ($base = $filelist[0]) =~ s/$suffixpat$/.html/;
+    $base = $htmllist[0];
     $t = button("first", $base, $i > 0) . $t;
 
     $t = "<a href=\"../index" .
@@ -364,10 +387,9 @@ sub write_image_page {
 	  "<img align=\"top\" src=\"../index.png\" border=\"0\" alt=\"[Index]\"></a>" . $t;
 
     # Link to next image.
-    ($base = $filelist[$i+1]) =~ s/$suffixpat$/.html/
-      if $i < $num_entries-1;
+    $base = $htmllist[$i+1] if $i < $num_entries-1;
     $t .= " " . button("next", $base, $i < $num_entries-1);
-    ($base = $filelist[-1]) =~ s/$suffixpat$/.html/;
+    $base = $htmllist[-1];
     $t .= button("last", $base, $i < $num_entries-1);
 
 
@@ -383,7 +405,7 @@ sub write_image_page {
 		 "<body $bodyatts>\n",
 		 "<center><h1>$t</h1>\n");
 
-    ($base = $file) =~ s/$suffixpat$/.html/;
+    $base = $htmllist[$i];
     print $html ("<h2>", html($captions{$file}), "</h2><p>\n",
 		 ($dir eq "medium") ?
 		 "<a href=\"../large/$base\"><img src=\"$file\" alt=\"[Click for bigger image]\">" : "<img src=\"$file\"></a>",
@@ -482,8 +504,7 @@ sub write_index_page {
 		if ( $this < $num_entries ) {
 		    my $file = $filelist[$this];
 		    my $base = $medium ? "medium/" : "large/";
-		    $base .= $file;
-		    $base =~ s/$suffixpat$/.html/;
+		    $base .= $htmllist[$this];
 		    print $html ("    <td align=\"center\" valign=\"bottom\">\n",
 				 "      <table border=\"0\" cellpadding=\"0\" cellspacing=\"0\" bgcolor=\"$LGREY\">\n",
 				 "        <tr>\n",
@@ -772,6 +793,7 @@ sub app_options {
 		     'mediumsize=i' => \$medium,
 		     'title=s'	=> \$album_title,
 		     'clobber'	=> \$clobber,
+		     'multi'	=> \$multi,
 		     'index-buttons' => \$index_buttons,
 		     'caption=s' => \$caption,
 		     'ident'	=> \$ident,
@@ -804,6 +826,7 @@ Usage: $0 [options] [file ...]
     -thumbsize NNN	the max size of thumbnail images
     -medium NNN		the max size of moderate sized images
     -captions XXX	f: filename s: size c: description t: tag
+    -multi		force multi-level image names
     -clobber		recreate everything
     -index-buttons	use index buttons instead of links
     -help		this message
