@@ -4,8 +4,8 @@ my $RCS_Id = '$Id$ ';
 # Author          : Johan Vromans
 # Created On      : Tue Sep 15 15:59:04 2002
 # Last Modified By: Johan Vromans
-# Last Modified On: Tue May 25 23:21:05 2004
-# Update Count    : 591
+# Last Modified On: Wed May 26 08:23:57 2004
+# Update Count    : 638
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -82,6 +82,12 @@ my $bodyatts = "text=\"#000000\" link=\"#000000\" vlink=\"#000000\"".
                " alink=\"#FF0000\" bgcolor=\"$DGREY\"";
 my $suffixpat = qr{\.(?:jpe?g|png|gif)}i;
 
+my %capfun = ('c' => \&c_caption,
+	      'f' => \&f_caption,
+	      's' => \&s_caption,
+	      't' => \&t_caption,
+	     );
+
 
 ################ The Process ################
 
@@ -93,16 +99,16 @@ use File::Basename;
 my @filelist;
 my @htmllist;			# map fn to html name
 
+# Storage for image info. Will be cached.
+my $info;
+
 # Individual file properties:
-my %description;			# descriptions
+my %description;		# descriptions
 my %rotate;			# rotate info (degrees clockwise)
 my %tag;			# tag info
 my %seen;			# to keep track
 
 my $add_from_src = 0;		# no info file, or wildcard seen
-
-# Storage for image info. Will be cached.
-my $info;
 
 # Load image names and info from the info file, if any.
 load_image_info();
@@ -116,7 +122,7 @@ my $num_entries = scalar(@filelist);
 print STDERR ("Number of entries = $num_entries\n") if $verbose;
 die("Nothing to do?\n") unless $num_entries > 0;
 
-# Clean up and create thumbnails directory.
+# Clean up and create directories.
 if ( $clobber ) {
     rmtree(["$dest_dir/thumbnails", "$dest_dir/medium"], 1);
 }
@@ -135,24 +141,38 @@ update_cache();
 my $entries_per_page = $index_columns*$index_rows;
 my $num_indexes = int(($num_entries - 1) / $entries_per_page) + 1;
 
+my $fn = "img0000";
 # Map file names to html pages.
-{ my $fn = "img0000";
-  for my $i ( 0 .. $num_entries-1 ) {
+for my $i ( 0 .. $num_entries-1 ) {
     $htmllist[$i] = $fn++ . ".html";
-  }
+}
+# Cleanup excess files.
+for (my $i = $num_entries ; ; $i++ ) {
+    my $excess = $fn++ . ".html";
+    unlink("$dest_dir/medium/$excess");
+    unlink("$dest_dir/large/$excess") or last;
 }
 
 # Write the individual pages.
 print STDERR ("Creating pages for ", $num_entries, " images\n") if $verbose;
+my $mod = 0;
 for my $i ( 0 .. $num_entries-1 ) {
-    write_image_page($i, "large");
-    write_image_page($i, "medium") if $medium;
+    write_image_page($i, "large") && $mod++;
+    write_image_page($i, "medium") && $mod++ if $medium;
 }
+uptodate("image", $mod) if $verbose;
 
 # Write the index pages.
 print STDERR ("Creating pages for ", $num_indexes, " indexes\n") if $verbose;
+$mod = 0;
 for my $i ( 0 .. $num_indexes-1 ) {
-    write_index_page($i);
+    write_index_page($i) && $mod++;
+}
+uptodate("index", $mod) if $verbose;
+
+# Cleanup excess indices.
+for (my $i = $num_indexes ; ; $i++ ) {
+    unlink("$dest_dir/index$i.html") or last;
 }
 
 # Copy the button images over to the target directory.
@@ -161,8 +181,6 @@ add_button_images();
 exit 0;
 
 ################ Subroutines ################
-
-sub button($$;$$);
 
 sub set_parameter_defaults {
 
@@ -369,63 +387,109 @@ sub prepare_images {
     }
 }
 
+#### Output generation.
+
+sub button($$;$$);
+
 sub write_image_page {
     my ($i, $dir) = @_;
 
     my $file = $filelist[$i];
-    my $html = do { local *H; *H };
-    open($html, ">$dest_dir/$dir/".$htmllist[$i] )
-      or die($htmllist[$i]." (create): $!\n");
-    select($html);
+    my $it = html($description{$file});
+    my $tt = "$album_title: Image " . ($i+1);
+    $tt .= " of " . $num_entries if $num_entries > 1;
+    $tt = html($tt);
+    $it ||= $tt;
 
-    my $t = "$album_title: Image " . ($i+1);
-    $t .= " of " . $num_entries if $num_entries > 1;
-    my $tt = $t;
-
-    # Link to first/prev image.
-    $t = button("first", $htmllist[0],    1, $i > 0)
-       . button("prev",  $htmllist[$i-1], 1, $i > 0) . " " . $t;
-
+    my $b;
     if ( $dir eq "large" && $medium ) {
-	$t = "<a href=\"../medium/".$htmllist[$i]."\">" .
-	      "<img align=\"top\" src=\"../images/index.png\" border=\"0\" alt=\"[Medium size]\"></a>" . $t;
+	$b = "<a href=\"../medium/".$htmllist[$i]."\">" .
+	  "<img align=\"top\" src=\"../images/index.png\" " .
+	  "border=\"0\" alt=\"[Medium size]\"></a><br>\n";
     }
     else {
-	$t = "<a href=\"../index" .
+	$b = "<a href=\"../index" .
 	  (($i >= $entries_per_page) ? int($i / $entries_per_page) : "") .
-	    ".html\">" .
-	      "<img align=\"top\" src=\"../images/index.png\" border=\"0\" alt=\"[Index]\"></a>" . $t;
+	  ".html\">" .
+	  "<img align=\"top\" src=\"../images/index.png\" " .
+	  "border=\"0\" alt=\"[Index]\"></a><br>\n";
     }
+    # Link to first/prev image.
+    $b .= button("first", $htmllist[0],    1, $i > 0) . "<br>\n";
+    $b .= button("prev",  $htmllist[$i-1], 1, $i > 0) . "<br>\n";
 
     # Link to next/last image.
-    $t .= " "
-       . button("next", $htmllist[$i+1], 1, $i < $num_entries-1)
-       . button("last", $htmllist[-1],   1, $i < $num_entries-1);
+    $b .= button("next", $htmllist[$i+1], 1, $i < $num_entries-1) . "<br>\n";
+    $b .= button("last", $htmllist[-1],   1, $i < $num_entries-1) . "<br>\n";
 
+    my $imglink;
+    if ( $dir eq "medium" ) {
+	$imglink = "<a href=\"../large/".$htmllist[$i]."\">" .
+	  "<img src=\"$file\" alt=\"[Click for bigger image]\">";
+    }
+    else {
+	$imglink = "<img src=\"$file\"></a>";
+    }
 
-    print("<style type=\"text/css\">\n",
-	  "<!--\n",
-	  $css,
-	  "-->\n",
-	  "</style>\n",
-	  "<html>\n",
-	  "<head>\n",
-	  "<title>$tt</title>\n",
-	  "</head>\n",
-	  "<body $bodyatts>\n",
-	  "<center><h1>$t</h1>\n");
+    my $auxinfo = $file;
+    $auxinfo .= " " . $tag{$file} if $tag{$file};
+    $auxinfo .= " (" . size_info($file) . ")";
 
-    my $ii = $info->entry($file);
-    print("<h2>", html($description{$file}), "</h2><p>\n",
-	  ($dir eq "medium") ?
-	  "<a href=\"../large/".$htmllist[$i]."\"><img src=\"$file\" alt=\"[Click for bigger image]\">" : "<img src=\"$file\"></a>",
-	  "<br>\n",
-	  $file, " ", $tag{$file}||"", " (",
-	  s_caption($file), ")\n",
-	  "<p>\n",
-	  "</center></body></html>\n");
+    my $new = <<EOD;
+<html>
+<head>
+<title>$it</title>
+<style type="text/css">
+<!--
+$css
+-->
+</style>
+</head>
+<body $bodyatts>
+  <table>
+    <tr>
+      <td>
+      </td>
+      <td align="left" valign="top">
+	  <h2>$it</h2>
+      </td>
+      <td align="right" valign="top">
+	  <h2>$tt</h2>
+      </td>
+    </tr>
+    <tr>
+      <td valign="top">
+	$b
+      </td>
+      <td align="center" valign="top" colspan="2">
+	$imglink<br>
+	$auxinfo
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+EOD
 
+    my $h = "$dest_dir/$dir/".$htmllist[$i];
+
+    # Do not overwrite unless modified.
+    if ( -s $h == length($new) ) {
+	local($/);
+	my $hh = do { local *H; *H };
+	my $old;
+	open($hh, $h) && ($old = <$hh>) && close($hh);
+	if ( $old eq $new ) {
+	    return 0;
+	}
+    }
+
+    my $html = do { local *H; *H };
+    open($html, ">$h")
+      or die("$h (create): $!\n");
+    print $html $new;
     close($html);
+    1;
 }
 
 sub write_index_page {
@@ -512,14 +576,12 @@ sub write_index_page {
     my $first_in_row = $x * $entries_per_page;
 
     for ( my $i = 0; $i < $index_rows; $i++, $first_in_row += $index_columns ) {
-	# First row is the image thumbnails.
 	if ( $first_in_row < $num_entries ) {
 	    print(qq(  <tr bgcolor="$LGREY">\n));
 	    for ( my $j = 0; $j < $index_columns; $j++ ) {
 		my $this = $first_in_row + $j;
 		if ( $this < $num_entries ) {
 		    my $file = $filelist[$this];
-		    my $ii = $info->entry($file);
 		    my $base = $medium ? "medium/" : "large/";
 		    $base .= $htmllist[$this];
 		    print("    <td align=\"center\" valign=\"bottom\">\n",
@@ -530,15 +592,10 @@ sub write_index_page {
 			  "</td>\n",
 			  "        </tr>\n",
 			  "        <tr>\n",
-			  "          <td align=\"center\">");
-		    foreach ( split(//, $caption) ) {
-			print(f_caption($file)) if $_ eq 'f';
-			print(s_caption($file, $medium)) if $_ eq 's';
-			print(c_caption($file)) if $_ eq 'c';
-			print(t_caption($file)) if $_ eq 't';
-			print("<br>");
-		    }
-		    print("\n",
+			  "          <td align=\"center\">",
+			  (map { $capfun{$_}->($file), "<br>\n" }
+			     split(//, $caption)),
+			  "\n",
 			  "          </td>\n",
 			  "        </tr>\n",
 			  "      </table>\n",
@@ -555,24 +612,24 @@ sub write_index_page {
 
     print("<p>\n", "</center></body></html>\n");
     close($html);
+
+    1;
 }
 
 sub button($$;$$) {
-    my ($tag, $index, $level, $active) = @_;
+    my ($tag, $link, $level, $active) = @_;
     my $Tag = ucfirst($tag);
 
     $level  = 0 unless defined $level;
     $active = 1 unless defined $active;
-
+    $tag .= "-gr" unless $active;
     $level = "../" x $level;
-
-    if ( $active ) {
-	return "<a href=\"$index\" alt=\"[$Tag]\">".
-	  "<img align=\"top\" src=\"${level}images/$tag.png\" border=\"0\" alt=\"[$Tag]\">".
-	    "</a>";
-    }
-    "<img align=\"top\" src=\"${level}images/$tag-gr.png\" border=\"0\" alt=\"[$Tag]\">";
+    my $b = "<img align=\"top\" src=\"${level}images/$tag.png\"".
+      " border=\"0\" alt=\"[$Tag]\">";
+    $active ? "<a href=\"$link\" alt=\"[$Tag]\">$b</a>" : $b;
 }
+
+#### HTML helpers.
 
 sub html {
     my $t = shift;
@@ -584,16 +641,16 @@ sub html {
     $t;
 }
 
+#### Caption helpers.
+
 sub f_caption {
     my ($file) = @_;
     html($file);
 }
 
 sub s_caption {
-    my ($file, $med) = @_;
-    my $ii = $info->entry($file);
-    $ii->width . "x" . $ii->height . ", " .
-      bytes($med ? $ii->medium_size : $ii->large_size);
+    my ($file) = @_;
+    size_info($file, $medium);
 }
 
 sub t_caption {
@@ -608,12 +665,7 @@ sub c_caption {
     $t;
 }
 
-sub bytes {
-    my $t = shift;
-    return $t . "b" if $t < 10*1024;
-    return ($t >> 10) . "kb" if $t < 10*1024*1024;
-    ($t >> 20) . "Mb";
-}
+#### Persistent info (cache) helpers.
 
 sub load_cache {
     $info = new ImageInfo;
@@ -623,6 +675,8 @@ sub load_cache {
 sub update_cache {
     $info->store("$dest_dir/.cache");
 }
+
+#### Miscellaneous.
 
 sub add_button_images {
 
@@ -667,6 +721,31 @@ sub add_button_images {
     }
     else {
 	print STDERR ("done\n") if $did && $verbose;
+    }
+}
+
+sub bytes {
+    my $t = shift;
+    return $t . "b" if $t < 10*1024;
+    return ($t >> 10) . "kb" if $t < 10*1024*1024;
+    ($t >> 20) . "Mb";
+}
+
+sub size_info {
+    my ($file, $med) = @_;
+    my $ii = $info->entry($file);
+    $ii->width . "x" . $ii->height . ", " .
+      bytes($med ? $ii->medium_size : $ii->large_size);
+}
+
+sub uptodate {
+    my ($type, $mod) = @_;
+    if ( $mod ) {
+	print STDERR ("(Needed to write ", $mod,
+		      " $type page", $mod == 1 ? "" : "s", ")\n");
+    }
+    else {
+	print STDERR ("(No $type pages needed updating)\n");
     }
 }
 
