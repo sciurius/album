@@ -4,8 +4,8 @@ my $RCS_Id = '$Id$ ';
 # Author          : Johan Vromans
 # Created On      : Sun May  9 17:49:55 2004
 # Last Modified By: Johan Vromans
-# Last Modified On: Sun May  9 17:50:47 2004
-# Update Count    : 3
+# Last Modified On: Sun May 16 14:16:55 2004
+# Update Count    : 8
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -21,6 +21,7 @@ $my_version .= '*' if length('$Locker$ ') > 12;
 
 ################ Command line parameters ################
 
+my $full = 0;			# include header
 my $verbose = 0;		# more verbosity
 
 # Development options (not shown with --help).
@@ -36,9 +37,19 @@ $trace |= ($debug || $test);
 
 ################ Presets ################
 
+use constant MONTHS => [qw(januari februari maart april mei juni juli augustus september oktober november december)];
+
 my $TMPDIR = $ENV{TMPDIR} || $ENV{TEMP} || '/usr/tmp';
 
 ################ The Process ################
+
+if ( $full ) {
+    print STDOUT <<EOD;
+!title Onuitgezocht
+
+!mediumsize 1024
+EOD
+}
 
 foreach my $dir ( @ARGV ) {
     warn("$dir: Not a directory\n"), next unless -d $dir;
@@ -52,7 +63,7 @@ foreach my $dir ( @ARGV ) {
 	if ( "$y$m$d" ne $date ) {
 	    $date = "$y$m$d";
 	    print "\n!tag ", 0+$d, " ",
-	      qw(januari februari maart april mei juni juli augustus september oktober november december)[$m-1], "\n";
+	      MONTHS->[$m-1], "\n";
 	}
 	print "$file -O:0 \n";
     }
@@ -72,7 +83,7 @@ sub app_options {
     GetOptions(ident	   => \&app_ident,
 	       verbose	   => \$verbose,
 	       # application specific options go here
-
+	       full	   => \$full,
 	       # development options
 	       test	   => \$test,
 	       trace	   => \$trace,
@@ -96,6 +107,7 @@ mkdata [options] [dir ...]
 
 Options:
 
+   --full		include data preamble
    --ident		show identification
    --help		brief help message
    --verbose		verbose information
@@ -103,6 +115,10 @@ Options:
 =head1 OPTIONS
 
 =over 8
+
+=item B<--full>
+
+Include data preamble.
 
 =item B<--verbose>
 
