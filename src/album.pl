@@ -4,8 +4,8 @@ my $RCS_Id = '$Id$ ';
 # Author          : Johan Vromans
 # Created On      : Tue Sep 15 15:59:04 2002
 # Last Modified By: Johan Vromans
-# Last Modified On: Wed Jun  2 22:14:42 2004
-# Update Count    : 1008
+# Last Modified On: Fri Jun  4 12:58:00 2004
+# Update Count    : 1010
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -609,10 +609,10 @@ sub write_image_page {
     my $imglink;
     if ( $dir eq "medium" ) {
 	$imglink = "<a href='../large/".$htmllist[$i]."'>" .
-	  img($file, alt => "[Click for bigger image]") . "</a>";
+	  img($file, alt => "[Click for bigger image]", border => 2) . "</a>";
     }
     else {
-	$imglink = img($file, alt => "[Image]");
+	$imglink = img($file, alt => "[Image]", border => 2);
     }
 
     my $auxright = html($file . " (" . size_info($file) . ")");
