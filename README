@@ -1,5 +1,13 @@
 'album' is a tool to create and maintain an HTML based photo album.
 
+The photo albums are intended to be the digital equivalents of paper
+albums, but easier to create and maintain. Although you can publish a
+photo album on the Web, this tool is not specifically targeted at
+creating Web shows.
+
+Details
+=======
+
 A photo album consists of a number of (large) pictures, small thumbnail
 images, and index pages. Optionally, medium sized images can be
 generated as well. The album will be organised as follows:
@@ -22,6 +30,7 @@ can be taken into account.
 Web site: http://www.squirrel.nl/people/jvromans/Album/index.html
 
 Helper programs
+===============
 
 This program requires some helper programs for certain tasks.
 
