@@ -4,8 +4,8 @@ my $RCS_Id = '$Id$ ';
 # Author          : Johan Vromans
 # Created On      : Sun May  9 17:49:55 2004
 # Last Modified By: Johan Vromans
-# Last Modified On: Mon May 17 21:50:41 2004
-# Update Count    : 36
+# Last Modified On: Tue May 18 12:31:17 2004
+# Update Count    : 37
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -87,7 +87,7 @@ foreach my $dir ( @ARGV ) {
 	    $f{$file} = "-O:0 ";
 	}
 	if ( $exif->{comment} ) {
-	    $f{$file} .= $exif->{comment};
+	    $f{$file} .= $exif->{comment} . " ";
 	}
     }
 
@@ -100,7 +100,7 @@ foreach my $dir ( @ARGV ) {
 	    print "\n!tag ", 0+$d, " ",
 	      MONTHS->[$m-1], "\n";
 	}
-	print "$file $f{$file} \n";
+	print "$file $f{$file}\n";
     }
 }
 
