@@ -4,8 +4,8 @@ my $RCS_Id = '$Id$ ';
 # Author          : Johan Vromans
 # Created On      : Tue Sep 15 15:59:04 2002
 # Last Modified By: Johan Vromans
-# Last Modified On: Fri Jul  9 21:47:22 2004
-# Update Count    : 1829
+# Last Modified On: Sat Jul 10 18:41:09 2004
+# Update Count    : 1839
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -107,11 +107,9 @@ my %capfun = ('c' => \&c_caption,
 my $br = br();
 
 # Helper programs
-my $prog_jpegtran  = findbin("jpegtran");
-my $prog_mplayer   = findbin("mplayer");
-my $prog_mencoder  = findbin("mencoder");
-my $prog_mpegstill = findbin("mpegstill");
-my $prog_mpeg2decode = findbin("mpeg2decode");
+my $prog_jpegtran  = findexec("jpegtran");
+my $prog_mplayer   = findexec("mplayer");
+my $prog_mencoder  = findexec("mencoder");
 
 ################ The Process ################
 
@@ -735,6 +733,8 @@ sub prepare_images {
 	 warn("resize: $t\n") if $t;
     };
 
+=begin checked_by_Makefile_PL
+
     unless ( $prog_jpegtran ) {
 	foreach my $el ( $filelist->entries ) {
 	    next unless $el->rotation || $el->mirror;
@@ -750,7 +750,7 @@ sub prepare_images {
 	    next unless $el->type == T_MPG;
 	    next if -s d_large($el->dest_name);
 	    warn("WARNING: Helper program 'mplayer' not found.\n",
-		 "\tMPG files will be copied.\n");
+		 "\tNo stills will be produced, and VOICE files will remain silent.\n");
 	    last;
 	}
     }
@@ -760,25 +760,12 @@ sub prepare_images {
 	    next unless $el->type == T_VOICE;
 	    next if -s d_large($el->assoc_name);
 	    warn("WARNING: Helper program 'mencoder' not found.\n",
-		 "\tVOICE files will remain silent.\n");
+		 "\tMPG files will be copied, and cannot be rotated.\n");
 	    last;
 	}
     }
 
-    unless ( $prog_mpegstill ) {
-	foreach my $el ( $filelist->entries ) {
-	    next unless $el->type == T_MPG;
-	    next if -s d_large($el->assoc_name);
-	    warn("WARNING: Helper program 'mpegstill' not found.\n");
-	    unless ( $prog_mpeg2decode ) {
-		warn("WARNING: Helper program 'mpeg2decoder' also not found.\n",
-		     "\tGenerating still files from MPG will be disabled.\n");
-	    }
-	    else {
-		warn("\tGenerating still files from MPG will be extremely slow.\n");
-	    }
-	}
-    }
+=cut
 
     foreach my $el ( $filelist->entries ) {
 	my $file = $el->dest_name;
@@ -810,6 +797,7 @@ sub prepare_images {
 			     $el->rotation, $el->mirror);
 		}
 		else {
+		    $msg->(" [no rotation]") if $el->rotation;
 		    $msg->(" ");
 		    copy($i_src, $i_large, $time);
 		}
@@ -868,7 +856,6 @@ sub prepare_images {
 	    $i_large = d_large($file);
 	    unless ( -s $i_large ) {
 		$msg->("still ");
-		$msg->("(be very patient) ") unless $prog_mpegstill;
 		$image = still($el);
 	    }
 	}
@@ -1306,7 +1293,7 @@ sub c_caption {
 
 #### Miscellaneous.
 
-sub findbin {
+sub findexec {
     my ($bin) = @_;
     foreach ( split(":", $ENV{PATH}) ) {
 	return "$_/$bin" if -x "$_/$bin";
@@ -1486,9 +1473,15 @@ sub still {
 
     my $new = d_large($el->assoc_name);
     my $still = new Image::Magick;
-    if ( $prog_mpegstill ) {
-	my $tmp = "mps$$.tmp";
-	system($prog_mpegstill, d_large($el->dest_name), $tmp);
+    if ( $prog_mplayer ) {
+	my $tmp = "00000001.jpg";
+	if ( -e $tmp ) {
+	    die("ERROR: mplayer needs to create a file $tmp, but it already exists!\n");
+	}
+	my $cmd = "$prog_mplayer -really-quiet -nosound -frames 1 -vo jpeg " .
+	  squote(d_large($el->dest_name));
+	my $t = `$cmd 2>&1`;
+	warn("$t\n") unless -s $tmp;
 	$still->Read($tmp);
 	unlink($tmp);
     }
