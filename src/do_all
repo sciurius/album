@@ -1,0 +1,10 @@
+#!/bin/sh
+
+cvs update -P -d
+for i in *
+do
+    if [ -d $i ]; then
+        perl -w album.pl --dest $i --info data/$i.dat
+    fi
+done
+perl -w mkindex.pl > index.html
