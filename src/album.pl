@@ -4,8 +4,8 @@ my $RCS_Id = '$Id$ ';
 # Author          : Johan Vromans
 # Created On      : Tue Sep 15 15:59:04 2002
 # Last Modified By: Johan Vromans
-# Last Modified On: Wed Jun 23 18:20:51 2004
-# Update Count    : 1363
+# Last Modified On: Fri Jun 25 12:43:44 2004
+# Update Count    : 1517
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -31,7 +31,7 @@ use Getopt::Long 2.13;
 # Command line options.
 my $import_exif = 0;
 my $import_dir;
-my $add_new = 0;		# add new from import
+my $update = 0;			# add new from large/import
 my $dest_dir = ".";
 my $image_info;
 my $linkthem = 1;		# link orig to large, if possible
@@ -46,6 +46,9 @@ my $medium;			# medium size, between large and small
 my $album_title;
 my $caption;
 
+# These are not command line options.
+my $journal;			# create journal
+
 # Development options (not shown with -help).
 my $debug = 0;			# debugging
 my $trace = 0;			# trace (show process)
@@ -56,11 +59,14 @@ app_options();
 
 # Post-processing.
 $trace |= ($debug || $test);
+$dest_dir =~ s;^\./;;;
+$import_dir =~ s;^\./;; if $import_dir;
 
 ################ Presets ################
 
 use constant DEFAULTS => { info       => "info.dat",
 			   title      => "Photos",
+			   medium     => 0,
 			   mediumsize => 915,
 			   thumbsize  => 200,
 			   indexrows  => 3,
@@ -72,19 +78,21 @@ my $TMPDIR = $ENV{TMPDIR} || $ENV{TEMP} || '/usr/tmp';
 
 my $WHITE = "#FFFFFF";
 my $BLACK = "#000000";
+my $RED   = "#FF0000";
 my $LGREY = "#E0E0E0";
 my $MGREY = "#D0D0D0";
 my $DGREY = "#C0C0C0";
 
 my $fontfam = "font-family: Verdana, Arial, Helvetica";
 my $css = <<EOD;
-body  { font-size: 80%; $fontfam; }
-td    { font-size: 80%; $fontfam; }
+body  { font-size:  80%; $fontfam; }
+td    { font-size:  80%; $fontfam; }
 p.hd  { font-size: 140%; font-weight: bold; $fontfam; }
-p.ft  { font-size: 80%; $fontfam; }
+p.ft  { font-size:  80%; $fontfam; }
 EOD
-my $bodyatts = "text='#000000' link='#000000' vlink='#000000'".
-               " alink='#FF0000' bgcolor='$DGREY'";
+my $bodyatts = "text='$BLACK' link='$BLACK' vlink='$BLACK'".
+               " alink='$RED' bgcolor='$DGREY'";
+
 my $suffixpat = qr{\.(?:jpe?g|png|gif|mpg)}i;
 
 my %capfun = ('c' => \&c_caption,
@@ -95,10 +103,6 @@ my %capfun = ('c' => \&c_caption,
 
 my $br = br();
 
-use constant T_JPG   => 1;
-use constant T_MPG   => 2;
-use constant T_VOICE => 3;
-
 ################ The Process ################
 
 use File::Path;
@@ -106,47 +110,42 @@ use File::Basename;
 use Time::Local;
 use Data::Dumper;
 
+# The files already there, if any.
+my $gotlist = new FileList;
+# The files in the import dir, if any.
+my $implist = new FileList;
+
 # The list of files, in the order to be processed.
+# This list is initialy filled from info.dat, and (optionally) updated
+# from the other lists.
 my $filelist = new FileList;
-
-# Storage for image info. Will be cached.
-my $info;
-
-# Individual file properties:
-my %seen;			# to keep track
-my %missing;			# to keep track
-
-my %newfiles;			# info for new files
-my $add_src = 0;		# * seen in info
-my $journal;			# create journal
-
-# Load image names and info from the info file, if any.
-load_image_info();
-
-# Apply defaults for other settings.
-set_parameter_defaults();
 
 # Load cached info, if possible.
 load_cache();
 
-# If files are to be imported, gather their names.
-load_new_files() if $add_new && $import_dir;
-load_src_files() if $add_src;
+# Gather files.
+load_files()  if -d d_large();
+#print STDERR Data::Dumper->Dump([$gotlist],[qw(gotlist)]);
+load_import() if $import_dir && -d $import_dir;
+#print STDERR Data::Dumper->Dump([$implist],[qw(implist)]);
 
-# Add image names from the source directory, if needed.
-get_image_names() if $add_new || $add_src;
-if ( %missing ) {
-    foreach ( sort keys %missing ) {
-	warn("$_: Missing\n");
-    }
-    die("Aborted!\n");
-}
+# Load image names and info from the info file, if any.
+load_info();
+#print STDERR Data::Dumper->Dump([$filelist],[qw(filelist)]);
+
+# Apply defaults to unset parameters.
+set_defaults();
+
+# Verify and update the file list.
+my $added = update_filelist();
+#print STDERR Data::Dumper->Dump([$filelist],[qw(filelist)]);
 
 my $num_entries = $filelist->tally;
 print STDERR ("Number of entries = $num_entries",
-	      $add_new ? " ($add_new added)" : "",
+	      $added ? " ($added added)" : "",
 	      "\n") if $verbose;
 die("Nothing to do?\n") unless $num_entries > 0;
+exit(0) if $test;
 
 # Clean up and create directories.
 if ( $clobber ) {
@@ -217,6 +216,14 @@ exit 0;
 
 ################ Subroutines ################
 
+# Image types.
+use constant T_JPG   => 1;
+use constant T_MPG   => 2;
+use constant T_VOICE => 3;	# still image + sound
+
+# Storage for image info. Will be cached.
+my $info;
+
 # Note: the HTML generators use the file names relatively.
 sub d_large      { unshift(@_, "large");      goto &d_dest; }
 sub d_medium     { unshift(@_, "medium");     goto &d_dest; }
@@ -225,15 +232,13 @@ sub d_icons      { unshift(@_, "icons");      goto &d_dest; }
 sub d_journal    { unshift(@_, "journal");    goto &d_dest; }
 sub d_dest       { join("/", $dest_dir, @_); }
 
-sub set_parameter_defaults {
+sub set_defaults {
 
-    $album_title ||= DEFAULTS->{title};
-
-    # Other settings.
-    $index_rows ||= DEFAULTS->{indexrows};
+    $album_title   ||= DEFAULTS->{title};
+    $index_rows    ||= DEFAULTS->{indexrows};
     $index_columns ||= DEFAULTS->{indexcols};
-    $thumb ||= DEFAULTS->{thumbsize};
-    $medium ||= 0;
+    $thumb         ||= DEFAULTS->{thumbsize};
+    $medium        ||= DEFAULTS->{medium};
 
     # Caption values.
     $caption ||= DEFAULTS->{caption};
@@ -242,7 +247,7 @@ sub set_parameter_defaults {
     $caption = lc($caption);
 }
 
-sub load_image_info {
+sub load_info {
 
     my %typemap = ( 'p' => T_JPG, 'm' => T_MPG, 'v' => T_VOICE );
 
@@ -254,8 +259,8 @@ sub load_image_info {
 	# Try default.
 	$image_info = d_dest(DEFAULTS->{info});
 	unless ( -s $image_info ) {
-	    $add_new++ if $import_dir;
-	    $add_src++ if -d d_large();
+	    my $add_new; $add_new++ if $import_dir;
+	    my $add_src; $add_src++ if -d d_large();
 	    print STDERR ("No ", DEFAULTS->{info});
 	    print STDERR (", adding images from ") if $add_src || $add_new;
 	    print STDERR (d_large())               if $add_src;
@@ -321,13 +326,16 @@ sub load_image_info {
 	    next;
 	}
 	($file, my $a) = split(' ', $_, 2);
+
+=begin obsolete
+
 	if ( $file eq "*" ) {
 	    $add_src = 1;
 	    $el = undef;
 	    next;
 	}
 
-	$el = undef, next if $seen{$file};
+=cut
 
 	my $rotate = 0;
 	my $type = T_JPG;
@@ -344,6 +352,7 @@ sub load_image_info {
 	$el = new FileEntry
 	  (dest_name   => $file,
 	   description => $a || "",
+	   annotation  => "",
 	   orientation => $rotate,
 	   type        => $type);
 	$el->tag($tag) if $tag;
@@ -355,27 +364,24 @@ sub load_image_info {
 	    (my $t = $file) =~ s/\.jpg$/.mp3/i;
 	    $el->assoc_name($t);
 	}
-	unless ( -s d_large($file) ) {
-	    warn("$file (info): Missing\n");
-	    $missing{$file} = $el;
-	}
-	else {
-	    $seen{$file} = $el;
-	}
-	$filelist->add($el) unless $el->description =~ /^--/;
+	$filelist->add($el);
     }
     close($fh);
     die("Aborted\n") if $err;
 }
 
-sub load_src_files {
+sub load_files {
     my $dh = do { local *DH; *DH; };
     opendir($dh, d_large())
       or die("Cannot opendir " . d_large() . ": $!\n");
 
-    foreach my $f ( sort grep { !/^\./ && /$suffixpat$/ } readdir($dh) ) {
+    my @files = sort grep { !/^\./ && /$suffixpat$/ } readdir($dh);
+    closedir($dh);
+
+    while ( @files ) {
+	my $f = shift(@files);
 	my $el = new FileEntry
-	  (type => T_JPG, orig_name => $f, dest_name => $f);
+	  (type => T_JPG, dest_name => $f);
 	if ( $f =~ /^(.+)\.jpg$/ ) {
 	    my $m = "$1.mp3";
 	    if ( -s d_large($m) ) {
@@ -385,24 +391,30 @@ sub load_src_files {
 	    }
 	}
 	elsif ( $f =~ /^(.+)\.mpg$/ ) {
-	    warn("$f: Changed to MPG\n");
 	    $el->type(T_MPG);
-	    $el->assoc_name($1."s.jpg");
+	    my $assoc = $1."s.jpg";
+	    $el->assoc_name($assoc);
+	    if ( $files[0] eq $assoc ) {
+		shift(@files);
+		warn("$assoc: Skipped still ($f)\n");
+	    }
 	}
-	$newfiles{$f} = $el;
+	$gotlist->add($el, $f);
     }
-
-    close($dh);
 }
 
-sub load_new_files {
+sub load_import {
     my $dh = do { local *DH; *DH; };
     opendir($dh, $import_dir)
       or die("Cannot opendir $import_dir: $!\n");
 
-    foreach my $f ( sort grep { !/^\./ && /$suffixpat$/ } readdir($dh) ) {
+    my @files = sort grep { !/^\./ && /$suffixpat$/ } readdir($dh);
+    closedir($dh);
+
+    while ( @files ) {
+	my $f = shift(@files);
 	if ( $import_exif ) {
-	    do_exif($f);
+	    shift(@files) if do_exif($f, $files[0]);
 	}
 	else {
 	    my $el = new FileEntry
@@ -411,15 +423,13 @@ sub load_new_files {
 		$el->type(T_MPG);
 		$el->assoc_name($1."s.jpg");
 	    }
-	    $newfiles{$f} = $el;
+	    $implist->add($el, $f);
 	}
     }
-
-    close($dh);
 }
 
 sub do_exif {
-    my ($file) = @_;
+    my ($file, $next) = @_;
 
     # Sony DSC-V1 produces the following files:
     #   DSC0nnnn.JPG	still image
@@ -433,29 +443,15 @@ sub do_exif {
     #   MOV0nnnn.MPG	movie
     # Files marked with * have a normal still image associated.
 
-    my $clashcheck = sub {
-	my ($file, $new, $ext) = @_;
-	$new .= "00";
-	my $clash = 0;
-	while ( $newfiles{"$new.$ext"} && !$missing{"$new.ext"} ) {
-	    print STDERR ("Import $file -> $new.$ext clashes with ",
-			  $newfiles{"$new.$ext"}->dest_name, "\n")
-	      if $verbose;
-	    $clash = 1;
-	    $new++;
-	}
-	print STDERR ("Import $file -> $new.$ext\n") if $verbose && $clash;
-	$new;
-    };
-
     # Normal still image.
     if ( $file =~ /^(dsc0)(\d+)\.(jpg)$/i ) {
 	my ($type, $seq, $ext) = ($1, $2, $3);
 	my $exif = get_exif("$import_dir/$file");
+	my $el;
 	my $fd = $exif->{"date/time"} || "";
 	if ( $fd =~ /(\d\d\d\d):(\d\d):(\d\d) (\d\d):(\d\d):(\d\d)/ ) {
 	    my $time = timelocal($6,$5,$4,$3,$2-1,$1);
-	    my $new = $clashcheck->($file, "$1$2$3$4$5", $ext);
+	    my $new = "$1$2$3$4$5$6$seq";
 	    my $ii = $info->entry("$new.$ext");
 	    if ( $ii && !$ii->orig_name ) {
 		my $f = "$import_dir/$file";
@@ -464,58 +460,28 @@ sub do_exif {
 		$info->entry("$new.$ext", $ii);
 	    }
 
-	    $newfiles{"$new.$ext"} =
-	      new FileEntry (type => T_JPG, orig_name => $file,
-			     dest_name => "$new.$ext",
-			     timestamp => $time);
+	    $el = new FileEntry (type => T_JPG, orig_name => $file,
+				 dest_name => "$new.$ext",
+				 exif => $exif, timestamp => $time);
 	    $file = "$new.$ext";
 	}
 	else {
 	    warn("$file: Missing or unparsable file date [$fd]\n");
-	    $newfiles{$file} =
-	      new FileEntry (type => T_JPG, orig_name => $file,
-			     dest_name => $file);
+	    $el = new FileEntry (type => T_JPG, orig_name => $file,
+				 dest_name => $file, exif => $exif);
 	}
 	if ( ($exif->{orientation}||"") =~ /^rotate (\d+)$/i  ) {
-	    $newfiles{$file}->orientation(int($1/90));
+	    $el->orientation(int($1/90));
 	}
-    }
-
-    # Still image + sound clip.
-    elsif ( $file =~ /^(dsc0)(\d+)\.(mpg)$/i ) {
-	my ($type, $seq, $ext) = ($1, $2, $3);
-	(my $f = $file) =~ s/\.mpg$/.jpg/;
-	my $exif = get_exif("$import_dir/$f");
-	unless ( $exif ) {
-	    warn("$file: Clip without still image?\n");
-	    return;
-	}
-	my $fd = $exif->{"date/time"} || "";
-	if ( $fd =~ /(\d\d\d\d):(\d\d):(\d\d) (\d\d):(\d\d):(\d\d)/ ) {
-	    my $time = timelocal($6,$5,$4,$3,$2-1,$1);
-	    my $new = $clashcheck->($file, "$1$2$3$4$5", $ext);
-	    my $ii = $info->entry("$new.$ext");
-	    if ( $ii && !$ii->orig_name ) {
-		my $f = "$import_dir/$file";
-		$f =~ s;^\./;;;
-		$ii->orig_name($f);
-		$info->entry("$new.$ext", $ii);
-	    }
-
-	    # Since we process alphabetically, the .jpg should already
-	    # be there.
-	    $newfiles{"$new.jpg"}->type(T_VOICE);
-	    $newfiles{"$new.jpg"}->assoc_name("$new.mp3");
-	    $file = "$new.$ext";
-	}
-	else {
-	    warn("$file: Missing or unparsable file date [$fd]\n");
+	if ( $next && $next eq "$type$seq.mpg" ) {
+	    warn("$file: Changed to VOICE\n");
+	    $el->type(T_VOICE);
 	    (my $t = $file) =~ s/\.jpg$/.mp3/i;
-	    $newfiles{$file} =
-	      new FileEntry (type => T_VOICE, orig_name => $file,
-			     dest_name => $file,
-			     assoc_name => $t);
+	    $el->assoc_name($t);
+	    $implist->add($el);
+	    return 1;
 	}
+	$implist->add($el);
     }
 
     # MPEG movie.
@@ -524,10 +490,8 @@ sub do_exif {
 	# We have to trust the file date...
 	my $time = (stat("$import_dir/$file"))[9];
 	my @tm = localtime($time);
-	my $new = $clashcheck->($file,
-				sprintf("%04d%02d%02d%02d%02d",
-					1900+$tm[5], 1+$tm[4], @tm[3,2,1]),
-				$ext);
+	my $new = sprintf("%04d%02d%02d%02d%02d%02d$seq",
+			  1900+$tm[5], 1+$tm[4], @tm[3,2,1,0]);
 	my $ii = $info->entry("$new.$ext") || new ImageInfo::Entry;
 	if ( !$ii->orig_name ) {
 	    my $f = "$import_dir/$file";
@@ -535,11 +499,12 @@ sub do_exif {
 	    $ii->orig_name($f);
 	}
 
-	$newfiles{"$new.$ext"} =
-	  new FileEntry (type => T_MPG, orig_name => $file,
-			 dest_name => "$new.$ext",
-			 assoc_name => $new."s.jpg",
-			 timestamp => $time);
+	$implist->add
+	  (new FileEntry (type => T_MPG, orig_name => $file,
+			  dest_name => "$new.$ext",
+			  assoc_name => $new."s.jpg",
+			  timestamp => $time),
+	   "$new.$ext");
 	$file = "$new.$ext";
 	$info->entry("$new.$ext", $ii);
     }
@@ -547,67 +512,144 @@ sub do_exif {
     # Assume ordinary JPEG.
     else {
 	# Copy as is.
-	$newfiles{$file} =
-	  new FileEntry (type => T_JPG, orig_name => $file,
-			 dest_name => $file);
+	$implist->add
+	  (new FileEntry (type => T_JPG, orig_name => $file,
+			  dest_name => $file), $file);
     }
+    return 0;
 }
 
-sub get_image_names {
+sub update_filelist {
+    my $todo = new FileList;
 
-    my $newinfo = "";
-    my $pdate = qr/(\d{4})(\d\d)(\d\d)\d{4}(?:\d\d|\w)/;
-    my $date = "";
-    $add_new = 0;
+    my $el;
+    my %seen;
+    my $missing;
 
-    my $t = "";
-    foreach my $file ( sort(keys(%newfiles)) ) {
-	next if $seen{$file}++;
+    foreach $el ( $filelist->entries ) {
+	my $f = $el->dest_name;
+	$seen{$f}++;
+	print STDERR ("todo[inf]: $f") if $trace;
+	my $entry = $gotlist->byname($f);
+	if ( $entry ) {
+	    print STDERR (" -- got") if $trace;
+	}
+	elsif ( $entry = $implist->byname($f) ) {
+	    print STDERR (" -- imp") if $trace;
+	}
+	if ( $entry ) {
+	    unless ( $el->description =~ /^--($|\s)/ ) {
+		# Copy properties from info.
+		$entry->tag($el->tag);
+		$entry->description($el->description);
+		$entry->annotation($el->annotation);
 
-	my $el = $newfiles{$file};
+		# If an entry has EXIF info, only override its
+		# orientation if explicitly specified in the info
+		# file.
+		$entry->orientation($el->orientation) if $el->orientation;
 
-	my ($y,$m,$d) = $file =~ /^$pdate\./io;
-	($y,$m,$d) = (0,0,0) unless defined($y);
-	if ( "$y$m$d" ne $date ) {
-	    $newinfo .= "\n!tag ";
-	    $date = "$y$m$d";
-	    if ( $date ne "000" ) {
-		$t = sprintf("%02d/%02d/%04d", $d, $m, $y);
-		$newinfo .= $t . "\n";
+		unless ( $entry->exif ) {
+		    my $ii = $info->entry($f);
+		    if ( $ii && $ii->orig_name ) {
+			my $exif = get_exif($ii->orig_name);
+			$entry->exif($exif) if $exif;
+		    }
+		}
+		unless ( $entry->exif && $import_exif ) {
+		    my $el = $implist->byname($f);
+		    $entry->exif($el->exif) if $el;
+		}
+		$todo->add($entry);
+		print STDERR ("\n") if $trace;
 	    }
 	    else {
-		$newinfo .= "\n";
-		$t = "";
+		print STDERR (" (ignored)\n") if $trace;
 	    }
 	}
-
-	$el->description("") unless $el->description;
-	$el->orientation(0)  unless $el->orientation;
-	$el->tag($t)         unless $el->tag;
-
-	if ( $missing{$file} ) {
-	    delete $missing{$file};
+	elsif ( $trace ) {
+		print STDERR ("\n");
 	}
 	else {
-	    $filelist->add($el);
-	    $newinfo .= "$file " .
-	      ($el->orientation ? ("-O:".$el->orientation." ") : "") .
-		($el->type == T_VOICE ? "-T:V " : "") .
-		  " \n";
-	    $add_new++;
+	    print STDERR ("todo[inf]: $f -- missing\n");
+	    $missing++;
 	}
+	die("Aborted!\n") if $missing;
     }
 
-    unless ( $add_new ) {	# nothing to add
-	warn("No new images imported\n") if $verbose;
-	return;
+    unless ( $filelist->tally == 0 || $update ) {
+	$filelist = $todo;
+	return 0;
     }
+
+    my $newinfo = "";
+    my $date = "";
+    my $new;
+
+    foreach $el ( $gotlist->entries ) {
+	my $f = $el->dest_name;
+	print STDERR ("todo[got]: $f") if $trace;
+	if ( $seen{$f}++ ) {
+	    print STDERR (" -- seen\n") if $trace;
+	    next;
+	}
+	print STDERR (" -- added\n") if $trace;
+	my $nd = "";
+	if ( $f =~ /^(\d{4})(\d\d)(\d\d)(\d\d)(\d\d)(\d\d)/ ) {
+	    $nd = "$3/$2/$1";
+	    $el->timestamp(timelocal($6,$5,$4,$3,$2-1,$1));
+	}
+	if ( $nd ne $date ) {
+	    $newinfo .= "\n!tag $nd\n";
+	    $date = $nd;
+	}
+	$newinfo .= $f . "\n";
+	$todo->add($el);
+	$new++;
+    }
+
+    foreach $el ( $implist->entries ) {
+	my $f = $el->dest_name;
+	print STDERR ("todo[imp]: $f") if $trace;
+	if ( $seen{$f}++ ) {
+	    print STDERR (" -- seen\n") if $trace;
+	    next;
+	}
+	print STDERR (" -- added\n") if $trace;
+	my $nd = "";
+	my $time = $el->timestamp;
+	if ( $time ) {
+	    my @tm = localtime($time);
+	    $nd = sprintf("%02d/%02d/%04d", $tm[3], 1+$tm[4], 1900+$tm[5]);
+	}
+	if ( $nd ne $date ) {
+	    $newinfo .= "\n!tag $nd\n";
+	    $date = $nd;
+	}
+	$newinfo .= "$f " .
+	  ($el->orientation ? ("-O:".$el->orientation." ") : "") .
+	    ($el->type == T_VOICE ? "-T:V " : "") .
+	      " \n";
+	$todo->add($el);
+	$new++;
+    }
+
+    $filelist = $todo;
+
+    unless ( $new ) {		# nothing to add
+	warn("No new images imported\n") if $verbose;
+	return 0;
+    }
+
+    return $new if $test;
+
     unless ( -w $image_info ) {
 	warn("$image_info: Cannot update (".
 	     (-e _ ? "no write access" : "does not exist") .
 	     ")\n");
-	return;
+	return $new;
     }
+
     my $infosize = -s $image_info;
 
     # Append new info.
@@ -626,6 +668,7 @@ sub get_image_names {
 	print $fh ("!page ${index_rows}x${index_columns}\n")
 	  if $index_rows != DEFAULTS->{indexrows}
 	      || $index_columns != DEFAULTS->{indexcols};
+	print $fh ("\n");
     }
     else {
 	print $fh ("\n");
@@ -635,6 +678,8 @@ sub get_image_names {
 	       $newinfo,
 	       "\n");
     close($fh);
+
+    $new;
 }
 
 sub prepare_images {
@@ -657,20 +702,20 @@ sub prepare_images {
 	my $movie = $el->type == T_MPG;
 
 	# Copy the file into place. Rotate if needed.
-	if ( ! -s $i_large && $import_dir ) {
-	    $i_src = "$import_dir/" . $newfiles{$file}->orig_name;
+	if ( ! -s $i_large && $el->orig_name ) {
+	    $i_src = "$import_dir/" . $el->orig_name;
 	    if ( $movie ) {
 		copy_mpg($i_src, $i_large,
 			 d_large($el->assoc_name),
-			 $newfiles{$file}->timestamp,
+			 $el->timestamp,
 			 $el->orientation);
 	    }
 	    elsif ( $import_exif ) {
 		# Unfortunately, jhead cannot rotate from->to, so
 		# we need to copy first and rotate later.
-		my $time = $newfiles{$file}->timestamp;
+		my $time = $el->timestamp;
 
-		if ( $linkthem && !$newfiles{$file}->orientation ) {
+		if ( $linkthem && !$el->orientation ) {
 		    print STDERR ("link ") if $verbose;
 		    unless ( link($i_src, $i_large) == 1 ) {
 			unlink($i_large); # just in case
@@ -682,7 +727,7 @@ sub prepare_images {
 		    print STDERR ("copy ") if $verbose;
 		    copy($i_src, $i_large, $time);
 		}
-		if ( $newfiles{$file}->orientation ) {
+		if ( $el->orientation ) {
 		    print STDERR ("rotate ") if $verbose;
 		    my $cmd = "jhead -autorot ".squote($i_large);
 		    my $t = `$cmd 2>&1`;
@@ -707,7 +752,7 @@ sub prepare_images {
 	    }
 	    if ( $el->type == T_VOICE ) {
 		copy_voice($i_src, d_large($el->assoc_name),
-			   $newfiles{$file}->timestamp);
+			   $el->timestamp);
 	    }
 	}
 	if ( $movie ) {
@@ -759,7 +804,7 @@ sub prepare_images {
 	    print STDERR ("size ") if $verbose;
 	    $ii = new ImageInfo::Entry (large_size => -s $i_large);
 
-	    print STDERR ("(void) ") if $verbose;
+	    print STDERR ("(n/a) ") if $verbose;
 	    $ii->width(0);
 	    $ii->height(0);
 	    $ii->medium_size(0);
@@ -862,13 +907,9 @@ sub write_image_page {
 	}
     }
 
-    $rf = $info->entry($rf)->orig_name;
-    my $exif;
-    if ( $rf ) {
-	$rf =~ s;^\./;;;
-	$exif = $info->entry($rf);
-	$exif = $exif->exif if $exif;
-	$exif = "<table border='1' width='100%' bgcolor='$MGREY'>\n" . restyle_exif($exif) . "</table>\n";
+    my $exif = "";
+    if ( $el->exif ) {
+	$exif = "<table border='1' width='100%' bgcolor='$MGREY'>\n" . restyle_exif($el->exif) . "</table>\n";
     }
 
     my $auxright = html($el->dest_name);
@@ -1129,20 +1170,12 @@ sub restyle_exif {
 
 sub f_caption {
     my ($el) = @_;
-    my $rf = $el->dest_name;
-    my $s = html($rf);
-    $rf = $info->entry($rf)->orig_name;
-    my $exif;
-    if ( $rf ) {
-	$rf =~ s;^\./;;;
-	$exif = $info->entry($rf);
-	$exif = $exif->exif if $exif;
-	$exif = "<table border='1' bgcolor='$MGREY' width='100%'>\n" .
-	  restyle_exif($exif) . "</table>\n";
-    }
-
-    if ( $exif ) {
-	$s = "<a href='#' class='info'>$s<span>$exif</span></a>";
+    my $s = html($el->dest_name);
+    if ( $el->exif ) {
+	$s = "<a href='#' class='info'>$s<span>".
+	  "<table border='1' bgcolor='$MGREY' width='100%'>\n".
+	    restyle_exif($el->exif) . "</table>\n".
+	      "</span></a>";
     }
     $s;
 }
@@ -1247,7 +1280,7 @@ sub add_button_images {
 	    print STDERR ("Creating icons ") if $verbose && !defined($name);
 	    $did++;
             $name = d_icons($1);
-	    print STDERR ("$1... ") if $verbose;
+	    print STDERR ("$1 ") if $verbose;
             open($out, ">$name");
             $doing = 1;         # Doing
             next;
@@ -1425,7 +1458,7 @@ sub app_options {
 		     'import=s'	=> \$import_dir,
 		     'exif'	=> \$import_exif,
 		     'dcim=s'	=> sub { $import_dir = $_[1]; $import_exif++ },
-		     'update'   => \$add_new,
+		     'update'   => \$update,
 		     'info=s'	=> \$image_info,
 		     'cols=i'	=> \$index_columns,
 		     'rows=i'	=> \$index_rows,
@@ -1438,6 +1471,7 @@ sub app_options {
 		     'ident'	=> \$ident,
 		     'verbose+'	=> \$verbose,
 		     'trace'	=> \$trace,
+		     'test'	=> \$test,
 		     'help|?'	=> \$help,
 		     'debug'	=> \$debug,
 		    )
@@ -1452,10 +1486,6 @@ sub app_options {
     app_ident() if $ident;
     $dest_dir = shift(@ARGV) if @ARGV;
     $medium = DEFAULTS->{mediumsize} if defined($medium) && !$medium;
-    if ( $add_new && !$import_dir ) {
-	warn("--update ignored -- no import dir specified\n");
-	$add_new = 0;
-    }
     if ( $import_dir && ! -d $import_dir ) {
 	die("$import_dir: Not a directory\n");
     }
@@ -1488,6 +1518,7 @@ Usage: $0 [options] [ directory ]
     --[no]link		do [not] link large to original. Default is link.
   Miscellaneous:
     --clobber		recreate everything (except large)
+    --test		verify only
     --help		this message
     --ident		show identification
     --verbose		verbose information
@@ -1507,6 +1538,7 @@ use Class::Struct "FileEntry" =>
     assoc_name	 => '$',	#  20040618120400.mp3 (for a T_VOICE)
     timestamp    => '$',	#  1087556744
     orientation  => '$',	#  degrees
+    exif	 => '$',	#  { 'camera make' => 'SONY', ... }
     tag		 => '$',	#  18 jun
     description  => '$',	#  Nice image
     annotation   => '$',	#  When walking through this beautiful landscape ...
@@ -1526,19 +1558,29 @@ package FileList;
 
 use Class::Struct "FileList" =>
   [ _data        => '$',
+    _hash	 => '$',
   ];
 
 sub add {
-    my ($self, $el) = @_;
+    my ($self, $el, $name) = @_;
     my $data = $self->_data;
+    my $hash = $self->_hash;
+    $self->_hash($hash = {}) unless $hash;
     $self->_data($data = []) unless $data;
     $el->seq(@$data+1);
     push(@$data, $el);
+    $hash->{$name || $el->dest_name} = $el;
     $self;
+}
+
+sub byname {
+    my ($self, $file) = @_;
+    $self->_hash ? $self->_hash->{$file} : undef;
 }
 
 sub entries {
     my ($self) = @_;
+    $self->_data([]) unless $self->_data;
     wantarray ? @{$self->_data} : $self->_data;
 }
 
@@ -1549,7 +1591,7 @@ sub tally {
 
 sub byseq {
     my ($self, $seq) = @_;
-    $self->_data->[$seq-1];
+    $self->_data ? $self->_data->[$seq-1] : undef;
 }
 
 #### Cache maintenance.
@@ -1583,7 +1625,7 @@ sub store {
     my $info = $self->{info};
     $Data::Dumper::Indent = 1;
     $Data::Dumper::Sortkeys = 1;
-    $Data::Dumper::Sortkeys = 1;
+    $Data::Dumper::Sortkeys = 1; # avoid warnings
     $Data::Dumper::Purity = 1;
     my $cache = do { local *C; *C };
     open($cache, ">$file")
