@@ -4,13 +4,13 @@ my $RCS_Id = '$Id$ ';
 # Author          : Johan Vromans
 # Created On      : Tue Sep 15 15:59:04 2002
 # Last Modified By: Johan Vromans
-# Last Modified On: Sun Nov 21 11:14:57 2004
-# Update Count    : 2368
+# Last Modified On: Sun Nov 21 18:48:47 2004
+# Update Count    : 2443
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
 
-$VERSION = "1.01";
+$VERSION = "1.02";
 
 use strict;
 
@@ -53,6 +53,14 @@ our $caption;
 our $datefmt;
 our $icon;
 our $locale;
+
+# Format (files).
+our $fmt_dir;
+our $fmt_index;
+our $fmt_image;
+our $fmt_large;
+our $fmt_medium;
+our $fmt_journal;
 
 # These are not command line options.
 my $journal;			# create journal
@@ -206,6 +214,9 @@ for (my $i = $num_entries ; ; $i++ ) {
     unlink(d_large($excess)) or last;
 }
 
+# Init formats.
+init_formats();
+
 # Write the individual pages.
 print STDERR ("Creating ", $num_entries, " image page",
 	      $num_entries == 1 ? "" : "s", "\n") if $verbose > 1;
@@ -321,6 +332,24 @@ sub parse_line {
 	}
 	elsif ( /^locale\s*(.*)/ ) {
 	    setopt("locale", $1);
+	}
+	elsif ( /^formats\s*(.*)/ ) {
+	    setopt("fmt_dir", $1);
+	}
+	elsif ( /^format\s+index\s*(.*)/ ) {
+	    setopt("fmt_index", $1);
+	}
+	elsif ( /^format\s+medium\s*(.*)/ ) {
+	    setopt("fmt_medium", $1);
+	}
+	elsif ( /^format\s+large\s*(.*)/ ) {
+	    setopt("fmt_large", $1);
+	}
+	elsif ( /^format\s+image\s*(.*)/ ) {
+	    setopt("fmt_image", $1);
+	}
+	elsif ( /^format\s+journal\s*(.*)/ ) {
+	    setopt("fmt_journal", $1);
 	}
 	else {
 	    warn("Unknown control: $_[0]\n");
@@ -640,7 +669,7 @@ sub load_info_journal {
 	    $el->type($type);
 	}
 	$filelist->add($el);
-	push(@journal, $el) if $a !~ /^--/;
+	push(@journal, $el) if !$a || $a !~ /^--/;
 	$dirs{$1} = 1 if $type != T_REF && $file =~ m;^(.+)/[^/]+$;;
     }
     close($fh);
@@ -944,7 +973,7 @@ sub update_filelist {
     my $fh = do { local *F; *F };
     open($fh, ">>", $info_file) || die("$info_file: $!\n");
     unless ( $infosize ) {
-	print $fh ("# album control file created by $my_name $my_version, ".
+	print $fh ("# album control file created by Album $::VERSION, ".
 	       localtime(time), "\n\n");
 	print $fh ("!title $album_title\n") if $album_title;
 	if ( $medium && !$optcfg{"medium"} ) {
@@ -1187,9 +1216,233 @@ sub prepare_images {
 
 #### Output generation.
 
+my $fmt_image_page;
+my $fmt_large_page;
+my $fmt_medium_page;
+my $fmt_index_page;
+my $fmt_journal_page;
+
+sub init_formats {
+
+    # Format for index pages (mostly).
+    #
+    # Variables:
+    #
+    #  $title
+    #  $ltop
+    #  $rtop
+    #  $vbuttons
+    #  $contents
+
+    $fmt_index = "$fmt_dir/index.fmt"
+      if $fmt_dir && !$fmt_index && -s "$fmt_dir/index.fmt";
+    if ( $fmt_index ) {
+	local($/);
+	open (my $fh, $fmt_index) || die("$fmt_index: $!\n");
+	$fmt_index_page = <$fh>;
+	close($fh);
+    }
+    else {
+	$fmt_index_page = <<'EOD';
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html>
+  <head>
+    <link rel="stylesheet" href="css/index.css">
+    <title>$title</title>
+  </head>
+  <body>
+    <table>
+      <tr>
+	<td></td>
+	<td align='left'>
+	  <p class='hd'>
+            $ltop
+          </p>
+	</td>
+	<td align='right'>
+	  <p class='hdx'>
+            $rtop
+          </p>
+	</td>
+      </tr>
+      <tr>
+	<td valign='top'>
+	  $vbuttons
+	</td>
+	<td valign='top' colspan='2'>
+	  $contents
+	</td>
+      </tr>
+    </table>
+  </body>
+</html>
+EOD
+    }
+
+    # Format for image pages (mostly).
+    #
+    # Variables:
+    #
+    #  $title
+    #  $ltop
+    #  $rtop
+    #  $vbuttons
+    #  $image
+    #  $lbot
+    #  $rbot
+
+    $fmt_image = "$fmt_dir/image.fmt"
+      if $fmt_dir && !$fmt_image && -s "$fmt_dir/image.fmt";
+    if ( $fmt_image ) {
+	local($/);
+	open(my $fh, $fmt_image) || die("$fmt_image: $!\n");
+	$fmt_image_page = <$fh>;
+	close($fh);
+    }
+    else {
+	$fmt_image_page = <<'EOD';
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html>
+  <head>
+    <title>$title</title>
+    <link rel="stylesheet" href="../css/$dir.css">
+  </head>
+  <body>
+    <table>
+      <tr>
+	<td></td>
+	<td align='left' valign='top'>
+	  <p class='hd'>
+            $ltop
+          </p>
+	</td>
+	<td align='right' valign='top'>
+	  <p class='hd'>
+            $rtop
+          </p>
+	</td>
+      </tr>
+      <tr>
+	<td valign='top'>
+	  $vbuttons
+	</td>
+	<td align='center' valign='top' colspan='2'>
+	  $image
+	</td>
+      </tr>
+      <tr>
+	<td></td>
+	<td align='left' valign='top'>
+	  <p class='ft'>
+            $lbot
+          </p>
+	</td>
+	<td align='right' valign='top'>
+	  <p class='ft'>
+            $rbot
+          </p>
+	</td>
+      </tr>
+    </table>
+  </body>
+</html>
+EOD
+    }
+
+    $fmt_large = "$fmt_dir/large.fmt"
+      if $fmt_dir && !$fmt_large && -s "$fmt_dir/large.fmt";
+    if ( $fmt_large ) {
+	local($/);
+	open(my $fh, $fmt_large) || die("$fmt_large: $!\n");
+	$fmt_large_page = <$fh>;
+	close($fh);
+    }
+    else {
+	$fmt_large_page = $fmt_image_page;
+    }
+
+    $fmt_medium = "$fmt_dir/medium.fmt"
+      if $fmt_dir && !$fmt_medium && -s "$fmt_dir/medium.fmt";
+    if ( $fmt_medium ) {
+	local($/);
+	open(my $fh, $fmt_medium) || die("$fmt_medium: $!\n");
+	$fmt_medium_page = <$fh>;
+	close($fh);
+    }
+    else {
+	$fmt_medium_page = $fmt_image_page;
+    }
+
+
+    # Format for journal pages (mostly).
+    #
+    # Variables:
+    #
+    #  $title
+    #  $tag
+    #  $hbuttons
+    #  $journal
+
+    $fmt_journal = "$fmt_dir/journal.fmt"
+      if $fmt_dir && !$fmt_journal && -s "$fmt_dir/journal.fmt";
+    if ( $fmt_journal ) {
+	local($/);
+	open(my $fh, $fmt_journal) || die("$fmt_journal: $!\n");
+	$fmt_journal_page = <$fh>;
+	close($fh);
+    }
+    else {
+	$fmt_journal_page = <<'EOD';
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html>
+  <head>
+    <link rel='stylesheet' href='../css/journal.css'>
+    <title>$title</title>
+  </head>
+  <body>
+    <table class='outer'>
+      <tr class='grey'>
+	<td>
+	  <p class='hd'>
+            $tag
+          </p>
+	</td>
+        <td align='right'>
+          $hbuttons
+        </td>
+      </tr>
+      $journal
+      <tr class='grey'>
+	<td>&nbsp;</td>
+        <td align='right'>
+          $hbuttons
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>
+EOD
+    }
+
+    # Remove tabs for indent processing.
+    for ( $fmt_index_page,
+	  $fmt_large_page,
+	  $fmt_medium_page,
+	  $fmt_journal_page ) {
+	s/^([ \t]+)/detab($1)/gem;
+    }
+
+}
+
 sub button($$;$$);
 
 sub ixname($);
+
+sub process_fmt {
+    my ($fmt, %map) = @_;
+    $fmt =~ s/^(.*?)\$(\w+)\b/$1.indent($map{$2}, length($1))/gme;
+    $fmt;
+}
 
 sub write_image_page {
     my ($el, $dir) = @_;
@@ -1280,45 +1533,20 @@ sub write_image_page {
 	      restyle_exif($el) . "</table>\n" .
 		"</span></a>";
     }
-    update_if_needed(d_dest($dir, $htmllist[$i]), <<EOD);
-<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
-<html>
-  <head>
-    <title>$it</title>
-    <link rel="stylesheet" href="../css/$dir.css">
-  </head>
-  <body>
-    <table>
-      <tr>
-	<td></td>
-	<td align='left' valign='top'>
-	  <p class='hd'>@{[indent($it2, 12)]}</p>
-	</td>
-	<td align='right' valign='top'>
-	  <p class='hd'>$tt</p>
-	</td>
-      </tr>
-      <tr>
-	<td valign='top'>
-	  @{[indent($b, 10)]}
-	</td>
-	<td align='center' valign='top' colspan='2'>
-	  @{[indent($imglink, 10)]}
-	</td>
-      </tr>
-      <tr>
-	<td></td>
-	<td align='left' valign='top'>
-	  <p class='ft'>$auxleft</p>
-	</td>
-	<td align='right' valign='top'>
-	  <p class='ft'>$auxright</p>
-	</td>
-      </tr>
-    </table>
-  </body>
-</html>
-EOD
+
+    update_if_needed(d_dest($dir, $htmllist[$i]),
+		     process_fmt($dir eq "medium" ?
+				   $fmt_medium_page :
+				   $fmt_large_page,
+				 title	  => $it,
+				 dir	  => $dir,
+				 ltop	  => $it2,
+				 rtop	  => $tt,
+				 vbuttons => $b,
+				 image	  => $imglink,
+				 lbot	  => $auxleft,
+				 rbot	  => $auxright,
+				));
 }
 
 sub write_index_page {
@@ -1423,38 +1651,14 @@ sub write_index_page {
     }
     $cc .= "</table>\n";
 
-    update_if_needed(d_dest(ixname($x)), <<EOD);
-<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
-<html>
-  <head>
-    <link rel="stylesheet" href="css/index.css">
-    <title>$tt</title>
-  </head>
-  <body>
-    <table>
-      <tr>
-	<td></td>
-	<td align='left'>
-	  <p class='hd'>$tt</p>
-	</td>
-	<td align='right'>
-	  <p class='hdx'>
-            @{[indent($t, 12)]}
-          </p>
-	</td>
-      </tr>
-      <tr>
-	<td valign='top'>
-	  @{[indent($b, 10)]}
-	</td>
-	<td valign='top' colspan='2'>
-	  @{[indent($cc, 10)]}
-	</td>
-      </tr>
-    </table>
-  </body>
-</html>
-EOD
+    update_if_needed(d_dest(ixname($x)),
+		     process_fmt($fmt_index_page,
+				 title    => $tt,
+				 ltop     => $tt,
+				 rtop     => $t,
+				 vbuttons => $b,
+				 contents => $cc,
+				));
 }
 
 sub write_journal {
@@ -1513,32 +1717,13 @@ sub write_journal {
 	      );
 	$x++;
 
-	update_if_needed(d_journal("jnl" . $jnltags{$tag} . ".html"), <<EOD);
-<html>
-  <head>
-    <link rel='stylesheet' href='../css/journal.css'>
-  </head>
-  <body>
-    <table class='outer'>
-      <tr class='grey'>
-	<td>
-	  <p class='hd'>@{[html($tag)]}</p>
-	</td>
-        <td align='right'>
-          @{[indent($b,10)]}
-        </td>
-      </tr>
-      @{[indent($jnl,6)]}
-      <tr class='grey'>
-	<td>&nbsp;</td>
-        <td align='right'>
-          @{[indent($b,10)]}
-        </td>
-      </tr>
-    </table>
-  </body>
-</html>
-EOD
+	update_if_needed(d_journal("jnl" . $jnltags{$tag} . ".html"),
+			 process_fmt($fmt_journal_page,
+				     title    => "Journal: " . html($tag),
+				     tag      => html($tag),
+				     hbuttons => $b,
+				     journal  => $jnl,
+				    ));
     };
 
     my $mod = 0;
@@ -1794,6 +1979,7 @@ sub add_button_images {
             next;
         }
     }
+    print STDERR ("\n") if $verbose > 1;
     if ( $doing ) {
         die("Error in DATA: still processing $name\n");
         unlink($name);
@@ -2010,8 +2196,8 @@ sub uptodate {
 
 sub detab {
     my ($line) = @_;
-
-    my (@l) = split(/\t/, $line);
+    my $orig = $line;
+    my (@l) = split(/\t/, $line, -1);
 
     # Replace tabs with blanks, retaining layout
 
