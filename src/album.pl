@@ -6,8 +6,8 @@ my $RCS_Id = '$Id$ ';
 # Author          : Johan Vromans
 # Created On      : Tue Sep 15 15:59:04 1992
 # Last Modified By: Johan Vromans
-# Last Modified On: Sat May  3 13:58:00 2003
-# Update Count    : 516
+# Last Modified On: Sat May  3 16:47:21 2003
+# Update Count    : 526
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -120,7 +120,7 @@ die("Nothing to do?\n") unless $num_entries > 0;
 if ( $clobber ) {
     rmtree(["$dest_dir/thumbnails", "$dest_dir/medium"], 1);
 }
-mkpath(["$dest_dir/thumbnails", "$dest_dir/large"], 1);
+mkpath(["$dest_dir/thumbnails", "$dest_dir/large", "$dest_dir/images"], 1);
 mkpath(["$dest_dir/medium"], 1) if $medium;
 
 # Load cached info, if possible.
@@ -173,6 +173,8 @@ write_noritsu_info() if $noritsu;
 exit 0;
 
 ################ Subroutines ################
+
+sub button($$;$$);
 
 sub set_parameter_defaults {
 
@@ -379,10 +381,10 @@ sub write_image_page {
     my $tt = $t;
 
     $base = $htmllist[$i-1];
-    $t = button("prev", $base, $i > 0) . " " . $t;
+    $t = button("prev", $base, 1, $i > 0) . " " . $t;
     # Link to first image.
     $base = $htmllist[0];
-    $t = button("first", $base, $i > 0) . $t;
+    $t = button("first", $base, 1, $i > 0) . $t;
 
     if ( $dir eq "large" && $medium ) {
 	$t = "<a href=\"../medium/".$htmllist[$i]."\">" .
@@ -397,9 +399,9 @@ sub write_image_page {
 
     # Link to next image.
     $base = $htmllist[$i+1] if $i < $num_entries-1;
-    $t .= " " . button("next", $base, $i < $num_entries-1);
+    $t .= " " . button("next", $base, 1, $i < $num_entries-1);
     $base = $htmllist[-1];
-    $t .= button("last", $base, $i < $num_entries-1);
+    $t .= button("last", $base, 1, $i < $num_entries-1);
 
 
     print $html ("<style type=\"text/css\">\n",
@@ -446,10 +448,10 @@ sub write_index_page {
     my $tt = $t;
 
     if ( $num_indexes > 1) {
-	$t = button1("prev", "index.html", 0) . " " . $t unless $x;
-	$t = button1("prev", "index.html") . " " . $t if $x == 1;
-	$t = button1("prev", "index".($x-1).".html") . " " . $t if $x > 1;
-	$t = button1("first", "index.html", $x > 0) . $t;
+	$t = button("prev", "index.html", 0, 0) . " " . $t unless $x;
+	$t = button("prev", "index.html") . " " . $t if $x == 1;
+	$t = button("prev", "index".($x-1).".html") . " " . $t if $x > 1;
+	$t = button("first", "index.html", 0, $x > 0) . $t;
 	$tt .= " " . ($x+1) . " of $num_indexes";
 	if ( $index_buttons ) {
 	    $t .= " " . ($x+1) . " of $num_indexes";
@@ -465,9 +467,9 @@ sub write_index_page {
 		}
 	    }
 	}
-	$t .= " " . button1("next", "index.html", 0) if $x == $num_indexes-1;
-	$t .= " " . button1("next", "index".($x+1).".html") if $x < $num_indexes-1;
-	$t .= button1("last", "index".($num_indexes-1).".html",
+	$t .= " " . button("next", "index.html", 0, 0) if $x == $num_indexes-1;
+	$t .= " " . button("next", "index".($x+1).".html") if $x < $num_indexes-1;
+	$t .= button("last", "index".($num_indexes-1).".html", 0,
 		     $x < $num_indexes - 1);
     }
 
@@ -487,15 +489,15 @@ sub write_index_page {
 
     if ( $index_buttons ) {
 	if ( $x > 0 ) {
-	    print $html (button1("first"), "\n")
+	    print $html (button("first", "index.html", 0, 1), "\n")
 	      if $num_indexes > 2;
-	    print $html (button1("prev",
-				"index".($x > 1 ? $x-1 : "").".html"), "\n");
+	    print $html (button("prev",
+				"index".($x > 1 ? $x-1 : "").".html", 0), "\n");
 	}
 
 	if ( $x < $num_indexes-1 ) {
-	    print $html (button1("next", "index".($x+1).".html"), "\n");
-	    print $html (button1("last", "index".($num_indexes-1).".html"), "\n")
+	    print $html (button("next", "index".($x+1).".html", 0), "\n");
+	    print $html (button("last", "index".($num_indexes-1).".html", 0), "\n")
 	      if $num_indexes > 2;
 	}
     }
@@ -611,15 +613,15 @@ sub write_alt_index_page {
 
     if ( $index_buttons ) {
 	if ( $x > 0 ) {
-	    print $html (button("first", "index.html"), "\n")
+	    print $html (button("first", "index.html", 1), "\n")
 	      if $num_indexes > 2;
 	    print $html (button("prev",
-				"index".($x > 1 ? $x-1 : "").".html"), "\n");
+				"index".($x > 1 ? $x-1 : "").".html", 1), "\n");
 	}
 
 	if ( $x < $num_indexes-1 ) {
-	    print $html (button("next", "index".($x+1).".html"), "\n");
-	    print $html (button("last", "index".($num_indexes-1).".html"), "\n")
+	    print $html (button("next", "index".($x+1).".html"), "\n", 1);
+	    print $html (button("last", "index".($num_indexes-1).".html", 1), "\n")
 	      if $num_indexes > 2;
 	}
     }
@@ -719,28 +721,21 @@ sub write_noritsu_info {
     close($fd);
 }
 
-sub button {
-    my ($tag, $index, $active) = (@_, 1);
+sub button($$;$$) {
+    my ($tag, $index, $level, $active) = @_;
     my $Tag = ucfirst($tag);
+
+    $level  = 0 unless defined $level;
+    $active = 1 unless defined $active;
+
+    $level = "../" x $level;
 
     if ( $active ) {
 	return "<a href=\"$index\" alt=\"[$Tag]\">".
-	  "<img align=\"top\" src=\"../$tag.png\" border=\"0\" alt=\"[$Tag]\">".
+	  "<img align=\"top\" src=\"${level}images/$tag.png\" border=\"0\" alt=\"[$Tag]\">".
 	    "</a>";
     }
-    "<img align=\"top\" src=\"../$tag-gr.png\" border=\"0\" alt=\"[$Tag]\">";
-}
-
-sub button1 {
-    my ($tag, $index, $active) = (@_, 1);
-    my $Tag = ucfirst($tag);
-
-    if ( $active ) {
-	return "<a href=\"$index\" alt=\"[$Tag]\">".
-	  "<img align=\"top\" src=\"$tag.png\" border=\"0\" alt=\"[$Tag]\">".
-	    "</a>";
-    }
-    "<img align=\"top\" src=\"$tag-gr.png\" border=\"0\" alt=\"[$Tag]\">";
+    "<img align=\"top\" src=\"${level}images/$tag-gr.png\" border=\"0\" alt=\"[$Tag]\">";
 }
 
 sub html {
@@ -881,7 +876,7 @@ EndOfUsage
 }
 
 __END__
-begin 644 first.png
+begin 644 images/first.png
 MB5!.1PT*&@H````-24A$4@```"(````B"`8````Z1PO"````!&=!34$``+&/
 M"_QA!0````9B2T=$`/\`_P#_H+VGDP````EP2%ES```+$@``"Q(!TMU^_```
 M``=T24U%!](&'@P%!C&J:IP```&O241!5'B<[9BQBL)`$(8_UZ#D;"SL?`"?
@@ -897,7 +892,7 @@ M%9K-IG)\:NN17"Z7;1])2D^0N*Y.UGB'3%K7GO\P.[W0>)B];PASM].`ASD?
 6^0(75+;=MXIF$0````!)14Y$KD)@@@``
 `
 end
-begin 644 index.png
+begin 644 images/index.png
 MB5!.1PT*&@H````-24A$4@```"(````B"`8````Z1PO"````!&=!34$``+&/
 M"_QA!0````9B2T=$`/\`_P#_H+VGDP````EP2%ES```+$@``"Q(!TMU^_```
 M``=T24U%!](&'@P%-8YZ"XH```&?241!5'B<[9A!BN)`%$!?#XW1OH(K#^':
@@ -913,7 +908,7 @@ M2VY$3OYKI)29%CW5?VYV>FF0F[UO*O/?3@-R<S[R"XFFX$N)OY`F`````$E%
 &3D2N0F""
 `
 end
-begin 644 last.png
+begin 644 images/last.png
 MB5!.1PT*&@H````-24A$4@```"(````B"`8````Z1PO"````!&=!34$``+&/
 M"_QA!0````9B2T=$`/\`_P#_H+VGDP````EP2%ES```+$@``"Q(!TMU^_```
 M``=T24U%!](&'@P%'U7!PEP```$5241!5'B<[=BQ;80P%,;Q?^+09`7FH.8M
@@ -926,7 +921,7 @@ MB;,Z6;WWJD77QB_F3R]TBOGW#9B;G084<S[R!058F0YBC22O`````$E%3D2N
 #0F""
 `
 end
-begin 644 next.png
+begin 644 images/next.png
 MB5!.1PT*&@H````-24A$4@```"(````B"`8````Z1PO"````!&=!34$``+&/
 M"_QA!0````9B2T=$`/\`_P#_H+VGDP````EP2%ES```+$@``"Q(!TMU^_```
 M``=T24U%!](&'@P$$T5LOS8```#]241!5'B<[=@Q#H(P%(#A7^/D%3@'<]\E
@@ -938,7 +933,7 @@ M@F@@DB%:B"2()B()HHF`7_P?T8X_)([)=L)[KUITZO[%='HA*:;W#9BO[084
 8LS]R![)HC08-&VZ(`````$E%3D2N0F""
 `
 end
-begin 644 prev.png
+begin 644 images/prev.png
 MB5!.1PT*&@H````-24A$4@```"(````B"`8````Z1PO"````!&=!34$``+&/
 M"_QA!0````9B2T=$`/\`_P#_H+VGDP````EP2%ES```+$@``"Q(!TMU^_```
 M``=T24U%!](&'@P$*VUN!Z@```&<241!5'B<[9B_:L)0%(>_A*"D+@YN>0"?
@@ -954,7 +949,7 @@ MN!*K)MXALU;2_2NST@N-RJQ]0YC2=@,JLS_R#<Z)JM5*)O89`````$E%3D2N
 #0F""
 `
 end
-begin 644 first-gr.png
+begin 644 images/first-gr.png
 MB5!.1PT*&@H````-24A$4@```"(````B"`8````Z1PO"````!&=!34$``+&/
 M"_QA!0````9B2T=$`*L`JP"K:IW=&0````EP2%ES```+$0``"Q$!?V1?D0``
 M``=T24U%!],%`PH;""A1(L$```$U241!5'B<[9@Q;H0P$$5?XHB"C@Z)<]`A
@@ -967,7 +962,7 @@ M->,X'@^BE**J*I12SG.<3]^U*4^2!*VUL___ZB,^]`"QM5BL7=<%#;JT_FEN
 C>L8XS=W7P!SV&G":]Y$O&I:#2F!<C%$`````245.1*Y"8((`
 `
 end
-begin 644 index-gr.png
+begin 644 images/index-gr.png
 MB5!.1PT*&@H````-24A$4@```"(````B"`8````Z1PO"````!&=!34$``+&/
 M"_QA!0````9B2T=$`/\`_P#_H+VGDP````EP2%ES```+$0``"Q$!?V1?D0``
 M``=T24U%!],%`PH<"_X9Y;P```%2241!5'B<[9BQ:H1`$(:_A'!R@7L"G\/:
@@ -981,7 +976,7 @@ MG74!T;6`Z%I`="T@NA8079W_&L_S1DW:%7\V)[W&F,W9MX'YM]N`V=R/?`+I
 3!JQ-F!I[D`````!)14Y$KD)@@@``
 `
 end
-begin 644 last-gr.png
+begin 644 images/last-gr.png
 MB5!.1PT*&@H````-24A$4@```"(````B"`8````Z1PO"````!&=!34$``+&/
 M"_QA!0````9B2T=$`*L`JP"K:IW=&0````EP2%ES```+$0``"Q$!?V1?D0``
 M``=T24U%!],%`PH<.$')A*H```$,241!5'B<[=C/#<(@&(?A%^/)%3I'S_V&
@@ -993,7 +988,7 @@ M'&606@@H@-1$0":D-@(R(!H(2(1H(>#-"JT4D0/^O?6(=OZ0."\'J_=>M=-7
 G[2]FIQ<JB]G[!LS73@,6<SYR`:R7?Q#7F]Z8`````$E%3D2N0F""
 `
 end
-begin 644 next-gr.png
+begin 644 images/next-gr.png
 MB5!.1PT*&@H````-24A$4@```"(````B"`8````Z1PO"````!&=!34$``+&/
 M"_QA!0````9B2T=$`/\`_P#_H+VGDP````EP2%ES```+$0``"Q$!?V1?D0``
 M``=T24U%!],%`PH7"?/C75L```$$241!5'B<[=@_#H(P%,?Q+^KD%3@'<]\9
@@ -1005,7 +1000,7 @@ M%$!J(B`34AL!&1`-!"1"M!"0`-%$P"_.1[3SA\297$YX[U6+3MU_,2N]T%C,
 ?VC=@OK8;L)C]D3M7S7@&)IXTW`````!)14Y$KD)@@@``
 `
 end
-begin 644 prev-gr.png
+begin 644 images/prev-gr.png
 MB5!.1PT*&@H````-24A$4@```"(````B"`8````Z1PO"````!&=!34$``+&/
 M"_QA!0````9B2T=$`*L`JP"K:IW=&0````EP2%ES```+$0``"Q$!?V1?D0``
 M``=T24U%!],%`PH=-%%D^<````%2241!5'B<[=BQ:H-`&,#QOR(&ZY+!S>=P
