@@ -44,6 +44,7 @@ it as follows:
   (Needed to write 7 image pages)
   Creating pages for 1 index
   (Needed to write 1 index page)
+  Creating index icon
 
 Your results will vary, but be similar to this example run. What you
 can see is that 'album' found 7 images in the 'large' directory,
@@ -52,6 +53,9 @@ resizing the images, and finally created the HTML pages. You can
 inspect your first photo album by opening file 'index.html' with your
 favorite browser. You can click on any image to see the larger
 version. Navigation buttons are provided to the left of the image.
+The 'index icon' is a small image file, icon.jpg, that contains a
+small view of the (first) index page. It can be used as an icon or
+thumbnal.
 
 It is interesting to run 'album' again:
 
@@ -64,6 +68,8 @@ It is interesting to run 'album' again:
   (No image pages needed updating)
   Creating pages for 1 index
   (No index pages needed updating)
+  Creating index icon
+  (Index icon not modified)
 
 'album' tries to avoid doing unnecessary work as much as possible. In
 this case, all thumbnails and image and index pages are up to date.
@@ -95,6 +101,7 @@ To add medium sized images (and also specify an album title):
   (Needed to write 14 image pages)
   Creating pages for 1 index
   (Needed to write 1 index page)
+  Creating index icon
 
 Again, 'album' only does the work needed, re-using the work already
 done.
@@ -145,6 +152,8 @@ followed by its description. Control lines start with an '!' mark.
   (No image pages needed updating)
   Creating pages for 1 index
   (No index pages needed updating)
+  Creating index icon
+  (Index icon not modified)
 
 Upon completion, 'info.dat' will look similar to:
 
@@ -182,6 +191,8 @@ Re-run the program (no need for B<--medium> and B<--title> anymore):
   (Needed to write 14 image pages)
   Creating pages for 1 index
   (Needed to write 1 index page)
+  Creating index icon
+  (Index icon not modified)
 
 There are no complaints anymore about a missing 'info.dat', but
 there's also no message 'adding images from ./large'. In other words,
@@ -309,6 +320,26 @@ rotated, so it will always be a copy.
 If you hover the mouse over the file name in the index page, or over
 the title on the image pages, a pop-up will show a selection of
 information from the EXIF data.
+
+=head2 Embedding other albums
+
+In the file 'info.dat' you can also enter names of HTML documents to
+refer to arbitrary other information you want to include in your
+album. You can use this to embed (more precisely: refer to) other
+albums. For example:
+
+  20040910/index.html  Pictures of an exhibition
+
+This will store in the album a reference to another album. If at the
+given location a file 'icon.jpg' exists, this will be used in the
+album as thumbnail image.
+
+The reference will only be present on the index pages. When following
+the 'previous' and 'next' links of image pages, these references will
+be skipped.
+
+Note that when you click on an external reference thumbnail, a new
+browser window will be opened to show the referenced information.
 
 =head2 Additional notes
 
