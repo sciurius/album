@@ -4,8 +4,8 @@ my $RCS_Id = '$Id$ ';
 # Author          : Johan Vromans
 # Created On      : Tue Sep 15 15:59:04 2002
 # Last Modified By: Johan Vromans
-# Last Modified On: Tue Sep 14 17:24:01 2004
-# Update Count    : 2081
+# Last Modified On: Tue Sep 14 22:24:29 2004
+# Update Count    : 2128
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -256,6 +256,7 @@ use constant T_VOICE => 3;	# still image + sound
 # Pseudo types.
 use constant T_TAG   => -1;
 use constant T_ANN   => -2;
+use constant T_REF   => -3;
 
 # List of possible subdirs to process.
 my @subdirs;
@@ -427,9 +428,13 @@ sub load_info {
 
 	my $rotate;
 	my $type = T_JPG;
+	my $assc;
 	while ( $a && $a =~ /^-(\w):(\S+)\s*(.*)/ ) {
 	    if ( lc($1) eq 'o' ) {
 		$rotate = 90 * ($2 % 4);
+	    }
+	    elsif ( lc($1) eq 'i' ) {
+		$assc = $2;
 	    }
 	    elsif ( lc($1) eq 't' ) {
 		$type = $typemap{lc($2)}
@@ -448,6 +453,7 @@ sub load_info {
 	    $el->annotation($annotation);
 	    $annotation = "";
 	}
+
 	$el->_rotation($rotate) if defined($rotate);
 	if ( $file =~ /^(.+)\.mpg$/i ) {
 	    $el->type(T_MPG);
@@ -457,9 +463,18 @@ sub load_info {
 	    (my $t = $file) =~ s/\.jpg$/.mp3/i;
 	    $el->assoc_name($t);
 	}
+	elsif ( $file =~ /.\.html?$/i ) {
+	    $type = T_REF;
+	}
+	if ( $type == T_REF ) {
+	    $assc = "icons/movie.jpg" unless defined $assc;
+	    $el->assoc_name($assc);
+	    $el->dest_name($file);
+	    $el->type($type);
+	}
 	$filelist->add($el);
 	push(@journal, $el) if $journal && $a !~ /^--/;
-	$dirs{$1} = 1 if $file =~ m;^(.+)/[^/]+$;;
+	$dirs{$1} = 1 if $type != T_REF && $file =~ m;^(.+)/[^/]+$;;
     }
     close($fh);
     die("Aborted\n") if $err;
@@ -620,6 +635,7 @@ sub update_filelist {
     my $el;
     my %seen;
     my $missing;
+    my $prev;
 
     foreach $el ( $filelist->entries ) {
 	my $f = $el->dest_name;
@@ -632,6 +648,10 @@ sub update_filelist {
 	elsif ( $entry = $implist->byname($f) ) {
 	    print STDERR (" -- imp") if $trace;
 	}
+	elsif ( $el->type == T_REF ) {
+	    $entry = $el;
+	    print STDERR (" -- ref") if $trace;
+	}
 	if ( $entry ) {
 	    unless ( $el->description =~ /^--($|\s)/ ) {
 		# Copy properties from info.
@@ -639,7 +659,9 @@ sub update_filelist {
 		$entry->description($el->description);
 		$entry->annotation($el->annotation);
 		$entry->_rotation($el->_rotation);
+		$entry->prev($prev->seq) if $prev;
 		$todo->add($entry);
+		$prev->next($entry->seq) if $prev;
 		print STDERR ("\n") if $trace;
 	    }
 	    else {
@@ -653,6 +675,7 @@ sub update_filelist {
 	    print STDERR ("todo[inf]: $f -- missing\n");
 	    $missing++;
 	}
+	$prev = $entry if $entry && $entry->type != T_REF;
     }
     die("Aborted!\n") if $missing;
 
@@ -685,7 +708,10 @@ sub update_filelist {
 	}
 	$newinfo .= $f . "\n";
 	$el->tag($date) if $date;
+	$el->prev($prev->seq) if $prev;
 	$todo->add($el);
+	$prev->next($el->seq) if $prev;
+	$prev = $el unless $el->type == T_REF;
 	push(@journal, $el) if $journal;
 	$new++;
     }
@@ -712,7 +738,10 @@ sub update_filelist {
 	    ($el->type == T_VOICE ? "-T:V " : "") .
 	      " \n";
 	$el->tag($date) if $date;
+	$el->prev($prev->seq) if $prev;
 	$todo->add($el);
+	$prev->next($el->seq) if $prev;
+	$prev = $el unless $el->type == T_REF;
 	push(@journal, $el) if $journal;
 	$new++;
     }
@@ -859,6 +888,7 @@ sub prepare_images {
 =cut
 
     foreach my $el ( $filelist->entries ) {
+	next unless $el->type > 0;
 	my $file = $el->dest_name;
 	$msgfile = $file;
 	$image = undef;
@@ -987,6 +1017,8 @@ sub ixname($);
 sub write_image_page {
     my ($el, $dir) = @_;
 
+    return unless $el->type > 0;
+
     my $i = $el->seq - 1;
     my $file = $el->dest_name;
     my $rf = $file;
@@ -1002,13 +1034,16 @@ sub write_image_page {
     $tt = html($tt);
     my $it = html($el->description) || $tt;
 
+    my $next = ($el->next || $num_entries+1) - 1;
+    my $prev = ($el->prev || 0) - 1;
+
     my $b = join("$br\n",
 		 ($dir eq "large" && $medium) ?
 		 button("medium", "../medium/".$htmllist[$i],              1, 1) :
 		 button("index",  "../".ixname(int($i/$entries_per_page)), 1, 1),
 		 button("first",  $htmllist[0],                            1, $i > 0),
-		 button("prev",   $htmllist[$i-1],                         1, $i > 0),
-		 button("next",   $htmllist[$i+1],                         1, $i < $num_entries-1),
+		 button("prev",   $htmllist[$prev] || "",                  1, $prev >= 0),
+		 button("next",   $htmllist[$next] || "",                  1, $next < $num_entries),
 		 button("last",   $htmllist[-1],                           1, $i < $num_entries-1));
 
     if ( $journal ) {
@@ -1181,14 +1216,25 @@ sub write_index_page {
 		if ( $this < $num_entries ) {
 		    my $el = $filelist->byseq($this+1);
 		    my $file = $el->dest_name;
-		    my $img = $el->type == T_MPG ? $el->assoc_name : $file;
-		    my $base = $medium ? "medium/" : "large/";
-		    $base .= $htmllist[$this];
+		    my $img;
+		    my $base;
+		    my $target = "";
+		    if ( $el->type == T_REF ) {
+			$img = $el->assoc_name;
+			$base = $el->orig_name;
+			$target = " target=\"_blank\"";
+		    }
+		    else {
+			$img = $el->type == T_MPG ? $el->assoc_name : $file;
+			$img = "thumbnails/$img";
+			$base = $medium ? "medium/" : "large/";
+			$base .= $htmllist[$this];
+		    }
 		    $cc .= "    <td align='center' valign='bottom'>\n".
 			  "      <table border='0' cellpadding='0' cellspacing='0' bgcolor='$LGREY'>\n".
 			  "        <tr>\n".
 			  "          <td align='center'>\n".
-			  "            <a href='$base'>".img("thumbnails/$img", alt => "[Click for bigger image]", border => 0)."</a>\n".
+			  "            <a href='$base'$target>".img($img, alt => "[Click for bigger image]", border => 0)."</a>\n".
 			  "          </td>\n".
 			  "        </tr>\n".
 			  "        <tr>\n".
@@ -1283,6 +1329,7 @@ sub write_journal {
 			"</tr>\n";
 		next;
 	    }
+	    next if $e->type == T_REF; #### TODO
 
 	    # We cannot use $el->seq, since that's the info.dat order
 	    # which and includes the skipped entries.
@@ -1897,7 +1944,7 @@ my @exif_fields;
 my $exif_rot;
 
 INIT {
-    @std_fields  = qw(type seq
+    @std_fields  = qw(type seq next prev
 		      dest_name orig_name assoc_name
 		      timestamp file_size medium_size
 		      tag description annotation
