@@ -50,8 +50,6 @@ init ::
 		touch $(DATA)/$$dir.dat; \
 		ln -s $(DATA)/$$dir.dat info.dat; \
 		echo "!title $$dir" > info.dat; \
-		echo "!medium" >>info.dat; \
-		echo "!dateformat %a %e %B" >>info.dat; \
 	}
 
 clean ::

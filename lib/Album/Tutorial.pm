@@ -44,7 +44,6 @@ it as follows:
   (Needed to write 7 image pages)
   Creating pages for 1 index
   (Needed to write 1 index page)
-  Creating index icon
 
 Your results will vary, but be similar to this example run. What you
 can see is that 'album' found 7 images in the 'large' directory,
@@ -53,9 +52,6 @@ resizing the images, and finally created the HTML pages. You can
 inspect your first photo album by opening file 'index.html' with your
 favorite browser. You can click on any image to see the larger
 version. Navigation buttons are provided to the left of the image.
-The 'index icon' is a small image file, icon.jpg, that contains a
-small view of the (first) index page. It can be used as an icon or
-thumbnal.
 
 It is interesting to run 'album' again:
 
@@ -68,8 +64,6 @@ It is interesting to run 'album' again:
   (No image pages needed updating)
   Creating pages for 1 index
   (No index pages needed updating)
-  Creating index icon
-  (Index icon not modified)
 
 'album' tries to avoid doing unnecessary work as much as possible. In
 this case, all thumbnails and image and index pages are up to date.
@@ -101,7 +95,6 @@ To add medium sized images (and also specify an album title):
   (Needed to write 14 image pages)
   Creating pages for 1 index
   (Needed to write 1 index page)
-  Creating index icon
 
 Again, 'album' only does the work needed, re-using the work already
 done.
@@ -152,8 +145,6 @@ followed by its description. Control lines start with an '!' mark.
   (No image pages needed updating)
   Creating pages for 1 index
   (No index pages needed updating)
-  Creating index icon
-  (Index icon not modified)
 
 Upon completion, 'info.dat' will look similar to:
 
@@ -191,8 +182,6 @@ Re-run the program (no need for B<--medium> and B<--title> anymore):
   (Needed to write 14 image pages)
   Creating pages for 1 index
   (Needed to write 1 index page)
-  Creating index icon
-  (Index icon not modified)
 
 There are no complaints anymore about a missing 'info.dat', but
 there's also no message 'adding images from ./large'. In other words,
@@ -220,15 +209,15 @@ Specifies the desired width for thumbnail images (B<--thumbsize>).
 
 =item B<!medium>
 
-Includes medium sized images (B<--medium>)
+Includes medium sized images (B<--medium>) of default size.
 
 =item B<!mediumsize> I<NNN>
 
-Specifies the desired width for medium sized images (B<--mediumsize>)
+Specifies the desired width for medium sized images (B<--mediumsize>).
 
 =item B<!tag> I<XXX>
 
-Sets the tag line for all subsequent images. Cancel with and empty
+Sets the tag line for all subsequent images. Cancel with an empty
 B<!tag> command.
 
 =item B<!caption>
@@ -245,7 +234,38 @@ I<XXX> must be a valid strftime(2) date format string, for example:
 
   !dateformat %a %e %B %Y
 
+=item B<!icon>
+
+Produce a file C<icon.jpg> to be used as an icon for this album
+(B<--icon>). The icon is of thumbnail size, and contains a small
+lookalike of the first index page.
+
+B<!icon> may be followed by a something true or false (B<--noicon>).
+Default is true.
+
 =back
+
+B<album> can read values for settings from configuration files.
+Settings can be set as in C<info.dat>, the leading exclamation mark is
+optional in this case. By default, the configuration files used are
+C<.albumrc> in the current directory, and C<.albumrc> in the user's
+home directory. The order of precedence is:
+
+=over
+
+=item 1. command line options
+
+=item 2. C<info.dat>
+
+=item 3. user config file C<.albumrc> in current directory
+
+=item 4. user config file C<.albumrc> in the home directory
+
+=back
+
+Environment variable ALBUMCONFIG can be used to designate user
+config files. It should be set to a colon-separated list of file names
+to be processed in order of precedence.
 
 =head2 Importing new images
 
@@ -332,7 +352,8 @@ albums. For example:
 
 This will store in the album a reference to another album. If at the
 given location a file 'icon.jpg' exists, this will be used in the
-album as thumbnail image.
+album as thumbnail image. To generate a sample icon for an album to be
+included, run the album program with command line option --icon.
 
 The reference will only be present on the index pages. When following
 the 'previous' and 'next' links of image pages, these references will

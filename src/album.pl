@@ -4,8 +4,8 @@ my $RCS_Id = '$Id$ ';
 # Author          : Johan Vromans
 # Created On      : Tue Sep 15 15:59:04 2002
 # Last Modified By: Johan Vromans
-# Last Modified On: Wed Sep 15 22:05:43 2004
-# Update Count    : 2183
+# Last Modified On: Thu Sep 16 22:33:16 2004
+# Update Count    : 2245
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -40,17 +40,18 @@ my $dest_dir = ".";
 my $info_file;
 my $linkthem = 1;		# link orig to large, if possible
 my $clobber = 0;
+my $mediumonly = 0;		# only medium size (for web export)
 my $verbose = 1;		# verbose processing
 
-# These are left undefined, for set_parameter_defaults.
-my $index_columns;
-my $index_rows;
-my $thumb;
-my $medium;			# medium size, between large and small
-my $mediumonly;			# only medium size (for web export)
-my $album_title;
-my $caption;
-my $datefmt;
+# These are left undefined, for set_defaults. Note: our, not my.
+our $index_columns;
+our $index_rows;
+our $thumb;
+our $medium;			# medium size, between large and small
+our $album_title;
+our $caption;
+our $datefmt;
+our $icon;
 
 # These are not command line options.
 my $journal;			# create journal
@@ -79,7 +80,8 @@ use constant DEFAULTS => { info       => "info.dat",
 			   indexcols  => 4,
 			   caption    => "fct",
 			   captionmin => "f",
-			   dateformat  => '%F',
+			   dateformat => '%F',
+			   icon	      => 0,
 			 };
 
 my $TMPDIR = $ENV{TMPDIR} || $ENV{TEMP} || '/usr/tmp';
@@ -189,6 +191,7 @@ prepare_images();
 
 # Update cache.
 update_cache();
+my $cache_update = 0;
 
 my $entries_per_page = $index_columns*$index_rows;
 my $num_indexes = int(($num_entries - 1) / $entries_per_page) + 1;
@@ -246,14 +249,15 @@ if ( $journal ) {
     uptodate("journal", $mod) if $verbose > 1;
 }
 
-print STDERR ("Creating index icon\n") if $verbose > 1;
-if ( indexicon() ) {
-    # Update cache.
-    update_cache();
+if ( $icon ) {
+    print STDERR ("Creating index icon\n") if $verbose > 1;
+    unless ( indexicon() ) {
+	print STDERR ("(Index icon not modified)\n") if $verbose > 1;
+    }
 }
-else {
-    print STDERR ("(Index icon not modified)\n") if $verbose > 1;
-}
+
+# Final update, if needed.
+update_cache() if $cache_update;
 
 exit 0;
 
@@ -283,24 +287,97 @@ sub d_journal    { unshift(@_, "journal");    goto &d_dest; }
 sub d_dest       { unshift(@_, $dest_dir) unless $dest_dir eq ".";
 		   join("/", @_); }
 
+my %optcfg;			# option set from config files
+
+sub setopt {
+    no strict qw(refs);
+    return if defined(${$_[0]});
+    print STDERR ("setopt $_[0] -> $_[1]\n") if $trace;
+    ${$_[0]} = $_[1];
+    $optcfg{$_[0]} = 1;
+}
+
+sub parse_line {
+    local ($_) = (@_);
+    my $err = 0;
+
+    if ( /^!?\s*(\S.*)/ ) {
+	$_ = $1;
+	if ( /^title\s+(.*)/ ) {
+	    setopt("album_title", $1);
+	}
+	elsif ( /^page\s+(\d+)x(\d+)/ ) {
+	    setopt("index_rows", $1);
+	    setopt("index_columns", $2);
+	}
+	elsif ( /^thumbsize\s*(\d+)/ ) {
+	    setopt("thumb", $1);
+	}
+	elsif ( /^mediumsize\s*(\d+)/ ) {
+	    setopt("medium", $1);
+	}
+	elsif ( /^medium\s*(\d+)?/ ) {
+	    setopt("medium", $1 || DEFAULTS->{mediumsize});
+	}
+	elsif ( /^dateformat\s*(.*)/ ) {
+	    setopt("datefmt", $1);
+	}
+	elsif ( /^caption\s*(.*)/ ) {
+	    setopt("caption", $1);
+	}
+	elsif ( /^icon\s*(.*)/ ) {
+	    setopt("icon", defined($1) && length($1) ? $1 : 1);
+	}
+	else {
+	    warn("Unknown control: $_[0]\n");
+	    $err++;
+	}
+    }
+    else {
+	warn("Invalid control: $_[0]\n");
+	$err++;
+    }
+    $err;
+}
+
 sub set_defaults {
 
-    $album_title   ||= DEFAULTS->{title};
-    $index_rows    ||= DEFAULTS->{indexrows};
-    $index_columns ||= DEFAULTS->{indexcols};
-    $thumb         ||= DEFAULTS->{thumbsize};
-    $medium        ||= DEFAULTS->{medium};
+    # Load settings from user files.
+    my $sl = $ENV{ALBUMCONFIG} || ".albumrc:".$ENV{HOME}."/.albumrc";
+    foreach my $cf ( split(/:/, $sl) ) {
+	unless ( -f $cf ) {
+	    warn("$cf: $!\n") if $ENV{ALBUMCONFIG};
+	    next;
+	}
+	open(my $fh, "<$cf") || next;
+	warn("parsing: $cf\n") if $trace;
+	my $err = 0;
+	while ( <$fh> ) {
+	    next if /^\s*#/;
+	    next unless /\S/;
+	    $err += parse_line($_);
+	}
+	close($fh);
+	die("Errors in config file $cf, aborted\n") if $err;
+    }
+
+    # Finally, apply defaults if necessary.
+    warn("apply defaults\n") if $trace;
+    setopt("album_title",   DEFAULTS->{title});
+    setopt("index_rows",    DEFAULTS->{indexrows});
+    setopt("index_columns", DEFAULTS->{indexcols});
+    setopt("thumb",         DEFAULTS->{thumbsize});
+    setopt("datefmt",       DEFAULTS->{dateformat});
+    setopt("icon",          DEFAULTS->{icon});
+
+    $medium = DEFAULTS->{mediumsize} if defined($medium) && !$medium || $mediumonly;
 
     # Caption values.
-    $caption = DEFAULTS->{( -s $info_file || $import_dir) ?
-			  "caption" : "captionmin" }
-      unless defined($caption);
+    setopt("caption", DEFAULTS->{( -s $info_file || $import_dir) ?
+				 "caption" : "captionmin" });
     die("Invalid value for caption: $caption\n")
       unless $caption =~ /^[fsct]*$/i;
     $caption = lc($caption);
-
-    # Default tags.
-    $datefmt ||= DEFAULTS->{dateformat};
 }
 
 sub load_info {
@@ -337,6 +414,7 @@ sub load_info {
     my $fh = do { local *FH; *FH };
     die("$info_file: $!\n")
       unless open($fh, $info_file);
+    warn("parsing: $info_file\n") if $trace;
 
     my $el;
     my %dirs;
@@ -371,26 +449,7 @@ sub load_info {
 
 	if ( /^!\s*(\S.*)/ ) {
 	    $_ = $1;
-	    if ( /^title\s+(.*)/ ) {
-		$album_title ||= $1;
-	    }
-	    elsif ( /^page\s+(\d+)x(\d+)/ ) {
-		$index_rows ||= $1;
-		$index_columns ||= $2;
-	    }
-	    elsif ( /^thumbsize\s*(\d+)/ ) {
-		$thumb ||= $1;
-	    }
-	    elsif ( /^mediumsize\s*(\d+)/ ) {
-		$medium = $1;
-	    }
-	    elsif ( /^medium\s*(\d+)?/ ) {
-		$medium = $1 || DEFAULTS->{mediumsize};
-	    }
-	    elsif ( /^dateformat\s*(.*)/ ) {
-		$datefmt = $1;
-	    }
-	    elsif ( /^tag\s*(.*)/ ) {
+	    if ( /^tag\s*(.*)/ ) {
 		$tag = $1;
 		$tag =~ s/\s$//;
 		$tag =~ s/\s+/ /g;
@@ -413,8 +472,10 @@ sub load_info {
 		    undef $el;
 		}
 	    }
-	    elsif ( /^caption\s*(.*)/ ) {
-		$caption ||= $1;
+	    elsif ( /^subdirs\s*(.*)/ ) {
+		foreach ( split(' ', $1)) {
+		    $dirs{$_}++;
+		}
 	    }
 	    elsif ( /^journal\s*(.*)/ ) {
 		if ( $filelist->tally ) {
@@ -423,14 +484,8 @@ sub load_info {
 		}
 		$journal++;
 	    }
-	    elsif ( /^subdirs\s*(.*)/ ) {
-		foreach ( split(' ', $1)) {
-		    $dirs{$_}++;
-		}
-	    }
 	    else {
-		warn("Unknown control: !$_\n");
-		$err++;
+		$err += parse_line("!".$_);
 	    }
 	    next;
 	}
@@ -791,14 +846,17 @@ sub update_filelist {
 	print $fh ("# album control file created by $my_name $my_version, ".
 	       localtime(time), "\n\n");
 	print $fh ("!title $album_title\n") if $album_title;
-	print $fh ("!medium\n") if $medium;
-	print $fh ("!mediumsize $medium\n")
-	  if $medium && $medium != DEFAULTS->{mediumsize};
+	if ( $medium && !$optcfg{"medium"} ) {
+	    print $fh ($medium != DEFAULTS->{mediumsize} ?
+		       "!mediumsize $medium\n" : "!medium\n");
+	}
 	print $fh ("!thumbsize $thumb\n")
-	  if $thumb != DEFAULTS->{thumbsize};
+	  if !$optcfg{"thumb"} && $thumb != DEFAULTS->{thumbsize};
 	print $fh ("!page ${index_rows}x${index_columns}\n")
-	  if $index_rows != DEFAULTS->{indexrows}
-	      || $index_columns != DEFAULTS->{indexcols};
+	  if !$optcfg{index_rows} && $index_rows != DEFAULTS->{indexrows}
+	      || !$optcfg{index_columns} && $index_columns != DEFAULTS->{indexcols};
+	print $fh ("!caption $caption\n")
+	  if !$optcfg{"caption"} && $caption ne DEFAULTS->{caption};
     }
     print $fh ("\n# New entries added by $my_name $my_version, ".
 	       localtime(time), "\n",
@@ -915,7 +973,7 @@ sub prepare_images {
 	# Check for directory names, e.g. f01/p01.jpg.
 	my $dn = dirname($file);
 	if ( $dn && $dn ne "." ) { # we have a dir name.
- 	    mkpath([d_thumbnails($dn), d_large($dn)], 1);
+	    mkpath([d_thumbnails($dn), d_large($dn)], 1);
 	    mkpath([d_medium($dn)], 1) if $medium;
 	}
 
@@ -1020,7 +1078,6 @@ sub prepare_images {
 	    $msg->($t) if $t;
 	}
 
-#	$msg->("test ") if $ddot == 47;
 	$msg->(); 		# flush
 
     }
@@ -1889,13 +1946,14 @@ sub indexicon {
     }
 
     my $iconfile = "icon.jpg";
-    my $ii = ::cache_entry(" indexicon ");
+    my $ii = cache_entry(" indexicon ");
     if ( -f $iconfile && $ii && $ii->dest_name eq "@imgs" ) {
 	return 0;
     }
     my $el = new ImageInfo($iconfile);
     $el->dest_name("@imgs");
-    ::cache_entry(" indexicon ", $el);
+    cache_entry(" indexicon ", $el);
+    $cache_update++;
 
     my $image = new Image::Magick->new;
     foreach ( @imgs ) {
@@ -1938,6 +1996,7 @@ sub app_options {
 		     'clobber'	=> \$clobber,
 		     'link!'	=> \$linkthem,
 		     'caption=s' => \$caption,
+		     'icon!'	=> \$icon,
 		     'ident'	=> \$ident,
 		     'quiet'	=> sub { $verbose = 0 },
 		     'verbose+'	=> \$verbose,
@@ -1957,7 +2016,6 @@ sub app_options {
     app_ident() if $ident;
     $dest_dir = @ARGV ? shift(@ARGV) : ".";
     $dest_dir =~ s;^\./;;;
-    $medium = DEFAULTS->{mediumsize} if defined($medium) && !$medium || $mediumonly;
     if ( $import_dir ) {
 	die("$import_dir: Not a directory\n")
 	  unless -d $import_dir;
