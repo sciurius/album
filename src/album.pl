@@ -4,8 +4,8 @@ my $RCS_Id = '$Id$ ';
 # Author          : Johan Vromans
 # Created On      : Tue Sep 15 15:59:04 2002
 # Last Modified By: Johan Vromans
-# Last Modified On: Thu Jul 15 18:44:05 2004
-# Update Count    : 2028
+# Last Modified On: Thu Jul 15 18:55:13 2004
+# Update Count    : 2036
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -105,6 +105,9 @@ my %capfun = ('c' => \&c_caption,
 	     );
 
 my $br = br();
+
+# Max.number of clickable index numbers (should be odd).
+use constant IXLIST => 21;
 
 # Helper programs
 my $prog_jpegtran  = findexec("jpegtran");
@@ -1109,7 +1112,18 @@ sub write_index_page {
 		  button("next",  ixname($x+1),           0, $x < $num_indexes-1),
 		  button("last",  ixname($num_indexes-1), 0, $x < $num_indexes-1));
 	$tt .= " " . ($x+1) . " of $num_indexes";
-	foreach ( 0..$num_indexes-1 ) {
+	my @ixlist = ( 0..$num_indexes-1 );
+	if ( @ixlist > IXLIST ) {
+	    @ixlist = ( $x );
+	    while ( @ixlist < IXLIST ) {
+		push(@ixlist, $ixlist[-1]+1)
+		  if $ixlist[-1]+1 < $num_indexes;
+		unshift(@ixlist, $ixlist[0]-1)
+		  if @ixlist < IXLIST && $ixlist[0] > 0;
+	    }
+	}
+	$t .= "...\n" if $ixlist[0];
+	foreach ( @ixlist ) {
 	    if ( $_ == $x ) {
 		$t .= ($x+1) . "\n";
 	    }
@@ -1117,6 +1131,7 @@ sub write_index_page {
 		$t .= "<a href='" . ixname($_) . "'>" . ($_+1) . "</a>\n";
 	    }
 	}
+	$t .= "...\n" if $ixlist[-1] < $num_indexes-1;
     }
 
     my $first_in_row = $x * $entries_per_page;
