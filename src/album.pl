@@ -4,8 +4,8 @@ my $RCS_Id = '$Id$ ';
 # Author          : Johan Vromans
 # Created On      : Tue Sep 15 15:59:04 2002
 # Last Modified By: Johan Vromans
-# Last Modified On: Mon Sep 13 20:53:54 2004
-# Update Count    : 2080
+# Last Modified On: Tue Sep 14 17:24:01 2004
+# Update Count    : 2081
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -701,8 +701,7 @@ sub update_filelist {
 	my $nd = "";
 	my $time = $el->timestamp;
 	if ( $time ) {
-	    my @tm = localtime($time);
-	    $nd = sprintf("%02d/%02d/%04d", $tm[3], 1+$tm[4], 1900+$tm[5]);
+	    $nd = strftime($datefmt, localtime($time));
 	}
 	if ( !defined($date) || $nd ne $date ) {
 	    $newinfo .= "\n!tag $nd\n";
