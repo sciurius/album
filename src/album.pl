@@ -4,8 +4,8 @@ my $RCS_Id = '$Id$ ';
 # Author          : Johan Vromans
 # Created On      : Tue Sep 15 15:59:04 2002
 # Last Modified By: Johan Vromans
-# Last Modified On: Fri Jun 25 17:24:31 2004
-# Update Count    : 1534
+# Last Modified On: Fri Jun 25 17:31:13 2004
+# Update Count    : 1535
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -129,7 +129,7 @@ load_info();
 
 # Gather files.
 load_files()  if -d d_large();
-print STDERR Data::Dumper->Dump([$gotlist],[qw(gotlist)]);
+#print STDERR Data::Dumper->Dump([$gotlist],[qw(gotlist)]);
 load_import() if $import_dir && -d $import_dir;
 #print STDERR Data::Dumper->Dump([$implist],[qw(implist)]);
 
