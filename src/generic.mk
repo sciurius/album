@@ -8,8 +8,7 @@ DCIM	= dcim/101msdcf
 DSC	= $(CAMERA)/$(DCIM)
 RAW	= $(HERE)/$(DCIM)
 OPTS	=
-ENV	= LANG=nl_NL.iso88591
-PERL	= $(ENV) perl
+PERL	= perl
 
 IMPORT	= $(shell test -d $(DCIM) && echo "--dcim=$(DCIM)")
 
