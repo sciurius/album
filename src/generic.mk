@@ -6,6 +6,7 @@ CAMERA	= /mnt/camera
 DCIM	= dcim/101msdcf
 DSC	= $(CAMERA)/$(DCIM)
 RAW	= $(HERE)/$(DCIM)
+OPTS	=
 
 IMPORT	= $(shell test -d $(DCIM) && echo "--dcim=$(DCIM)")
 
@@ -25,10 +26,10 @@ umountc :
 	-umount $(CAMERA)
 
 update :
-	perl -w $(TOOLS)/album.pl --verbose --update $(IMPORT) $(HERE)
+	perl -w $(TOOLS)/album.pl $(OPTS) --verbose --update $(IMPORT) $(HERE)
 
 clobber :
-	perl -w $(TOOLS)/album.pl --verbose --clobber --update $(IMPORT) $(HERE)
+	perl -w $(TOOLS)/album.pl $(OPTS) --verbose --clobber --update $(IMPORT) $(HERE)
 
 .PHONY : journal
 journal : journal/index.html
