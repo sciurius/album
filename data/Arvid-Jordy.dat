@@ -3,48 +3,51 @@
 !mediumsize 800
 
 !tag
+x0000.jpg Jordy
+
+!tag 2001
 f05016_13a.jpg -O:0 Jordy
 
 !tag 26 April 2001
 f05021_18a.jpg -O:0 Arvid
 
-!tag
+!tag 2001
 f05023_20a.jpg -O:0 Joan, Arvid en Jordy
 
 !tag 13 Mei 2001
-f01027.jpg -O:1
-f01028.jpg -O:0
-f01029.jpg -O:0
-f01030.jpg -O:0
-f01031.jpg -O:3
-f01032.jpg -O:0
+f01027.jpg -O:1 Joan met Arvid
+f01028.jpg -O:0 Jordy bloot
+f01029.jpg -O:0 Jordy met Ma Vromans
+f01030.jpg -O:0 Ma met Arvid
+f01031.jpg -O:3 Ma met Arvid
+f01032.jpg -O:0 Jordy
 
-!tag
-f01033.jpg -O:0
-f01034.jpg -O:1
-f01035.jpg -O:3
-f01036.jpg -O:1
-f01037.jpg -O:0
+!tag 2001
+f01033.jpg -O:0 Arvid
+f01034.jpg -O:1 Arvid
+f01035.jpg -O:3 Arvid
+f01036.jpg -O:1 Arvid
+f01037.jpg -O:0 Arvid
 
-!tag
-f02008_5a.jpg -O:1 
-f02009_6a.jpg -O:1 
+!tag 2001
+f02008_5a.jpg -O:1 Joan met Arvid
+f02009_6a.jpg -O:1 Joan met Arvid
 
-!tag
-f02016_13a.jpg -O:0 
-f02017_14a.jpg -O:0 
-f02018_15a.jpg -O:0 
-f02019_16a.jpg -O:0 
-f02020_17a.jpg -O:1 
-f02021_18a.jpg -O:1 
-f02022_19a.jpg -O:0 
-f02023_20a.jpg -O:0 
-f02024_21a.jpg -O:0 
-f02025_22a.jpg -O:0 
-f02026_23a.jpg -O:0 
-f02027_24a.jpg -O:0 
+!tag 2001
+f02016_13a.jpg -O:0 Arvid
+f02017_14a.jpg -O:0 Arvid
+f02018_15a.jpg -O:0 Arvid
+f02019_16a.jpg -O:0 Arvid
+f02020_17a.jpg -O:1 Tymen met Jordy
+f02021_18a.jpg -O:1 Tymen met Jordy
+f02022_19a.jpg -O:0 Peggy, Tymen met Jordy
+f02023_20a.jpg -O:0 Joan met Arvid
+f02024_21a.jpg -O:0 Joan met Arvid
+f02025_22a.jpg -O:0 Joan met Arvid
+f02026_23a.jpg -O:0 Joan met Arvid
+f02027_24a.jpg -O:0 Joan met Arvid
 
-!tag
+!tag 2001
 f03010_10.jpg -O:0 Jordy en Arvid
 f03011_11.jpg -O:0 Arvid
 f03012_12.jpg -O:0 Arvid
@@ -56,7 +59,7 @@ f03017_17.jpg -O:0 Arvid
 f03018_18.jpg -O:0 Arvid en Flo
 f03019_19.jpg -O:0 Arvid en Flo
 
-!tag
+!tag 2001
 f03025_25.jpg -O:0 Flo en Arvid
 
 !tag 29 september 2001
@@ -67,17 +70,17 @@ f040002.jpg -O:0 Jordy's verjaardag
 f040001.jpg -O:0 Jordy's verjaardag
 f040000.jpg -O:0 Jordy's verjaardag
 
-!tag
-036_2.jpg -O:0 
-037_3.jpg -O:0 
-038_4.jpg -O:0 
+!tag 2002
+036_2.jpg -O:0 Peggy, Tymen, Jordy, Arvid
+037_3.jpg -O:0 Peggy, Tymen, Jordy, Arvid
+038_4.jpg -O:0 Peggy, Tymen, Jordy, Arvid
 
-!tag
+!tag 2002
 084_10.jpg -O:0 Arvid
 085_11.jpg -O:3 Arvid
 086_12.jpg -O:0 Arvid
 
-!tag
+!tag 2002
 089_15.jpg -O:0 Arvid aan 't orgel
 090_16.jpg -O:0 Arvid aan 't orgel
 
@@ -104,3 +107,11 @@ f040000.jpg -O:0 Jordy's verjaardag
 200405081141240042.jpg -O:0 Arvid foto!
 200405081148530043.jpg -O:0 Arvid
 200405081215470044.jpg -O:1 Arvid puzzel
+
+# New entries added by album 1.35, Wed Jun 30 10:59:02 2004
+
+!tag 29/06/2004
+200406291610320420.jpg Jordy Knexx
+200406291612210421.jpg Jordy Knexx
+200406292022020423.jpg Badjas
+
