@@ -4,8 +4,8 @@ my $RCS_Id = '$Id$ ';
 # Author          : Johan Vromans
 # Created On      : Tue Sep 15 15:59:04 2002
 # Last Modified By: Johan Vromans
-# Last Modified On: Fri Nov 19 12:56:21 2004
-# Update Count    : 2362
+# Last Modified On: Sat Nov 20 12:46:11 2004
+# Update Count    : 2366
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -1355,8 +1355,7 @@ sub write_index_page {
 		my $el = $filelist->byseq(($_ * $index_rows * $index_columns) + 1);
 		$t .= "<a";
 		if ( my $tag = $el->tag ) {
-		    $t .= " onmouseover='return tip(\"$tag\")'" .
-		      " onmouseout='return tip(\"\")' onclick='return tip(\"\")'";
+		    $t .= " title=\"$tag\"";
 		}
 		$t .= " href='" . ixname($_) . "'>" . ($_+1) . "</a>\n";
 	    }
@@ -1429,14 +1428,6 @@ sub write_index_page {
 <html>
   <head>
     <link rel="stylesheet" href="css/index.css">
-    <script language="JavaScript">
-    <!--
-    function tip(tipText) {
-      window.status = tipText;
-      return true;
-    }
-    -->
-    </script>
     <title>$tt</title>
   </head>
   <body>
@@ -1447,7 +1438,7 @@ sub write_index_page {
 	  <p class='hd'>$tt</p>
 	</td>
 	<td align='right'>
-	  <p class='hd'>
+	  <p class='hdx'>
             @{[indent($t, 12)]}
           </p>
 	</td>
@@ -1887,13 +1878,25 @@ table.outer td {
     border-width: 1px;
     border-style: solid;
     border-color: #7c7c7c #f5f5f5 #f5f5f5 #7c7c7c;
-    padding: 3px;
 }
 table.inner {
     border: outset 0px;
 }
 table.inner td {
     border: inset 0px;
+}
+p.hdx {
+    font-size: 140%; font-weight: bold;
+    font-family: Verdana, Arial, Helvetica;
+}
+p.hdx a:link {
+    color: #000000; text-decoration: underline;
+}
+p.hdx a:visited {
+    color: #000000; text-decoration: underline;
+}
+p.hdx a:hover {
+    color: #FF0000; text-decoration: underline;
 }
 EOD
 
