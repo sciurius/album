@@ -1,4 +1,8 @@
+package Album::Tutorial;
+
 # $Id$
+
+# NOTE: This is a documentation-only module.
 
 =pod
 
@@ -272,3 +276,5 @@ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See either the
 GNU General Public License or the Artistic License for more details.
 
 =cut
+
+1;

@@ -2,8 +2,8 @@
 # Author          : Johan Vromans
 # Created On      : Fri Jul  9 15:45:48 2004
 # Last Modified By: Johan Vromans
-# Last Modified On: Mon Jul 12 23:18:13 2004
-# Update Count    : 19
+# Last Modified On: Fri Aug  6 18:00:32 2004
+# Update Count    : 20
 # Status          : Experimental
 
 use strict;
@@ -62,6 +62,7 @@ WriteMakefile
 		     'Image::Magick' => 6,
 		   },
    EXE_FILES    => [ map { "script/$_" } @scripts ],
+   PM		=> {},
  );
 
 sub checkexec {
