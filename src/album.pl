@@ -4,8 +4,8 @@ my $RCS_Id = '$Id$ ';
 # Author          : Johan Vromans
 # Created On      : Tue Sep 15 15:59:04 2002
 # Last Modified By: Johan Vromans
-# Last Modified On: Mon Jul 12 23:13:52 2004
-# Update Count    : 2027
+# Last Modified On: Thu Jul 15 18:44:05 2004
+# Update Count    : 2028
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -666,6 +666,7 @@ sub update_filelist {
 	    $date = $nd;
 	}
 	$newinfo .= $f . "\n";
+	$el->tag($date) if $date;
 	$todo->add($el);
 	push(@journal, $el) if $journal;
 	$new++;
@@ -693,6 +694,7 @@ sub update_filelist {
 	  ($el->rotation ? ("-O:".int($el->rotation/90)." ") : "") .
 	    ($el->type == T_VOICE ? "-T:V " : "") .
 	      " \n";
+	$el->tag($date) if $date;
 	$todo->add($el);
 	push(@journal, $el) if $journal;
 	$new++;
