@@ -4,8 +4,8 @@ my $RCS_Id = '$Id$ ';
 # Author          : Johan Vromans
 # Created On      : Tue Sep 15 15:59:04 2002
 # Last Modified By: Johan Vromans
-# Last Modified On: Wed May 26 08:23:57 2004
-# Update Count    : 638
+# Last Modified On: Wed May 26 19:04:13 2004
+# Update Count    : 655
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -74,9 +74,12 @@ my $LGREY = "#E0E0E0";
 my $MGREY = "#D0D0D0";
 my $DGREY = "#C0C0C0";
 
+my $fontfam = "font-family: Verdana, Arial, Helvetica";
 my $css = <<EOD;
-body  { font-size: 80%; font-family: Verdana, Arial, Helvetica; }
-td    { font-size: 80%; font-family: Verdana, Arial, Helvetica; }
+body  { font-size: 80%; $fontfam; }
+td    { font-size: 80%; $fontfam; }
+p.hd  { font-size: 140%; font-weight: bold; $fontfam; }
+p.ft  { font-size: 80%; $fontfam; }
 EOD
 my $bodyatts = "text=\"#000000\" link=\"#000000\" vlink=\"#000000\"".
                " alink=\"#FF0000\" bgcolor=\"$DGREY\"";
@@ -142,7 +145,13 @@ my $entries_per_page = $index_columns*$index_rows;
 my $num_indexes = int(($num_entries - 1) / $entries_per_page) + 1;
 
 my $fn = "img0000";
-# Map file names to html pages.
+# Cleanup excess files.
+for ( 0 ) {
+    my $excess = $fn++ . ".html";
+    unlink("$dest_dir/medium/$excess");
+    unlink("$dest_dir/large/$excess") or last;
+}
+# Map file names to html pages. Start with 1 to match "image N of M".
 for my $i ( 0 .. $num_entries-1 ) {
     $htmllist[$i] = $fn++ . ".html";
 }
@@ -425,15 +434,14 @@ sub write_image_page {
     my $imglink;
     if ( $dir eq "medium" ) {
 	$imglink = "<a href=\"../large/".$htmllist[$i]."\">" .
-	  "<img src=\"$file\" alt=\"[Click for bigger image]\">";
+	  "<img src=\"$file\" alt=\"[Click for bigger image]\"></a>";
     }
     else {
-	$imglink = "<img src=\"$file\"></a>";
+	$imglink = "<img src=\"$file\">";
     }
 
-    my $auxinfo = $file;
-    $auxinfo .= " " . $tag{$file} if $tag{$file};
-    $auxinfo .= " (" . size_info($file) . ")";
+    my $auxright = html($file . " (" . size_info($file) . ")");
+    my $auxleft  = html($tag{$file} || "");
 
     my $new = <<EOD;
 <html>
@@ -448,13 +456,12 @@ $css
 <body $bodyatts>
   <table>
     <tr>
-      <td>
-      </td>
+      <td></td>
       <td align="left" valign="top">
-	  <h2>$it</h2>
+        <p class="hd">$it</p>
       </td>
       <td align="right" valign="top">
-	  <h2>$tt</h2>
+        <p class="hd">$tt</p>
       </td>
     </tr>
     <tr>
@@ -462,8 +469,16 @@ $css
 	$b
       </td>
       <td align="center" valign="top" colspan="2">
-	$imglink<br>
-	$auxinfo
+	$imglink
+      </td>
+    </tr>
+    <tr>
+      <td></td>
+      <td align="left" valign="top">
+        <p class="ft">$auxleft</p>
+      </td>
+      <td align="right" valign="top">
+        <p class="ft">$auxright</p>
       </td>
     </tr>
   </table>
@@ -474,7 +489,7 @@ EOD
     my $h = "$dest_dir/$dir/".$htmllist[$i];
 
     # Do not overwrite unless modified.
-    if ( -s $h == length($new) ) {
+    if ( -s $h && -s _ == length($new) ) {
 	local($/);
 	my $hh = do { local *H; *H };
 	my $old;
@@ -592,10 +607,11 @@ sub write_index_page {
 			  "</td>\n",
 			  "        </tr>\n",
 			  "        <tr>\n",
-			  "          <td align=\"center\">",
+			  "          <td align=\"center\">\n",
+			  "            <p class=\"ft\">",
 			  (map { $capfun{$_}->($file), "<br>\n" }
 			     split(//, $caption)),
-			  "\n",
+			  "</p>\n",
 			  "          </td>\n",
 			  "        </tr>\n",
 			  "      </table>\n",
