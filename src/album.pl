@@ -4,8 +4,8 @@ my $RCS_Id = '$Id$ ';
 # Author          : Johan Vromans
 # Created On      : Tue Sep 15 15:59:04 2002
 # Last Modified By: Johan Vromans
-# Last Modified On: Thu Sep 16 22:33:16 2004
-# Update Count    : 2245
+# Last Modified On: Fri Sep 17 20:00:42 2004
+# Update Count    : 2275
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -245,6 +245,7 @@ for (my $i = $num_indexes ; ; $i++ ) {
 if ( $journal ) {
     print STDERR ("Creating ", $journal, " journal page",
 		  $journal == 1 ? "" : "s", "\n") if $verbose > 1;
+    mkpath([d_journal()], $verbose > 1);
     $mod = write_journal();
     uptodate("journal", $mod) if $verbose > 1;
 }
@@ -407,9 +408,6 @@ sub load_info {
     my $err = 0;
     my $file;
     my $tag;
-    my $nexttag = 0;
-    my $annotation = "";
-    my $tags = 0;
 
     my $fh = do { local *FH; *FH };
     die("$info_file: $!\n")
@@ -418,28 +416,11 @@ sub load_info {
 
     my $el;
     my %dirs;
-    local($/) = $/;
+
     while ( <$fh> ) {
 	chomp;
 
-	if ( /^#(.*)/ && $journal ) {
-	    $annotation .= " " . $1;
-	    next;
-	}
-
 	next if /^\s*#/;
-
-	if ( !/\S/ && $journal && $annotation ) {
-	    $el = new ImageInfo;
-	    $el->annotation($annotation);
-	    $el->tag($tag);
-	    $el->type(T_ANN);
-	    push(@journal, $el);
-	    $annotation = "";
-	    undef $el;
-	    next;
-	}
-
 	next unless /\S/;
 
 	if ( /^\s+/ && $el ) {
@@ -453,24 +434,6 @@ sub load_info {
 		$tag = $1;
 		$tag =~ s/\s$//;
 		$tag =~ s/\s+/ /g;
-		if ( $journal ) {
-		    if ( $tag !~ /\S/ ) {
-			warn("Tag may not be empty\n");
-			$err++;
-			next;
-		    }
-		    if ( exists($jnltags{$tag}) ) {
-			warn("Tag \"$tag\" is not unique\n");
-			$err++;
-		    }
-		    $jnltags{$tag} = sprintf("%04d", ++$nexttag);
-		    $el = new ImageInfo;
-		    $el->tag($tag);
-		    $el->type(T_TAG);
-		    push(@journal, $el);
-		    $tags++;
-		    undef $el;
-		}
 	    }
 	    elsif ( /^subdirs\s*(.*)/ ) {
 		foreach ( split(' ', $1)) {
@@ -482,7 +445,8 @@ sub load_info {
 		    warn("\"!journal\" must precede image info\n");
 		    $err++;
 		}
-		$journal++;
+		load_info_journal($err, $fh);
+		return;
 	    }
 	    else {
 		$err += parse_line("!".$_);
@@ -515,12 +479,144 @@ sub load_info {
 	$el->type($type);
 	$el->description($a) if $a;
 	$el->tag($tag) if $tag;
+	$el->_rotation($rotate) if defined($rotate);
+	if ( $file =~ /^(.+)\.mpg$/i ) {
+	    $el->type(T_MPG);
+	    $el->assoc_name($1."s.jpg"); # associates still image
+	}
+	elsif ( $type == T_VOICE ) {
+	    (my $t = $file) =~ s/\.jpg$/.mp3/i;
+	    $el->assoc_name($t);
+	}
+	elsif ( $file =~ /.\.html?$/i ) {
+	    $type = T_REF;
+	}
+	if ( $type == T_REF ) {
+	    for ( dirname($file)."/icon.jpg" ) {
+		$assc = $_ if !defined $assc && -f $_;
+	    }
+	    $assc = "icons/extern.jpg" unless defined $assc;
+	    $el->assoc_name($assc);
+	    $el->dest_name($file);
+	    $el->type($type);
+	}
+	$filelist->add($el);
+	$dirs{$1} = 1 if $type != T_REF && $file =~ m;^(.+)/[^/]+$;;
+    }
+    close($fh);
+    die("Aborted\n") if $err;
+    @subdirs = sort(keys(%dirs));
+}
+
+sub load_info_journal {
+    my $err = shift;
+    my $fh = shift;
+
+    #### WARNING: EXPERIMENTAL ####
+
+    warn("parsing (journal mode)\n") if $trace;
+
+    my %typemap = ( 'p' => T_JPG, 'm' => T_MPG, 'v' => T_VOICE );
+
+    my $tag;
+    my $nexttag = 0;
+    my $annotation = "";
+    my $tags = 0;
+    my %dirs;
+    local($/) = "";		# para mode
+    while ( <$fh> ) {
+	chomp;
+	next if /^\s*#/;
+	next unless /\S/;
+
+	# Handle controls.
+	if ( /^!\s*(\S.*)/ ) {
+	    $_ = $1;
+	    if ( /^tag\s*(.*)/ ) {
+		$tag = $1;
+		$tag =~ s/\s$//;
+		$tag =~ s/\s+/ /g;
+
+		if ( $tag !~ /\S/ ) {
+		    warn("Tag may not be empty\n");
+		    $err++;
+		    next;
+		}
+		if ( exists($jnltags{$tag}) ) {
+		    warn("Tag \"$tag\" is not unique\n");
+		    $err++;
+		}
+		$jnltags{$tag} = sprintf("%04d", ++$nexttag);
+		my $el = new ImageInfo;
+		$el->tag($tag);
+		$el->type(T_TAG);
+		push(@journal, $el);
+		$tags++;
+	    }
+	    elsif ( /^subdirs\s*(.*)/ ) {
+		foreach ( split(' ', $1)) {
+		    $dirs{$_}++;
+		}
+	    }
+	    elsif ( /^journal\s*(.*)/ ) {
+		if ( $filelist->tally ) {
+		    warn("\"!journal\" must precede image info\n");
+		    $err++;
+		}
+		# Ignore.
+	    }
+	    else {
+		$err += parse_line("!".$_);
+	    }
+	    next;
+	}
+
+	if ( /^\*\s*(.*)/s ) {
+	    $_ = $1;
+	}
+	else {
+	    my $el = new ImageInfo;
+	    $el->annotation($_);
+	    $el->tag($tag);
+	    $el->type(T_ANN);
+	    push(@journal, $el);
+	    next;
+	}
+	s/\s*\n\s+/ /g;
+	my @a = split(/\n/, $_);
+	$_ = shift(@a);
+	my $annotation = join(" ", @a);
+	my ($file, $a) = split(' ', $_, 2);
+
+	my $rotate;
+	my $type = T_JPG;
+	my $assc;
+	while ( $a && $a =~ /^-(\w):(\S+)\s*(.*)/ ) {
+	    if ( lc($1) eq 'o' ) {
+		$rotate = 90 * ($2 % 4);
+	    }
+	    elsif ( lc($1) eq 'i' ) {
+		$assc = basename($file)."/".$2;
+		unless ( -s $assc && -r _ ) {
+		    warn("$file (info): $assc [$!]\n");
+		    undef $assc;
+		}
+	    }
+	    elsif ( lc($1) eq 't' ) {
+		$type = $typemap{lc($2)}
+		  or warn("$file (info): Illegal type: $2\n"), $err++;
+	    }
+	    $a = $3;
+	}
+	my $el = new ImageInfo($file);
+	$el->type($type);
+	$el->description($a) if $a;
+	$el->tag($tag) if $tag;
 	if ( $annotation ) {
 	    $annotation =~ s/^\s+//;
 	    $annotation =~ s/\s+$//;
 	    $annotation =~ s/\s+/ /g;
 	    $el->annotation($annotation);
-	    $annotation = "";
 	}
 
 	$el->_rotation($rotate) if defined($rotate);
@@ -545,7 +641,7 @@ sub load_info {
 	    $el->type($type);
 	}
 	$filelist->add($el);
-	push(@journal, $el) if $journal && $a !~ /^--/;
+	push(@journal, $el) if $a !~ /^--/;
 	$dirs{$1} = 1 if $type != T_REF && $file =~ m;^(.+)/[^/]+$;;
     }
     close($fh);
@@ -1981,30 +2077,35 @@ sub app_options {
     return unless @ARGV > 0;
 
     if ( !GetOptions(
-		     'import=s'	=> \$import_dir,
-		     'exif'	=> \$import_exif,
-		     'dcim=s'	=> sub { $import_dir = $_[1]; $import_exif++ },
-		     'update'   => \$update,
-		     'info=s'	=> \$info_file,
-		     'cols=i'	=> \$index_columns,
-		     'rows=i'	=> \$index_rows,
-		     'thumbsize=i' => \$thumb,
-		     'medium'   => sub { $medium = 0 },
-		     'mediumsize:i' => \$medium,
-		     'mediumonly' => \$mediumonly,
-		     'title=s'	=> \$album_title,
-		     'clobber'	=> \$clobber,
-		     'link!'	=> \$linkthem,
-		     'caption=s' => \$caption,
-		     'icon!'	=> \$icon,
-		     'ident'	=> \$ident,
-		     'quiet'	=> sub { $verbose = 0 },
-		     'verbose+'	=> \$verbose,
-		     'trace'	=> \$trace,
-		     'test'	=> \$test,
-		     'help|?'	=> \$help,
-		     'debug'	=> \$debug,
-		    )
+	# Run time options.
+	'clobber'        => \$clobber,
+	'dcim=s'         => sub { $import_dir = $_[1]; $import_exif++ },
+	'exif'           => \$import_exif,
+	'import=s'       => \$import_dir,
+	'info=s'         => \$info_file,
+	'link!'          => \$linkthem,
+	'update'         => \$update,
+	'mediumonly'     => \$mediumonly,
+
+        # Album options. Can also be set in info/config files.
+	'caption=s'      => \$caption,
+	'cols|columns=i' => \$index_columns,
+	'icon!'          => \$icon,
+	'medium'         => sub { $medium = 0 },
+	'mediumsize=i'   => \$medium,
+	'rows=i'         => \$index_rows,
+	'thumbsize=i'    => \$thumb,
+	'title=s'        => \$album_title,
+
+	# Miscellaneous.
+	'debug'          => \$debug,
+	'help|?'         => \$help,
+	'ident'          => \$ident,
+	'quiet'          => sub { $verbose = 0 },
+	'test'           => \$test,
+	'trace'          => \$trace,
+	'verbose+'       => \$verbose,
+        )
 	 or $help
 	 or @ARGV > 1
 	 or @ARGV && ! -d $ARGV[0]
@@ -2035,19 +2136,22 @@ Usage: $0 [options] [ directory ]
   Album:
     --info XXX		description file, default "@{[DEFAULTS->{info}]}" (if it exists)
     --title XXX		album title, default "@{[DEFAULTS->{title}]}"
+    --[no]icon		[do not] produce an album icon
   Index:
     --cols NN		number of columns per page, default @{[DEFAULTS->{indexcols}]}
     --rows NN		number of rows per page, default @{[DEFAULTS->{indexrows}]}
     --thumbsize NNN	the max size of thumbnail images, default @{[DEFAULTS->{thumbsize}]}
     --captions XXX	f: filename s: size c: description t: tag
   Medium:
-    --medium [ NNN ]	the max size of medium sized images, default @{[DEFAULTS->{mediumsize}]}
+    --medium    	produce medium sized images of size @{[DEFAULTS->{mediumsize}]}
+    --mediumsize NNN	the max size of medium sized images, default @{[DEFAULTS->{mediumsize}]}
+    --mediumonly	ignore large images and links (for web export)
   Importing:
     --import XXX	original images
     --exif		use w/ EXIF info, if possible
     --dcim XXX		as --import with --exif
     --update		add new entries from import, if needed
-    --[no]link		do [not] link large to original. Default is link.
+    --[no]link		[do not] link to original, instead of copying. Default is link.
   Miscellaneous:
     --clobber		recreate everything (except large)
     --test		verify only
