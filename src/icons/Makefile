@@ -1,13 +1,20 @@
+# Maintenace of icons
 
-ICONS = first-gr first index journal last-gr last medium movie2 movie next-gr next prev-gr prev sound2 sound 
+ICONS = index medium \
+	first first-gr \
+	last last-gr \
+	next next-gr \
+	prev prev-gr \
+	journal sound
 
 all :
 	rm -f uu
 	for icon in $(ICONS); do \
 	  tgif -print -ppm $$icon.obj; \
 	  pnmscale -width=33 -height=33 $$icon.ppm | pnmtopng > $$icon.png; \
-	  uuencode icons/$$icon.png < $$icon.png >> uu; \
+	  uuencode $$icon.png < $$icon.png >> uu; \
 	done
+	uuencode movie.jpg < movie.jpg >> uu
 
 clean :
 	rm -f uu
