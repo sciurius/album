@@ -4,13 +4,13 @@ my $RCS_Id = '$Id$ ';
 # Author          : Johan Vromans
 # Created On      : Tue Sep 15 15:59:04 2002
 # Last Modified By: Johan Vromans
-# Last Modified On: Sun Oct  3 16:40:17 2004
-# Update Count    : 2307
+# Last Modified On: Fri Nov 19 12:56:21 2004
+# Update Count    : 2362
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
 
-$VERSION = "1.00";
+$VERSION = "1.01";
 
 use strict;
 
@@ -86,23 +86,6 @@ use constant DEFAULTS => { info       => "info.dat",
 			 };
 
 my $TMPDIR = $ENV{TMPDIR} || $ENV{TEMP} || '/usr/tmp';
-
-my $WHITE = "#FFFFFF";
-my $BLACK = "#000000";
-my $RED   = "#FF0000";
-my $LGREY = "#E0E0E0";
-my $MGREY = "#D0D0D0";
-my $DGREY = "#C0C0C0";
-
-my $fontfam = "font-family: Verdana, Arial, Helvetica";
-my $css = <<EOD;
-body  { font-size:  80%; $fontfam; }
-td    { font-size:  80%; $fontfam; }
-p.hd  { font-size: 140%; font-weight: bold; $fontfam; }
-p.ft  { font-size:  80%; $fontfam; }
-EOD
-my $bodyatts = "text='$BLACK' link='$BLACK' vlink='$BLACK'".
-               " alink='$RED' bgcolor='$DGREY'";
 
 my $suffixpat = qr{\.(?:jpe?g|png|gif|mpg)}i;
 
@@ -183,11 +166,14 @@ exit(0) if $test;
 if ( $clobber ) {
     rmtree([d_thumbnails(), d_medium()], $verbose > 1);
 }
-mkpath([d_large(), d_thumbnails(), d_icons()], $verbose > 1);
+mkpath([d_large(), d_thumbnails(), d_icons(), d_css()], $verbose > 1);
 mkpath([d_medium()], $verbose > 1) if $medium;
 
 # Copy the button images over to the target directory.
 add_button_images();
+
+# Create the default style sheets, if necessary.
+add_stylesheets();
 
 # Copy images in place, rotate if necessary, and create the thumbnails.
 prepare_images();
@@ -287,6 +273,7 @@ sub d_large      { unshift(@_, "large");      goto &d_dest; }
 sub d_medium     { unshift(@_, "medium");     goto &d_dest; }
 sub d_thumbnails { unshift(@_, "thumbnails"); goto &d_dest; }
 sub d_icons      { unshift(@_, "icons");      goto &d_dest; }
+sub d_css        { unshift(@_, "css");        goto &d_dest; }
 sub d_journal    { unshift(@_, "journal");    goto &d_dest; }
 sub d_dest       { unshift(@_, $dest_dir) unless $dest_dir eq ".";
 		   join("/", @_); }
@@ -1289,7 +1276,7 @@ sub write_image_page {
     if ( $el->Make ) {		# EXIF info
 	$it2 = "<a href='#' class='info'>" . $it .
 	  "<span>" .
-	    "<table border='1' width='100%' bgcolor='$MGREY'>\n" .
+	    "<table border='1' width='100%'>\n" .
 	      restyle_exif($el) . "</table>\n" .
 		"</span></a>";
     }
@@ -1298,19 +1285,9 @@ sub write_image_page {
 <html>
   <head>
     <title>$it</title>
-    <style type='text/css'>
-      <!--
-      @{[indent($css, 6)]}
-      a.info{position: relative;z-index:24;background-color:$DGREY; color:$BLACK; text-decoration:none}
-      a.info:hover{z-index:25;background-color: $DGREY}
-      a.info span{display: none}
-      a.info:hover span{display:block;
-	  position:absolute; top:2em;left:2em; width:15em;
-	  border:0px; background-color:$MGREY; color:$BLACK;text-align: center}
-      -->
-    </style>
+    <link rel="stylesheet" href="../css/$dir.css">
   </head>
-  <body $bodyatts>
+  <body>
     <table>
       <tr>
 	<td></td>
@@ -1399,12 +1376,11 @@ sub write_index_page {
     }
 
     # Construct the actual index part.
-    my $cc = "<table border='2' cellpadding='3' cellspacing='3'" .
-             " bgcolor='$MGREY'>\n";
+    my $cc = "<table class='outer'>\n";
 
     for ( my $i = 0; $i < $index_rows; $i++, $first_in_row += $index_columns ) {
 	if ( $first_in_row < $num_entries ) {
-	    $cc .= "  <tr bgcolor='$LGREY'>\n";
+	    $cc .= "  <tr>\n";
 	    for ( my $j = 0; $j < $index_columns; $j++ ) {
 		my $this = $first_in_row + $j;
 		if ( $this < $num_entries ) {
@@ -1425,7 +1401,7 @@ sub write_index_page {
 			$base .= $htmllist[$this];
 		    }
 		    $cc .= "    <td align='center' valign='bottom'>\n".
-			  "      <table border='0' cellpadding='0' cellspacing='0' bgcolor='$LGREY'>\n".
+			  "      <table class='inner'>\n".
 			  "        <tr>\n".
 			  "          <td align='center'>\n".
 			  "            <a href='$base'$target>".img($img, alt => "[Click for bigger image]", border => 0)."</a>\n".
@@ -1440,7 +1416,7 @@ sub write_index_page {
 			  "    </td>\n";
 		}
 		else {
-		    $cc .= "    <td width='$thumb' bgcolor='$DGREY'>&nbsp</td>\n";
+		    $cc .= "    <td width='$thumb'>&nbsp</td>\n";
 		}
 	    }
 	    $cc .= "  </tr>\n";
@@ -1452,17 +1428,7 @@ sub write_index_page {
 <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
 <html>
   <head>
-    <style type='text/css'>
-      <!--
-      @{[indent($css, 6)]}
-      a.info{position: relative;z-index:24;background-color:$LGREY; color:$BLACK; text-decoration:none}
-      a.info:hover{z-index:25;background-color: $LGREY}
-      a.info span{display: none}
-      a.info:hover span{display:block;
-	  position:absolute; top:2em;left:2em; width:25em;
-	  border:0px; background-color:$MGREY; color:$BLACK;text-align: center}
-      -->
-    </style>
+    <link rel="stylesheet" href="css/index.css">
     <script language="JavaScript">
     <!--
     function tip(tipText) {
@@ -1473,7 +1439,7 @@ sub write_index_page {
     </script>
     <title>$tt</title>
   </head>
-  <body $bodyatts>
+  <body>
     <table>
       <tr>
 	<td></td>
@@ -1559,19 +1525,11 @@ sub write_journal {
 	update_if_needed(d_journal("jnl" . $jnltags{$tag} . ".html"), <<EOD);
 <html>
   <head>
-    <style>
-    <!--
-    body  { font-family: Verdana, Arial, Helvetica; }
-    p.hd  { font-size: 140%; font-weight: bold;
-	    font-family: Verdana, Arial, Helvetica;
-	    margin-left: 0.1in; margin-top: 0.1in; margin-bottom: 0.1in;
-	  }
-    -->
-    </style>
+    <link rel='stylesheet' href='../css/journal.css'>
   </head>
   <body>
-    <table width="500" border="0" cellpadding="0" cellspacing="10">
-      <tr bgcolor='#C0C0C0'>
+    <table class='outer'>
+      <tr class='grey'>
 	<td>
 	  <p class='hd'>@{[html($tag)]}</p>
 	</td>
@@ -1580,7 +1538,7 @@ sub write_journal {
         </td>
       </tr>
       @{[indent($jnl,6)]}
-      <tr bgcolor='#C0C0C0'>
+      <tr class='grey'>
 	<td>&nbsp;</td>
         <td align='right'>
           @{[indent($b,10)]}
@@ -1712,7 +1670,7 @@ sub f_caption {
     my $s = html($el->dest_name);
     if ( $el->Make ) {
 	$s = "&nbsp;$s<a href='#' class='info'>&nbsp;<span>".
-	  "<table border='1' bgcolor='$MGREY' width='100%'>\n".
+	  "<table border='1' width='100%'>\n".
 	    restyle_exif($el) . "</table>\n".
 	      "</span></a>";
     }
@@ -1853,6 +1811,170 @@ sub add_button_images {
 	print STDERR ("done\n") if $did && $verbose > 1;
     }
 }
+
+################ Style Sheets ################
+
+my $add_stylesheet_msg;
+sub add_stylesheets {
+
+    my $css_fontfam = "font-family: Verdana, Arial, Helvetica";
+    my $WHITE = "#FFFFFF";
+    my $BLACK = "#000000";
+    my $RED   = "#FF0000";
+    my $LGREY = "#E0E0E0";
+    my $MGREY = "#D0D0D0";
+    my $DGREY = "#C0C0C0";
+
+    $add_stylesheet_msg = 0;
+
+    add_stylesheet("common", <<EOD);
+body {
+    font-size:  80%; $css_fontfam;
+    text: $BLACK;
+    background: $DGREY;
+}
+td {
+    font-size:  80%; $css_fontfam;
+}
+p.hd {
+    font-size: 140%; font-weight: bold;
+    $css_fontfam;
+}
+p.ft {
+    font-size:  80%; $css_fontfam;
+}
+a:link {
+    color: $BLACK; text-decoration: none;
+}
+a:visited {
+    color: $BLACK; text-decoration: none;
+}
+a:active {
+    color: $RED; text-decoration: none;
+}
+EOD
+
+    add_stylesheet("index", <<EOD);
+\@import "common.css";
+a.info {
+    position: relative; z-index: 24; background-color: $LGREY;
+    color: $BLACK; text-decoration:none;
+}
+a.info:hover {
+    z-index: 25; background-color: $LGREY;
+}
+a.info span {
+    display: none;
+}
+a.info:hover span {
+    display: block;
+    position: absolute; top: 2em; left: 2em; width: 25em;
+    border: 0px; background-color: $MGREY; color: $BLACK;
+    text-align: center;
+}
+table.outer {
+    background: #d0d0d0;
+    border-collapse: separate;
+    border-width: 2px;           /* border=2 */
+    border-style: solid;
+    border-color: #e8e8e8 #727272 #727272 #e8e8e8;
+    border-spacing: 3px;        /* cellspacing = 3 */
+}
+table.outer tr {
+    background: #e0e0e0;
+}
+table.outer td {
+    border-width: 1px;
+    border-style: solid;
+    border-color: #7c7c7c #f5f5f5 #f5f5f5 #7c7c7c;
+    padding: 3px;
+}
+table.inner {
+    border: outset 0px;
+}
+table.inner td {
+    border: inset 0px;
+}
+EOD
+
+    add_stylesheet("large", <<EOD);
+\@import "common.css";
+a.info {
+    position: relative; z-index: 24; background-color: $DGREY;
+    color: $BLACK; text-decoration: none;
+}
+a.info:hover {
+    z-index: 25; background-color: $DGREY;
+}
+a.info span {
+    display: none;
+}
+a.info:hover span {
+    display: block;
+    position: absolute; top: 2em; left: 2em; width: 15em;
+    border: 0px; background-color: $MGREY; color :$BLACK;
+    text-align: center;
+}
+EOD
+
+    add_stylesheet("medium", <<EOD);
+\@import "common.css";
+a.info {
+    position: relative; z-index: 24; background-color: $DGREY;
+    color:$BLACK; text-decoration:none;
+}
+a.info:hover {
+    z-index: 25; background-color: $DGREY;
+}
+a.info span {
+    display: none;
+}
+a.info:hover span {
+    display: block;
+    position: absolute; top:2em; left: 2em; width: 15em;
+    border: 0px; background-color: $MGREY; color: $BLACK;
+    text-align: center;
+}
+EOD
+
+    add_stylesheet("journal", <<EOD);
+body {
+    font-size: 100%; $css_fontfam;
+    text: $BLACK;
+    background: $WHITE;
+}
+p.hd {
+    font-size: 140%; font-weight: bold;
+    margin-left: 0.1in; margin-top: 0.1in; margin-bottom: 0.1in;
+}
+table.outer {
+    width: 500px;
+    border-spacing: 10px;
+}
+tr.grey {
+    background: $DGREY;
+}
+table.outer td {
+}
+EOD
+
+    print STDERR ("\n") if $add_stylesheet_msg;
+}
+
+sub add_stylesheet {
+    my ($css, $data) = @_;
+    return if -e d_css("$css.css");
+    print STDERR ("Creating style sheets: ")
+      unless $add_stylesheet_msg++;
+    print STDERR ("$css ");
+    $css = d_css("$css.css");
+    open(my $out, ">".$css) or die("$css: $!\n");
+    binmode($out);
+    print $out ($data);
+    close($out) or die("$css: $!\n");
+}
+
+################ End Style Sheets ################
 
 sub bytes {
     my $t = shift;

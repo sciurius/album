@@ -54,4 +54,7 @@ init ::
 clean ::
 	rm -f .cache *png index*html large/*html *~
 	rm -f shellrun.exe ShellRun.exe autorun.inf
-	rm -fr icons images medium thumbnails .xvpics
+	rm -fr icons css images medium thumbnails .xvpics
+
+realclean :: clean
+	rm -f `readlink info.dat` info.dat 
