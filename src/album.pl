@@ -4,8 +4,8 @@ my $RCS_Id = '$Id$ ';
 # Author          : Johan Vromans
 # Created On      : Tue Sep 15 15:59:04 2002
 # Last Modified By: Johan Vromans
-# Last Modified On: Wed Jun  9 16:49:14 2004
-# Update Count    : 1011
+# Last Modified On: Wed Jun  9 19:10:27 2004
+# Update Count    : 1013
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -1022,8 +1022,7 @@ sub get_exif {
     }
 
     # Run jhead to collect the EXIF data.
-    use 5.008;
-    open(my $p, "-|", "jhead", $file) or die("$file: $!\n");
+    open(my $p, "-|", "jhead " . squote($file)) or die("$file: $!\n");
     my %h;
     while ( <$p> ) {
 	s/\s+:\s+/: /;
@@ -1163,6 +1162,7 @@ sub store {
 
 sub entry {
     my ($self, $file, $entry) = @_;
+    $file =~ s;^\./;;;
     if ( defined $entry ) {
 	$self->{info}->{$file} = $entry;
     }
