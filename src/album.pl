@@ -4,8 +4,8 @@ my $RCS_Id = '$Id$ ';
 # Author          : Johan Vromans
 # Created On      : Tue Sep 15 15:59:04 2002
 # Last Modified By: Johan Vromans
-# Last Modified On: Tue Jun 22 11:11:52 2004
-# Update Count    : 1313
+# Last Modified On: Wed Jun 23 18:20:51 2004
+# Update Count    : 1363
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -70,6 +70,8 @@ use constant DEFAULTS => { info       => "info.dat",
 
 my $TMPDIR = $ENV{TMPDIR} || $ENV{TEMP} || '/usr/tmp';
 
+my $WHITE = "#FFFFFF";
+my $BLACK = "#000000";
 my $LGREY = "#E0E0E0";
 my $MGREY = "#D0D0D0";
 my $DGREY = "#C0C0C0";
@@ -804,6 +806,7 @@ sub write_image_page {
     my ($el, $dir) = @_;
     my $i = $el->seq - 1;
     my $file = $el->dest_name;
+    my $rf = $file;
 
     # Try movie.
     my $movie = $el->type == T_MPG;
@@ -859,9 +862,22 @@ sub write_image_page {
 	}
     }
 
+    $rf = $info->entry($rf)->orig_name;
+    my $exif;
+    if ( $rf ) {
+	$rf =~ s;^\./;;;
+	$exif = $info->entry($rf);
+	$exif = $exif->exif if $exif;
+	$exif = "<table border='1' width='100%' bgcolor='$MGREY'>\n" . restyle_exif($exif) . "</table>\n";
+    }
+
     my $auxright = html($el->dest_name);
     my $s = size_info($el);
     $auxright .= " ($s)" if $s;
+    my $it2 = $it;
+    if ( $exif ) {
+	$it2 = "<a href='#' class='info'>$it<span>$exif</span></a>";
+    }
     my $auxleft  = html($el->tag || "");
 
     update_if_needed(d_dest($dir, $htmllist[$i]), <<EOD);
@@ -872,12 +888,12 @@ sub write_image_page {
     <style type='text/css'>
       <!--
       @{[indent($css, 6)]}
-      a.info{position: relative;z-index:24;background-color:#ccc; color:#000; text-decoration:none}
-      a.info:hover{z-index:25;background-color: #ff0}
+      a.info{position: relative;z-index:24;background-color:$DGREY; color:$BLACK; text-decoration:none}
+      a.info:hover{z-index:25;background-color: $DGREY}
       a.info span{display: none}
       a.info:hover span{display:block;
 	  position:absolute; top:2em;left:2em; width:15em;
-	  border:1px solid #0cf; background-color:#cff; color:#000;text-align: center}
+	  border:0px; background-color:$MGREY; color:$BLACK;text-align: center}
       -->
     </style>
   </head>
@@ -886,7 +902,7 @@ sub write_image_page {
       <tr>
 	<td></td>
 	<td align='left' valign='top'>
-	  <p class='hd'>$it</p>
+	  <p class='hd'>$it2</p>
 	</td>
 	<td align='right' valign='top'>
 	  <p class='hd'>$tt</p>
@@ -992,6 +1008,12 @@ sub write_index_page {
     <style type='text/css'>
       <!--
       @{[indent($css, 6)]}
+      a.info{position: relative;z-index:24;background-color:$LGREY; color:$BLACK; text-decoration:none}
+      a.info:hover{z-index:25;background-color: $LGREY}
+      a.info span{display: none}
+      a.info:hover span{display:block;
+	  position:absolute; top:2em;left:2em; width:25em;
+	  border:0px; background-color:$MGREY; color:$BLACK;text-align: center}
       -->
     </style>
     <title>$tt</title>
@@ -1079,11 +1101,50 @@ sub img {
     $ret . ">";
 }
 
+sub restyle_exif {
+    my ($exif) = @_;
+    my $ret = "";
+    my $v;
+    $ret .= "<tr><td>Date</td><td>".html($v)."</td></tr>\n"
+      if $v = $exif->{"date/time"};
+    $ret .= "<tr><td>Exposure</td><td>".html(ucfirst $exif->{"exposure"})."  ".
+      html($exif->{"exposure time"})."</td></tr>\n";
+    $ret .= "<tr><td>Aperture</td><td>".html($v)."</td></tr>\n"
+      if $v = $exif->{"aperture"};
+    if ( $v = $exif->{"focal length"} ) {
+	if ( $exif->{"camera model"} eq "DSC-V1" && $v =~ /(\d+\.\d+)mm/ ) {
+	    $v .= sprintf("  (%.1fmm equiv.)", $1*4.857);
+	}
+	$ret .= "<tr><td>Focal length</td><td>".html($v)."</td></tr>\n"
+    }
+    $ret .= "<tr><td>ISO</td><td>".html($v)."</td></tr>\n"
+      if $v = $exif->{"iso equiv."};
+    $ret .= "<tr><td>Flash</td><td>".html(ucfirst $v)."</td></tr>\n"
+      if ($v = $exif->{"flash used"}) && $v ne "No";
+    $ret .= "<tr><td>Metering</td><td>".html(ucfirst $v)."</td></tr>\n"
+      if ($v = $exif->{"metering mode"}) && $v ne "No";
+}
+
 #### Caption helpers.
 
 sub f_caption {
     my ($el) = @_;
-    html($el->dest_name);
+    my $rf = $el->dest_name;
+    my $s = html($rf);
+    $rf = $info->entry($rf)->orig_name;
+    my $exif;
+    if ( $rf ) {
+	$rf =~ s;^\./;;;
+	$exif = $info->entry($rf);
+	$exif = $exif->exif if $exif;
+	$exif = "<table border='1' bgcolor='$MGREY' width='100%'>\n" .
+	  restyle_exif($exif) . "</table>\n";
+    }
+
+    if ( $exif ) {
+	$s = "<a href='#' class='info'>$s<span>$exif</span></a>";
+    }
+    $s;
 }
 
 sub s_caption {
