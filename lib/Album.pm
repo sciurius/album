@@ -31,6 +31,11 @@ Images can be handled 'in situ', or imported from e.g. a CD-ROM or
 digital camera. Optionally, EXIF information from digital camera files
 can be taken into account.
 
+The photo albums are the digital equivalents of paper albums, but
+easier to create and maintain. Although you can publish a photo album
+on the Web, this tool is not specifically targeted at creating Web
+shows.
+
 =head1 DESCRIPTION
 
 For a description how to use the program, see L<Album::Tutorial>.
@@ -39,7 +44,7 @@ For a description how to use the program, see L<Album::Tutorial>.
 
 Johan Vromans (jvromans@squirrel.nl) wrote this module.
 
-Web site: http://www.squirrel.nl/people/jvromans/Album/index.html
+Web site: L<http://www.squirrel.nl/people/jvromans/Album/index.html>.
 
 =head1 COPYRIGHT AND DISCLAIMER
 

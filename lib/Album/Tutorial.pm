@@ -19,6 +19,8 @@ and maintain HTML based photo albums.
 
 =head1 DESCRIPTION
 
+=head2 Getting started
+
 To get started, create a new directory and cd to it. Create a
 subdirectory 'large' and put some pictures there. If you have
 installed the 'album' tool in your execution path, you can now execute
@@ -68,12 +70,14 @@ this case, all thumbnails and image and index pages are up to date.
 The line of periods shows progress, one period for each image
 processed.
 
+=head2 Adding medium sized images
+
 The purpose of medium sized images is easy browsing by having a
 consistent and convenient size. The default size shows normal 4:3
 images completely on an 1024x768 screen in the browser's full screen
 mode. 
 
-To add medium sized images (and specify an album title):
+To add medium sized images (and also specify an album title):
 
   $ album -v --medium --title "My First Album"
   No info.dat, adding images from large
@@ -93,16 +97,36 @@ To add medium sized images (and specify an album title):
   (Needed to write 1 index page)
 
 Again, 'album' only does the work needed, re-using the work already
-done. 
+done.
+
+=head2 Adding image descriptions
 
 As can be seen from the example runs, 'album' looks for a file
 'info.dat'. This file can be used to:
 
-  - control what images must be shown
-  - the order in which they must be shown
-  - whether rotation is necessary
-  - set tag and description information
-  - control other settings
+=over 4
+
+=item *
+
+control what images must be shown
+
+=item *
+
+the order in which they must be shown
+
+=item *
+
+whether rotation is necessary
+
+=item *
+
+set tag and description information
+
+=item *
+
+control other settings
+
+=back
 
 The format of 'info.dat' is simple. Empty lines and lines starting with
 a '#' are ignored. Data lines contain the name of an image file,
@@ -149,7 +173,7 @@ for example:
   im028.jpg  Swimming cows
   im029.jpg  Moon over Clew Bay
 
-Re-run the program (no need for --medium and --title anymore):
+Re-run the program (no need for B<--medium> and B<--title> anymore):
 
   $ album -v
   Number of entries = 7
@@ -165,21 +189,47 @@ the only images shown are the ones named in the control file. New
 images added to the 'large' directory will be ignored. We'll see later
 what to do about that.
 
-Summary of control commands. Most settings can also obtained with
-command line options, as shown.
+=head2 Summary of 'info.dat' control commands
 
-  !title XXX       set the title to XXX, override with --title
-  !page NxM        set the layout to N rows (--rows) and 
-		   M columns (--columns)
-  !thumbsize NNN   desired width of thumbnails (--thumbsize)
-  !medium          include medium sized images (--medium)
-  !mediumsize NNN  desired width of medium sized images (--mediumsize)
-  !tag             tagline for all following images
-  !caption         caption code for index pages (--caption),
-		   a sequence of f (file name), s (size, WxH),
-		   c (caption), t (tag line); default "fct".
+Most settings can also obtained with command line options, as shown.
 
-Importing new images.
+=over
+
+=item B<!title> I<XXX>
+
+Sets the title to I<XXX>, override with B<--title>.
+
+=item B<!page> I<N>B<x>I<M>
+
+Sets the layout to I<N> rows (B<--rows>) and I<M> columns (B<--columns>).
+
+=item B<!thumbsize> NNN
+
+Specifies the desired width for thumbnail images (B<--thumbsize>).
+
+=item B<!medium>
+
+Includes medium sized images (B<--medium>)
+
+=item B<!mediumsize> I<NNN>
+
+Specifies the desired width for medium sized images (B<--mediumsize>)
+
+=item B<!tag> I<XXX>
+
+Sets the tag line for all subsequent images. Cancel with and empty
+B<!tag> command.
+
+=item B<!caption>
+
+Sets the caption code for index pages (B<--caption>). It must be a
+sequence of B<f> (file name), B<s> (size, WxH), B<c> (caption), B<t>
+(tag line). If no B<!caption> has been used, the default value is
+B<fct>.
+
+=back
+
+=head2 Importing new images
 
 An important feature of 'album' is importing new images from an
 external source. For example, you can import new images from a CD-ROM,
@@ -204,17 +254,31 @@ directory, and processed as usual. 'info.dat' has been updated with
 the new entries. Note that images found on the CD-ROM that already
 exist in 'large' (i.e., have the same name) are skipped.
 
+=head2 Using EXIF information
+
 When importing images from a digital camera, 'album' can use the EXIF
 information that is present in these files:
 
-  - it will use the time stamp rename it to YYYYMMDDhhmmssSSSS (where SSSS
-    is a sequence number);
-  - it will set the modification time of the file to the time stamp;
-  - while copying the image, it will be rotated if necessary,
-    according to the 'orientation' property in the EXIF information.
+=over 4
 
-To enable EXIF processing, add the --exif command line option, or
-specify the import directory with --dcim instead of --import:
+=item *
+
+it will use the time stamp rename it to YYYYMMDDhhmmssSSSS (where SSSS
+is a sequence number);
+
+=item *
+
+it will set the modification time of the file to the time stamp;
+
+=item *
+
+while copying the image, it will be rotated if necessary,
+according to the 'orientation' property in the EXIF information.
+
+=back
+
+To enable EXIF processing, add the B<--exif> command line option, or
+specify the import directory with B<--dcim> instead of B<--import>:
 
   $ ls -l /mnt/camera/dcim/101msdcf
   -rwxr-xr-x 1 jv jv 2347808 Jun 25 12:08 /mnt/camera/dcim/101msdcf/dsc00052.jpg
@@ -239,9 +303,9 @@ If you hover the mouse over the file name in the index page, or over
 the title on the image pages, a pop-up will show a selection of
 information from the EXIF data.
 
-Additional notes.
+=head2 Additional notes
 
-The --clobber command line option will force regeneration of all
+The B<--clobber> command line option will force regeneration of all
 medium and thumbnail images, and HTML pages. It will not force
 re-import of the 'large' images. To completely rebuild everything
 save info.dat, remove all the files in the album directory (including
