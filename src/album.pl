@@ -4,8 +4,8 @@ my $RCS_Id = '$Id$ ';
 # Author          : Johan Vromans
 # Created On      : Tue Sep 15 15:59:04 2002
 # Last Modified By: Johan Vromans
-# Last Modified On: Sat Jul 10 19:20:56 2004
-# Update Count    : 1844
+# Last Modified On: Sat Jul 10 19:59:42 2004
+# Update Count    : 1845
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -1234,7 +1234,7 @@ sub f_caption {
     my ($el) = @_;
     my $s = html($el->dest_name);
     if ( $el->Make ) {
-	$s = "<a href='#' class='info'>" . $s . "<span>".
+	$s = "&nbsp;$s<a href='#' class='info'>&nbsp;<span>".
 	  "<table border='1' bgcolor='$MGREY' width='100%'>\n".
 	    restyle_exif($el) . "</table>\n".
 	      "</span></a>";
