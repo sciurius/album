@@ -11,13 +11,15 @@ generated as well. The album will be organised as follows:
   medium/          optional medium sized images, with HTML pages
   thumbnail/       thumbnail images
 
-Each image can be labelled with a description, a tag (applies to a
+Each image can be labeled with a description, a tag (applies to a
 group of images, e.g. a date), the image name, and some
 characteristics (size and dimensions).
 
 Images can be handled 'in situ', or imported from e.g. a CD-ROM or
 digital camera. Optionally, EXIF information from digital camera files
 can be taken into account.
+
+Web site: http://www.squirrel.nl/people/jvromans/Album/index.html
 
 Helper programs
 
