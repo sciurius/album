@@ -20,7 +20,7 @@ mountc :
 _fetch :
 	rsync -av --modify-window=1 \
 	    $(DSC)/ $(RAW)/
-	chmod 0444 $(RAW)/*.?pg
+	find $(RAW) -type f -perm +333 -print -exec chmod 0444 {} \;
 
 umountc :
 	-umount $(CAMERA)
