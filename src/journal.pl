@@ -6,8 +6,8 @@ my $RCS_Id = '$Id$ ';
 # Author          : Johan Vromans
 # Created On      : Thu Jun  3 20:43:47 2004
 # Last Modified By: Johan Vromans
-# Last Modified On: Thu Jun  3 23:04:35 2004
-# Update Count    : 90
+# Last Modified On: Fri Jun  4 19:12:44 2004
+# Update Count    : 95
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -67,7 +67,11 @@ my $havetb = 0;
 
 while ( <> ) {
     chomp;
-    next unless /\S/;
+    if ( !/\S/ && $ block ) {
+	onecol($block);
+	$block = "";
+	next;
+    }
     if ( /#\s*(.*)/ ) {
 	$block .= $1 . "\n";
 	next;
@@ -83,7 +87,13 @@ while ( <> ) {
 	    $block = "";
 	    next;
 	}
-	image($1, $2);
+	my ($img, $desc) = ($1, $2);
+	if ( $desc =~ /^--/ ) {
+	    $block = "";
+	}
+	else {
+	    image($1, $2);
+	}
     }
 }
 block();
@@ -121,8 +131,8 @@ sub block {
 sub image {
     my ($name, $desc) = @_;
     twocol($block,
-	   "<a href='medium/$name' border='0'>" .
-	   "<img src='thumbnails/$name'></a>");
+	   "<a href='../medium/$name' border='0'>" .
+	   "<img src='../thumbnails/$name'></a>");
     $block = "";
 }
 
@@ -144,6 +154,20 @@ sub twocol {
 	  "\n");
 }
 
+sub onecol {
+    my ($c1) = @_;
+    print("  ",
+	  indent(2, $tb),
+	  "\n") unless $havetb++;
+    print("    ",
+	  indent(4,
+		 "<tr>",
+		 "  <td colspan='2' valign='middle' align='left'>",
+		 "    " . indent(4, $c1),
+		 "  </td>",
+		 "</tr>"),
+	  "\n");
+}
 sub indent {
     # Shift contents to the right so it fits pretty.
     my ($n, @t) = @_;
