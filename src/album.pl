@@ -4,8 +4,8 @@ my $RCS_Id = '$Id$ ';
 # Author          : Johan Vromans
 # Created On      : Tue Sep 15 15:59:04 2002
 # Last Modified By: Johan Vromans
-# Last Modified On: Sat Jul  3 16:54:12 2004
-# Update Count    : 1728
+# Last Modified On: Sat Jul  3 21:59:35 2004
+# Update Count    : 1730
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -72,6 +72,7 @@ use constant DEFAULTS => { info       => "info.dat",
 			   indexrows  => 3,
 			   indexcols  => 4,
 			   caption    => "fct",
+			   captionmin => "f",
 			 };
 
 my $TMPDIR = $ENV{TMPDIR} || $ENV{TEMP} || '/usr/tmp';
@@ -246,7 +247,8 @@ sub set_defaults {
     $medium        ||= DEFAULTS->{medium};
 
     # Caption values.
-    $caption ||= DEFAULTS->{caption};
+    $caption ||= DEFAULTS->{( -s $info_file || $import_dir) ?
+			    "caption" : "captionmin" };
     die("Invalid value for caption: $caption\n")
       unless $caption =~ /^[fsct]+$/i;
     $caption = lc($caption);
