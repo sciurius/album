@@ -4,13 +4,13 @@ my $RCS_Id = '$Id$ ';
 # Author          : Johan Vromans
 # Created On      : Tue Sep 15 15:59:04 2002
 # Last Modified By: Johan Vromans
-# Last Modified On: Sun Sep 19 18:37:22 2004
-# Update Count    : 2297
+# Last Modified On: Fri Oct  1 17:34:32 2004
+# Update Count    : 2305
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
 
-$VERSION = 0.09;
+$VERSION = 0.10;
 
 use strict;
 
@@ -115,7 +115,7 @@ my %capfun = ('c' => \&c_caption,
 my $br = br();
 
 # Max.number of clickable index numbers (should be odd).
-use constant IXLIST => 21;
+use constant IXLIST => 15;
 
 # Helper programs
 my $prog_jpegtran  = findexec("jpegtran");
@@ -166,7 +166,7 @@ load_import() if $import_dir && -d $import_dir;
 # Apply defaults to unset parameters.
 set_defaults();
 
-warn("date => ", strftime($datefmt, localtime(time)), "\n");
+# warn("date => ", strftime($datefmt, localtime(time)), "\n");
 
 # Verify and update the file list.
 my $added = update_filelist();
@@ -1526,7 +1526,8 @@ sub write_journal {
 
 	    # We cannot use $el->seq, since that's the info.dat order
 	    # which and includes the skipped entries.
-	    my $dst = ($e->type == T_MPG || $e->type == T_REF) ? $e->assoc_name : d_thumbnails($e->dest_name);
+	    my $dst = ($e->type == T_REF) ? $e->assoc_name :
+	      d_thumbnails($e->type == T_MPG ? $e->assoc_name : $e->dest_name);
 	    my $img = "<a name='" . sprintf("img%04d", $seq) . "' " .
 	              ($e->type == T_REF ? " target=\"_blank\"" : "").
 		      "href='../" .
@@ -2202,7 +2203,7 @@ INIT {
 		      MeteringMode SceneCaptureType Orientation
 		      height width file_ext);
 
-    $exif_rot = { top_left   => [   0, ''  ],    # 1: corr. needed
+    $exif_rot = { top_left   => [   0, ''  ],    # 1: no corr. needed
 		  top_right  => [   0, 'v' ],    # 2: flop (V)
 		  bot_right  => [ 180, ''  ],    # 3: 180
 		  bot_left   => [   0, 'h' ],    # 4: flip (H)
@@ -2213,13 +2214,19 @@ INIT {
 		};
 }
 
+sub basename {
+    my ($f) = @_;
+    $f =~ s;^large/;;;
+    $f;
+}
+
 sub new {
     my ($pkg, $file) = @_;
     $pkg = ref($pkg) if ref($pkg);
 
     my $self = { $file ?
 		 (orig_name    => $file,
-		  dest_name    => ::basename($file)) : (),
+		  dest_name    => basename($file)) : (),
 		 description  => "",
 		 annotation   => "",
 		 tag	      => "",
