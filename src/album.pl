@@ -4,8 +4,8 @@ my $RCS_Id = '$Id$ ';
 # Author          : Johan Vromans
 # Created On      : Tue Sep 15 15:59:04 2002
 # Last Modified By: Johan Vromans
-# Last Modified On: Thu Aug 19 21:12:57 2004
-# Update Count    : 2053
+# Last Modified On: Wed Aug 25 10:10:55 2004
+# Update Count    : 2054
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -1792,6 +1792,7 @@ sub app_options {
 		     'cols=i'	=> \$index_columns,
 		     'rows=i'	=> \$index_rows,
 		     'thumbsize=i' => \$thumb,
+		     'medium'   => sub { $medium = 0 },
 		     'mediumsize:i' => \$medium,
 		     'mediumonly' => \$mediumonly,
 		     'title=s'	=> \$album_title,
