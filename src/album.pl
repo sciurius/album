@@ -4,8 +4,8 @@ my $RCS_Id = '$Id$ ';
 # Author          : Johan Vromans
 # Created On      : Tue Sep 15 15:59:04 2002
 # Last Modified By: Johan Vromans
-# Last Modified On: Wed May 26 19:04:13 2004
-# Update Count    : 655
+# Last Modified On: Wed May 26 22:21:12 2004
+# Update Count    : 666
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -413,7 +413,7 @@ sub write_image_page {
     my $b;
     if ( $dir eq "large" && $medium ) {
 	$b = "<a href=\"../medium/".$htmllist[$i]."\">" .
-	  "<img align=\"top\" src=\"../images/index.png\" " .
+	  "<img align=\"top\" src=\"../images/up.png\" " .
 	  "border=\"0\" alt=\"[Medium size]\"></a><br>\n";
     }
     else {
@@ -486,41 +486,11 @@ $css
 </html>
 EOD
 
-    my $h = "$dest_dir/$dir/".$htmllist[$i];
-
-    # Do not overwrite unless modified.
-    if ( -s $h && -s _ == length($new) ) {
-	local($/);
-	my $hh = do { local *H; *H };
-	my $old;
-	open($hh, $h) && ($old = <$hh>) && close($hh);
-	if ( $old eq $new ) {
-	    return 0;
-	}
-    }
-
-    my $html = do { local *H; *H };
-    open($html, ">$h")
-      or die("$h (create): $!\n");
-    print $html $new;
-    close($html);
-    1;
+    update_if_needed("$dest_dir/$dir/".$htmllist[$i], $new);
 }
 
 sub write_index_page {
     my ($x) = @_;
-
-    # Open the page for writing
-    my $html = do { local *H; *H };
-    if ( $x > 0 ) {
-	open($html, ">$dest_dir/index$x.html")
-	  or die("index$x.html (create): $!\n");
-    }
-    else {
-	open($html, ">$dest_dir/index.html")
-	  or die("index.html (create): $!\n");
-    }
-    select($html);
 
     my $t = $album_title.": Index";
     my $tt = $t;
@@ -553,83 +523,84 @@ sub write_index_page {
 		     $x < $num_indexes - 1);
     }
 
-    print("<style type=\"text/css\">\n",
-	  "<!--\n",
-	  $css,
-	  "-->\n",
-	  "</style>\n",
-	  "<html>\n",
-	  "<head>\n",
-	  "<title>$tt</title>\n",
-	  "</head>\n",
-	  "<body $bodyatts>\n",
-	  "<center>\n",
-	  "<h1>$t</h1>\n",
-	  "<p>\n");
+    my $new = <<EOD;
+<html>
+<head>
+<style type="text/css">
+<!--
+$css,
+-->
+</style>
+<title>$tt</title>
+</head>
+<body $bodyatts>
+  <center>
+  <h1>$t</h1>
+  <p>
+EOD
 
     if ( $index_buttons ) {
 	if ( $x > 0 ) {
-	    print(button("first", "index.html", 0, 1), "\n")
+	    $new .= button("first", "index.html", 0, 1) . "\n"
 	      if $num_indexes > 2;
-	    print(button("prev",
-			 "index".($x > 1 ? $x-1 : "").".html", 0, 1),
-		  "\n");
+	    $new .= button("prev",
+			   "index".($x > 1 ? $x-1 : "").".html", 0, 1) .
+		    "\n";
 	}
 
 	if ( $x < $num_indexes-1 ) {
-	    print(button("next", "index".($x+1).".html", 0), "\n");
-	    print(button("last",
-			 "index".($num_indexes-1).".html", 0, 1),
-		  "\n")
+	    $new .= button("next", "index".($x+1).".html", 0) . "\n";
+	    $new .= button("last",
+			   "index".($num_indexes-1).".html", 0, 1) .
+		    "\n"
 	      if $num_indexes > 2;
 	}
     }
 
-    print(qq(<table border="2" cellpadding="3" cellspacing="3"),
-	  qq( bgcolor="$MGREY">\n));
+    $new .= qq(<table border="2" cellpadding="3" cellspacing="3") .
+            qq( bgcolor="$MGREY">\n);
 
     my $first_in_row = $x * $entries_per_page;
 
     for ( my $i = 0; $i < $index_rows; $i++, $first_in_row += $index_columns ) {
 	if ( $first_in_row < $num_entries ) {
-	    print(qq(  <tr bgcolor="$LGREY">\n));
+	    $new .= qq(  <tr bgcolor="$LGREY">\n);
 	    for ( my $j = 0; $j < $index_columns; $j++ ) {
 		my $this = $first_in_row + $j;
 		if ( $this < $num_entries ) {
 		    my $file = $filelist[$this];
 		    my $base = $medium ? "medium/" : "large/";
 		    $base .= $htmllist[$this];
-		    print("    <td align=\"center\" valign=\"bottom\">\n",
-			  "      <table border=\"0\" cellpadding=\"0\" cellspacing=\"0\" bgcolor=\"$LGREY\">\n",
-			  "        <tr>\n",
-			  "          <td align=\"center\">",
-			  "<a href=\"$base\"><img src=\"thumbnails/$file\" alt=\"[Click for bigger image]\" border=\"0\"></a>",
-			  "</td>\n",
-			  "        </tr>\n",
-			  "        <tr>\n",
-			  "          <td align=\"center\">\n",
-			  "            <p class=\"ft\">",
+		    $new .= "    <td align=\"center\" valign=\"bottom\">\n".
+			  "      <table border=\"0\" cellpadding=\"0\" cellspacing=\"0\" bgcolor=\"$LGREY\">\n".
+			  "        <tr>\n".
+			  "          <td align=\"center\">".
+			  "<a href=\"$base\"><img src=\"thumbnails/$file\" alt=\"[Click for bigger image]\" border=\"0\"></a>".
+			  "</td>\n".
+			  "        </tr>\n".
+			  "        <tr>\n".
+			  "          <td align=\"center\">\n".
+			  "            <p class=\"ft\">".
 			  (map { $capfun{$_}->($file), "<br>\n" }
-			     split(//, $caption)),
-			  "</p>\n",
-			  "          </td>\n",
-			  "        </tr>\n",
-			  "      </table>\n",
-			  "    </td>\n");
+			     split(//, $caption)).
+			  "</p>\n".
+			  "          </td>\n".
+			  "        </tr>\n".
+			  "      </table>\n".
+			  "    </td>\n";
 		}
 		else {
-		    print("    <td bgcolor=\"$DGREY\">&nbsp</td>\n");
+		    $new .= "    <td bgcolor=\"$DGREY\">&nbsp</td>\n";
 		}
 	    }
-	    print("  </tr>\n");
+	    $new .= "  </tr>\n";
 	}
     }
-    print("</table>\n");
+    $new .= "</table>\n";
 
-    print("<p>\n", "</center></body></html>\n");
-    close($html);
+    $new .= "<p>\n" . "</center></body></html>\n";
 
-    1;
+    update_if_needed("$dest_dir/index".($x > 0 ? $x : ""). ".html", $new);
 }
 
 sub button($$;$$) {
@@ -693,6 +664,28 @@ sub update_cache {
 }
 
 #### Miscellaneous.
+
+sub update_if_needed {
+    my ($fname, $new) = @_;
+
+    # Do not overwrite unless modified.
+    if ( -s $fname && -s _ == length($new) ) {
+	local($/);
+	my $hh = do { local *F; *F };
+	my $old;
+	open($hh, $fname) && ($old = <$hh>) && close($hh);
+	if ( $old eq $new ) {
+	    return 0;
+	}
+    }
+
+    my $fh = do { local *F; *F };
+    open($fh, ">$fname")
+      or die("$fname (create): $!\n");
+    print $fh $new;
+    close($fh);
+    1;
+}
 
 sub add_button_images {
 
@@ -920,6 +913,22 @@ M%9K-IG)\:NN17"Z7;1])2D^0N*Y.UGB'3%K7GO\P.[W0>)B];PASM].`ASD?
 `
 end
 begin 644 images/index.png
+MB5!.1PT*&@H````-24A$4@```"(````B"`8````Z1PO"````!&=!34$``+&/
+M"_QA!0````9B2T=$`/\`_P#_H+VGDP````EP2%ES```+$@``"Q(!TMU^_```
+M``=T24U%!](&'@P%-8YZ"XH```&?241!5'B<[9A!BN)`%$!?#XW1OH(K#^':
+MND(.H"`2=2$,@@?(P@OT3JB-T4;=U!U<N)MSS,J-$.PB9:&SZ31CM3.TCG%"
+MXX."?/)3_Z6H2JB"G/#@Q%7@Z8;U7X$?KD@5^`Z4;RCR$WA.95*)%R'$`;A9
+M>ZOW`E33$:D!(2``A!#7?O,/+)?+]TL@?'03A!"4RV6"(,A,0DJ)$.)W&3Z(
+M``1!0*U6RTP$(`S#H_A;IM7.X&N(6&M12E&OUXGC^)]$3LZ1SV",02E%J]5"
+M:TV2)$111*E4NJB_BT9$:\UL-J/1:*"U!D`I1;O=QEI[&Y'M=LMD,J'9;!X5
+MW>_W+!8+.IU.]B*;S08I)=UN]^1]:RWS^9Q>KY>-R.%P8+U>,QJ-Z/?[?\W5
+M6C.=3AD,!F>)?&JR[G8[5JL54111J50PQI`DR7LSQASEQW',>#RF6"PR'`ZO
+M)U(H%/!]']_W_YCCBAECSEI!%R]?%\_S\#SOXN>_QI?UFMQ%7.XB+G<1E[N(
+M2VY$3OYKI)29%CW5?VYV>FF0F[UO*O/?3@-R<S[R"XFFX$N)OY`F`````$E%
+&3D2N0F""
+`
+end
+begin 644 images/up.png
 MB5!.1PT*&@H````-24A$4@```"(````B"`8````Z1PO"````!&=!34$``+&/
 M"_QA!0````9B2T=$`/\`_P#_H+VGDP````EP2%ES```+$@``"Q(!TMU^_```
 M``=T24U%!](&'@P%-8YZ"XH```&?241!5'B<[9A!BN)`%$!?#XW1OH(K#^':
