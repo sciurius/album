@@ -4,8 +4,8 @@ my $RCS_Id = '$Id$ ';
 # Author          : Johan Vromans
 # Created On      : Tue Sep 15 15:59:04 2002
 # Last Modified By: Johan Vromans
-# Last Modified On: Mon May 31 00:20:31 2004
-# Update Count    : 873
+# Last Modified On: Mon May 31 23:20:52 2004
+# Update Count    : 954
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -31,6 +31,7 @@ use Getopt::Long 2.13;
 # Command line options.
 my $import_exif = 0;
 my $import_dir;
+my $add_new = 0;		# add new from import
 my $dest_dir = ".";
 my $image_info;
 my $clobber = 0;
@@ -101,20 +102,23 @@ my %tag;			# tag info
 my %seen;			# to keep track
 
 my %newfiles;			# info for new files
-my $add_new = 0;		# no info file, or wildcard seen
-
-mkpath(["$dest_dir/large"], 1);
-
-# If files are to be imported, gather their names.
-load_new_files() if $import_dir;
+my $add_src = 0;		# * seen in info
 
 # Load image names and info from the info file, if any.
 load_image_info();
 
+# Apply defaults for other settings.
 set_parameter_defaults();
 
+# Load cached info, if possible.
+load_cache();
+
+# If files are to be imported, gather their names.
+load_new_files() if $add_new && $import_dir;
+load_src_files() if $add_src;
+
 # Add image names from the source directory, if needed.
-get_image_names() if $add_new;
+get_image_names() if $add_new || $add_src;
 
 my $num_entries = scalar(@filelist);
 print STDERR ("Number of entries = $num_entries",
@@ -126,11 +130,8 @@ die("Nothing to do?\n") unless $num_entries > 0;
 if ( $clobber ) {
     rmtree(["$dest_dir/thumbnails", "$dest_dir/medium"], 1);
 }
-mkpath(["$dest_dir/thumbnails", "$dest_dir/images"], 1);
+mkpath(["$dest_dir/large", "$dest_dir/thumbnails", "$dest_dir/images"], 1);
 mkpath(["$dest_dir/medium"], 1) if $medium;
-
-# Load cached info, if possible.
-load_cache();
 
 # Copy images in place, rotate if necessary, and create the thumbnails.
 prepare_images();
@@ -218,7 +219,14 @@ sub load_image_info {
 	# Try default.
 	$image_info = "$dest_dir/info.dat";
 	unless ( -s $image_info ) {
-	    $add_new++;
+	    $add_new++ if $import_dir && -d $import_dir;
+	    $add_src++ if -d "$dest_dir/large";
+	    print STDERR ("No info.dat");
+	    print STDERR (", adding images from ") if $add_src || $add_new;
+	    print STDERR ("$dest_dir/large")       if $add_src;
+	    print STDERR (" and ")                 if $add_src && $add_new;
+	    print STDERR ($import_dir)             if $add_new;
+	    print STDERR ("\n");
 	    return;
 	}
     }
@@ -272,7 +280,10 @@ sub load_image_info {
 	    next;
 	}
 	($file, my $a) = split(' ', $_, 2);
-	$add_new |= $file eq "*";
+	if ( $file eq "*" ) {
+	    $add_src = 1;
+	    next;
+	}
 	my $rotate = 0;
 	if ( $a && $a =~ /^-O:(\d)\s*(.*)/ ) {
 	    $rotate = 90 * ($1 % 4);
@@ -281,7 +292,6 @@ sub load_image_info {
 	$description{$file} = $a || "";
 	$rotate{$file} = $rotate;
 	$tag{$file} = $tag if $tag;
-	next if $file eq "*";
 	unless ( $newfiles{$file} || -s "$dest_dir/large/$file" ) {
 	    warn("$file (info): Missing\n");
 	    $err++;
@@ -291,6 +301,18 @@ sub load_image_info {
     }
     close($fh);
     die("Aborted\n") if $err;
+}
+
+sub load_src_files {
+    my $dh = do { local *DH; *DH; };
+    opendir($dh, $dest_dir)
+      or die("Cannot opendir $dest_dir: $!\n");
+
+    foreach my $f ( grep { !/^\./ && /$suffixpat$/ } readdir($dh) ) {
+	$newfiles{$f} = [$f];
+    }
+
+    close($dh);
 }
 
 sub load_new_files {
@@ -363,17 +385,18 @@ sub get_image_names {
 			   september oktober november december)];
 
 
-    my $newinfo = "\n# New entries added by $my_name $my_version\n";
+    my $newinfo = "";
     my $pdate = qr/(\d{4})(\d\d)(\d\d)\d{4}(?:\d\d|\w)/;
     my $date = "";
+    $add_new = 0;
 
+    my $t = "";
     foreach my $file ( sort(keys(%newfiles)) ) {
 	next if $seen{$file}++;
 	push(@filelist, $file);
 
-	$tag{$file}	 = $tag{"*"};
-	$description{$file} = $description{"*"};
-	$rotate{$file}	 = $rotate{"*"};
+	$description{$file} = "";
+	$rotate{$file}	    = 0;
 
 	my ($y,$m,$d) = $file =~ /^$pdate\./io;
 	($y,$m,$d) = (0,0,0) unless defined($y);
@@ -381,44 +404,46 @@ sub get_image_names {
 	    $newinfo .= "\n!tag ";
 	    $date = "$y$m$d";
 	    if ( $date ne "000" ) {
-		$newinfo .= 0+$d . " " . MONTHS->[$m-1] . "\n";
+		$t = sprintf("%02d/%02d/%04d", $d, $m, $y);
+		$newinfo .= $t . "\n";
 	    }
 	    else {
 		$newinfo .= "\n";
+		$t = "";
 	    }
 	}
+	$tag{$file} = $t;
 
 	$newinfo .= "$file " .
 	  ($rotate{$file} ? "-O:$rotate{$file} " : "") . " \n";
 	$add_new++;
     }
-    $add_new--;
-    return unless $add_new;
 
-    $newinfo .= "# End added entries\n\n";
-
-    use Cwd qw(abs_path);
-    my $file = $image_info;
-    while ( -l $file ) {
-	$file = dirname($file) . "/" . readlink($file);
+    unless ( $newinfo ) {	# nothing to add
+	warn("No new images imported\n") if $verbose;
+	return;
     }
-    if ( -w $file ) {
-	local(@ARGV) = ($file);
-	local($^I) = "~";
-	while ( <> ) {
-	    if ( /^\*$/ ) {
-		print $newinfo;
-	    }
-	    print;
-	}
+    unless ( -w $image_info ) {
+	warn("$image_info: Cannot update (".
+	     (-e _ ? "no write access" : "does not exist") .
+	     ")\n");
+	return;
     }
 
+    # Append new info.
+    warn("Updating $image_info\n") if $verbose;
+    my $fh = do { local *F; *F };
+    open($fh, ">>", $image_info) || die("$image_info: $!\n");
+    print $fh ("\n# New entries added by $my_name $my_version\n",
+	       $newinfo,
+	       "# End added entries\n");
+    close($fh);
 }
 
 sub prepare_images {
 
     foreach my $file ( @filelist ) {
-	print STDERR ("$file... ") if $verbose;
+	print STDERR ("$file: ") if $verbose;
 
 	# Check for directory names, e.g. f01/p01.jpg.
 	my $dn = dirname($file);
@@ -428,6 +453,8 @@ sub prepare_images {
 	}
 
 	my $i_large   = "$dest_dir/large/$file";
+	my $w;
+	my $h;
 
 	# Copy the file into place. Rotate if needed.
 	if ( ($clobber || ! -s $i_large) && $import_dir ) {
@@ -435,97 +462,91 @@ sub prepare_images {
 	    if ( $import_exif ) {
 		# Unfortunately, jhead cannot rotate from->to, so
 		# we need to copy first and rotate later.
-		print STDERR ("copying... ") if $verbose;
+		print STDERR ("copy ") if $verbose;
 		my $time = $newfiles{$file}->[1];
 		copy($i_src, $i_large, $time);
 		if ( $newfiles{$file}->[2] ) {
-		    print STDERR ("rotating... ") if $verbose;
+		    print STDERR ("rotate ") if $verbose;
 		    system("jhead", "-autorot", $i_large);
 		    utime($time, $time, $i_large);
 		}
+		print STDERR ("[", bytes(-s $i_large), "] ") if $verbose;
 	    }
 	    elsif ( $rotate{$file} ) {
-		print STDERR ("rotating... ") if $verbose;
-		system("convert", "-rotate", "$rotate{$file}",
-		       $i_src, $i_large);
-		die("Aborted\n") if $? == 2;
-		die(sprintf("rotate error: 0x%02x%02x\n", $? >> 8, $? & 0xff))
-		  if $?;
+		print STDERR ("rotate ") if $verbose;
+		my $t = convert
+		  ($i_src, $i_large,
+		   $verbose ? "-verbose" : (),
+		   "-rotate", "$rotate{$file}");
+		print STDERR ("[", $t, "] ") if $verbose;
+		($w, $h) = $t =~ /^(\d+)x(\d+)/ unless $w && $h;
 	    }
 	    else {
-		print STDERR ("copying... ") if $verbose;
+		print STDERR ("copy ") if $verbose;
 		copy($i_src, $i_large);
+		print STDERR ("[", bytes(-s $i_large), "] ") if $verbose;
 	    }
 	}
 
 	my $i_medium  = "$dest_dir/medium/$file";
 	my $i_small   = "$dest_dir/thumbnails/$file";
 
+	if ( $medium && ($clobber  || ! -s $i_medium) ) {
+	    print STDERR ("resize ") if $verbose;
+	    my $t = convert
+	      ($i_large, $i_medium,
+	       $verbose ? "-verbose" : (),
+	       # Read the docs.
+	       "-size", "${medium}x$medium", "-resize", "${medium}x$medium",
+	       # Remove unneccessary stuff.
+	       "+profile", "*");
+	    print STDERR ("[", $t, "] ") if $verbose;
+	    ($w, $h) = $t =~ /^(\d+)x(\d+)/ unless $w && $h;
+	}
+
+	if ( $clobber || ! -s $i_small ) {
+	    print STDERR ("resize ") if $verbose;
+	    my $t = convert
+	      ($i_large, $i_small,
+	       $verbose ? "-verbose" : (),
+	       "-size", "${thumb}x$thumb", "-resize", "${thumb}x$thumb",
+	       "+profile", "*");
+	    print STDERR ("[", $t, "] ") if $verbose;
+	    ($w, $h) = $t =~ /^(\d+)x(\d+)/ unless $w && $h;
+	}
+
 	# Get image info.
 	my $ii = $info->entry($file);
 	if ( $ii ) {
-	    print STDERR ("cached... ") if $verbose;
+	    ($w, $h) = ($ii->width, $ii->height);
+	    $ii->medium_size(-s $i_medium) if $medium;
 	}
 	else {
-	    my $inf = `identify -verbose -format "%w %h" $i_large`;
-	    die("Aborted\n") if $? == 2;
-	    die(sprintf("identify error: 0x%02x%02x\n", $? >> 8, $? & 0xff))
-	      if $? || $inf !~ /^(\d+)\s+(\d+)/;
+	    print STDERR ("size ") if $verbose;
 	    $ii = new ImageInfo::Entry
-	      (large_size   => -s $i_large,
-	       medium_size  => 0,
-	       width	    => $1,
-	       height	    => $2);
-	}
+	      (large_size   => -s $i_large);
 
-	my $neednl = 0;
-	if ( $medium && ($clobber  || ! -s $i_medium) ) {
-	    system("convert",
-		   $verbose ? "-verbose" : (),
-		   # Read the docs.
-		   "-size", "${medium}x$medium", "-resize", "${medium}x$medium",
-		   # Remove unneccessary stuff.
-		   "+profile", "*",
-		   $i_large, $i_medium);
-	    die("Aborted\n") if $? == 2;
-	    die(sprintf("convert error: 0x%02x%02x\n", $? >> 8, $? & 0xff))
-	      if $?;
+	    if ( $h && $w ) {
+		print STDERR ("(known) ") if $verbose;
+	    }
+	    else {
+		my $inf = `identify -verbose -format "%w %h" $i_large`;
+		die("Aborted\n") if $? == 2;
+		die(sprintf("identify error: 0x%02x%02x\n", $? >> 8, $? & 0xff))
+		  if $? || $inf !~ /^(\d+)\s+(\d+)/;
+		($w, $h) = ($1, $2);
+	    }
+
+	    $ii->width($w);
+	    $ii->height($h);
+	    $ii->medium_size(-s $i_medium) if $medium;
+	    print STDERR ($ii->tostr, " ") if $verbose;
 	}
-	else {
-	    $neednl++;
-	}
-	$ii->medium_size(-s $i_medium) if $medium;
 
 	# Update image info.
 	$info->entry($file, $ii);
-	print STDERR ($ii->tostr, " ") if $verbose;
 
-	if ( $clobber || ! -s $i_small ) {
-	    my @t;
-
-	    if ( $ii->width > $ii->height ) {
-		@t = ( $thumb,
-		       int($thumb * ($ii->height/$ii->width)) );
-	    }
-	    else {
-		@t = ( int($thumb * ($ii->width/$ii->height)),
-		       $thumb );
-	    }
-
-	    system("convert",
-		   $verbose ? "-verbose" : (),
-		   "-size", "${thumb}x$thumb", "-resize", "${thumb}x$thumb",
-		   "+profile", "*",
-		   $i_large, $i_small);
-	    die("Aborted\n") if $? == 2;
-	    die(sprintf("convert error: 0x%02x%02x\n", $? >> 8, $? & 0xff))
-	      if $?;
-	}
-	else {
-	    $neednl++;
-	}
-
-	print STDERR ("\n") if $verbose && $neednl;
+	print STDERR ("OK\n") if $verbose;
     }
 }
 
@@ -752,6 +773,7 @@ sub indent {
     # Shift contents to the right so it fits pretty.
     my ($t, $n) = @_;
     $n = " " x $n;
+    return $n unless $t;
     $t = detab($t);
     $t =~ s/\n+$//;
     $t =~ s/\n/\n$n/g;
@@ -803,6 +825,17 @@ sub update_cache {
 }
 
 #### Miscellaneous.
+
+sub convert {
+    my ($from, $to, @args) = @_;
+    my $cmd = "convert ".
+      join(" ", map { "'".$_."'" } @args, $from, $to);
+    my $res = `$cmd 2>&1`;
+    die("${res}Aborted\n") if $? == 2;
+    die(sprintf("${res}convert error: 0x%02x%02x\n", $? >> 8, $? & 0xff))
+      if $?;
+    $res =~ /\d+x\d+=>\d+x\d+/ ? $& : $res;
+}
 
 sub update_if_needed {
     my ($fname, $new) = @_;
@@ -942,6 +975,15 @@ sub copy {
 
 sub get_exif {
     my ($file) = @_;
+
+    # Use cached info.
+    my $ii = $info->entry($file);
+    if ( $ii ) {
+	my $e = $ii->exif;
+	return $e if $e;
+    }
+
+    # Run jhead to collect the EXIF data.
     use 5.008;
     open(my $p, "-|", "jhead", $file) or die("$file: $!\n");
     my %h;
@@ -950,7 +992,14 @@ sub get_exif {
 	$h{lc($1)} = $2 if /^(.*?): (.*)/;
     }
     close($p) or die("$file: $!\n");
+
     $h{exposure} ||= "manual";
+
+    # Update cache.
+    $ii ||= new ImageInfo::Entry(exif => \%h);
+    $info->entry($file, $ii);
+
+    # Return.
     \%h;
 }
 
@@ -968,6 +1017,7 @@ sub app_options {
 		     'import=s'	=> \$import_dir,
 		     'exif'	=> \$import_exif,
 		     'dcim=s'	=> sub { $import_dir = $_[1]; $import_exif++ },
+		     'update'   => \$add_new,
 		     'info=s'	=> \$image_info,
 		     'cols=i'	=> \$index_columns,
 		     'rows=i'	=> \$index_rows,
@@ -993,6 +1043,12 @@ sub app_options {
     app_ident() if $ident;
     $dest_dir = shift(@ARGV) if @ARGV;
     $medium = 915 if $medium && $medium == 1;
+    if ( $add_new ) {
+	warn("--update ignored -- no import dir specified\n")
+	  unless $import_dir;
+	$add_new = 0;
+    }
+
 }
 
 sub app_ident {
@@ -1008,7 +1064,8 @@ Usage: $0 [options] [ directory ]
     --title XXX		album title
     --import XXX	import new images from XXX
     --exif		import images w/ EXIF info
-    --dcim XXX		as --import with --exit
+    --dcim XXX		as --import with --exif
+    --update		add new entries from import, if needed
     --cols NN		number of columns per page
     --rows NN		number of rows per page
     --thumbsize NNN	the max size of thumbnail images
@@ -1082,16 +1139,17 @@ use Class::Struct "ImageInfo::Entry" =>
     medium_size	 => '$',
     width	 => '$',
     height	 => '$',
+    exif	 => '$',
   ];
 
 sub ImageInfo::Entry::tostr {
     my ($self) = @_;
-    "[ " . join(" ",
-		$self->large_size,
-		$self->medium_size,
-		$self->width,
-		$self->height,
-	       ) . " ]";
+    "[" . join(" ",
+	       $self->large_size,
+	       $self->medium_size,
+	       $self->width,
+	       $self->height,
+	      ) . "]";
 }
 
 package main;
