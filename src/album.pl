@@ -4,8 +4,8 @@ my $RCS_Id = '$Id$ ';
 # Author          : Johan Vromans
 # Created On      : Tue Sep 15 15:59:04 2002
 # Last Modified By: Johan Vromans
-# Last Modified On: Wed Jun  9 19:10:27 2004
-# Update Count    : 1013
+# Last Modified On: Wed Jun  9 19:24:57 2004
+# Update Count    : 1021
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -377,8 +377,16 @@ sub do_exif {
 	    }
 	    $new .= ".jpg";
 	    print STDERR ("Import $file -> $new\n") if $verbose && $clash;
+	    my $ii = $info->entry($new);
+	    if ( $ii && !$ii->orig_name ) {
+		my $f = "$import_dir/$file";
+		$f =~ s;^\./;;;
+		$ii->orig_name($f);
+		$info->entry($new, $ii);
+	    }
 
 	    $newfiles{$new} = [ $file, $time, 0 ];
+
 	    $file = $new;
 	}
 	else {
@@ -485,10 +493,11 @@ sub prepare_images {
 	my $i_large   = "$dest_dir/large/$file";
 	my $w;
 	my $h;
+	my $i_src;
 
 	# Copy the file into place. Rotate if needed.
 	if ( ($clobber || ! -s $i_large) && $import_dir ) {
-	    my $i_src = "$import_dir/" . $newfiles{$file}->[0];
+	    $i_src = "$import_dir/" . $newfiles{$file}->[0];
 	    if ( $import_exif ) {
 		# Unfortunately, jhead cannot rotate from->to, so
 		# we need to copy first and rotate later.
@@ -553,6 +562,7 @@ sub prepare_images {
 	    print STDERR ("size (cached) ") if $verbose;
 	    ($w, $h) = ($ii->width, $ii->height);
 	    $ii->medium_size(-s $i_medium) if $medium;
+	    $ii->orig_name($i_src) if $i_src;
 	}
 	else {
 	    print STDERR ("size ") if $verbose;
@@ -572,6 +582,7 @@ sub prepare_images {
 	    $ii->width($w);
 	    $ii->height($h);
 	    $ii->medium_size(-s $i_medium) if $medium;
+	    $ii->orig_name($i_src) if $i_src;
 	    print STDERR ($ii->tostr, " ") if $verbose > 1;
 	}
 
@@ -1183,6 +1194,7 @@ use Class::Struct "ImageInfo::Entry" =>
     width	 => '$',
     height	 => '$',
     exif	 => '$',
+    orig_name	 => '$',
   ];
 
 sub ImageInfo::Entry::tostr {
