@@ -4,8 +4,8 @@ my $RCS_Id = '$Id$ ';
 # Author          : Johan Vromans
 # Created On      : Tue Sep 15 15:59:04 2002
 # Last Modified By: Johan Vromans
-# Last Modified On: Sun Jul 11 18:35:50 2004
-# Update Count    : 1846
+# Last Modified On: Sun Jul 11 22:30:03 2004
+# Update Count    : 1934
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -129,6 +129,7 @@ my $implist = new FileList;
 # This list is initialy filled from info.dat, and (optionally) updated
 # from the other lists.
 my $filelist = new FileList;
+my @filelist;			# for journal
 
 # Load cached info, if possible.
 load_cache();
@@ -225,6 +226,11 @@ for (my $i = $num_indexes ; ; $i++ ) {
     unlink(d_dest("index$i.html")) or last;
 }
 
+if ( $journal ) {
+    print STDERR ("Creating journal\n");
+    $mod = write_journal();
+    uptodate("journal", $mod) if $verbose > 1;
+}
 exit 0;
 
 ################ Subroutines ################
@@ -289,6 +295,7 @@ sub load_info {
     my $err = 0;
     my $file;
     my $tag;
+    my $annotation = "";
 
     my $fh = do { local *FH; *FH };
     die("$info_file: $!\n")
@@ -299,7 +306,23 @@ sub load_info {
     local($/) = $/;
     while ( <$fh> ) {
 	chomp;
+
+	if ( /^#(.*)/ && $journal ) {
+	    $annotation .= " " . $1;
+	    next;
+	}
+
 	next if /^\s*#/;
+
+	if ( !/\S/ && $journal && $annotation ) {
+	    $el = new ImageInfo;
+	    $el->annotation($annotation);
+	    $el->tag($tag);
+	    push(@filelist, $el);
+	    $annotation = "";
+	    next;
+	}
+
 	next unless /\S/;
 
 	if ( /^\s+/ && $el ) {
@@ -333,7 +356,6 @@ sub load_info {
 	    }
 	    elsif ( /^journal\s*(.*)/ ) {
 		$journal++;
-		# $/ = "";	# para mode
 	    }
 	    elsif ( /^subdirs\s*(.*)/ ) {
 		foreach ( split(' ', $1)) {
@@ -364,6 +386,13 @@ sub load_info {
 	$el->type($type);
 	$el->description($a) if $a;
 	$el->tag($tag) if $tag;
+	if ( $annotation ) {
+	    $annotation =~ s/^\s+//;
+	    $annotation =~ s/\s+$//;
+	    $annotation =~ s/\s+/ /g;
+	    $el->annotation($annotation);
+	    $annotation = "";
+	}
 	$el->_rotation($rotate) if defined($rotate);
 	if ( $file =~ /^(.+)\.mpg$/i ) {
 	    $el->type(T_MPG);
@@ -374,6 +403,7 @@ sub load_info {
 	    $el->assoc_name($t);
 	}
 	$filelist->add($el);
+	push(@filelist, $el);
 	$dirs{$1} = 1 if $file =~ m;^(.+)/[^/]+$;;
     }
     close($fh);
@@ -598,6 +628,7 @@ sub update_filelist {
 	}
 	$newinfo .= $f . "\n";
 	$todo->add($el);
+	push(@filelist, $el) if $journal;
 	$new++;
     }
 
@@ -624,6 +655,7 @@ sub update_filelist {
 	    ($el->type == T_VOICE ? "-T:V " : "") .
 	      " \n";
 	$todo->add($el);
+	push(@filelist, $el) if $journal;
 	$new++;
     }
 
@@ -896,6 +928,7 @@ sub ixname($);
 
 sub write_image_page {
     my ($el, $dir) = @_;
+
     my $i = $el->seq - 1;
     my $file = $el->dest_name;
     my $rf = $file;
@@ -922,7 +955,9 @@ sub write_image_page {
 
     if ( $journal ) {
 	$b .= "$br\n" .
-	  button("journal", "../journal/index.html", 1, 1);
+	  button("journal",
+		 "../journal/index.html#img".sprintf("%04d", $i+1),
+		 1, 1);
     }
     if ( $el->type == T_VOICE ) {
 	my $sound = $el->assoc_name;
@@ -967,7 +1002,6 @@ sub write_image_page {
 	      restyle_exif($el) . "</table>\n" .
 		"</span></a>";
     }
-
     update_if_needed(d_dest($dir, $htmllist[$i]), <<EOD);
 <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
 <html>
@@ -1043,16 +1077,19 @@ sub write_index_page {
 	    }
 	}
     }
+
+    my $first_in_row = $x * $entries_per_page;
+
     if ( $journal ) {
 	$b .= "$br\n" if $b;
-	$b .= button("journal", "journal/index.html", 0, 1);
+	$b .= button("journal",
+		     "journal/index.html#img".sprintf("%04d", $first_in_row+1),
+		     0, 1);
     }
 
     # Construct the actual index part.
     my $cc = "<table border='2' cellpadding='3' cellspacing='3'" .
              " bgcolor='$MGREY'>\n";
-
-    my $first_in_row = $x * $entries_per_page;
 
     for ( my $i = 0; $i < $index_rows; $i++, $first_in_row += $index_columns ) {
 	if ( $first_in_row < $num_entries ) {
@@ -1131,6 +1168,112 @@ sub write_index_page {
   </body>
 </html>
 EOD
+}
+
+sub write_journal {
+
+    my $tb = qq(<table width="500" border="0" cellpadding="0" cellspacing="10">);
+    my $jnl = <<EOD;
+<html>
+  <head>
+    <style>
+    <!--
+    body  { font-family: Verdana, Arial, Helvetica; }
+    p.hd  { font-size: 140%; font-weight: bold;
+	    font-family: Verdana, Arial, Helvetica;
+	    margin-left: 0.1in; margin-top: 0.1in; margin-bottom: 0.1in;
+	  }
+    -->
+    </style>
+  </head>
+<body>
+EOD
+
+    my $el;
+    my $havetb = 0;
+    my $pr = sub { $jnl .= "@_" };
+
+    my $indent = sub {
+	# Shift contents to the right so it fits pretty.
+	my ($n, @t) = @_;
+	$n = " " x $n;
+	return $n unless @t && "@t";
+	my $t = join("\n", map { detab($_) } @t);
+	$t =~ s/\n+$//;
+	$t =~ s/\n/\n$n/g;
+	$t;
+    };
+    my $twocol = sub {
+	my ($c1, $c2) = @_;
+	$pr->("  ",
+	      $indent->(2, $tb),
+	      "\n") unless $havetb++;
+	$pr->("    ",
+	      $indent->(4,
+			"<tr>",
+			"  <td valign='middle' align='left'>",
+			"    " . $indent->(4, $c1),
+			"  </td>",
+			"  <td valign='top' align='left'>",
+			"    " . $indent->(4, $c2),
+			"  </td>",
+			"</tr>"),
+	      "\n");
+    };
+
+    my $onecol = sub {
+	my ($c1) = @_;
+	$pr->("  ",
+	      $indent->(2, $tb),
+	      "\n") unless $havetb++;
+	$pr->("    ",
+	      $indent->(4,
+			"<tr>",
+			"  <td colspan='2' valign='middle' align='left'>",
+			"    " . $indent->(4, $c1),
+			"  </td>",
+			"</tr>"),
+	      "\n");
+    };
+
+    my $tag = "";
+    foreach $el ( @filelist ) {
+	my $t = $el->tag || "";
+	if ( $tag ne $t ) {
+	    $tag = $t;
+	    $pr->("  </table>\n") if $havetb;
+	    $pr->("  ",
+		  $indent->(2, $tb),
+		  "\n");
+	    $havetb = 1;
+	    $pr->("    ",
+		  $indent->(4,
+			    "<tr>",
+			    "  <td bgcolor='#C0C0C0' colspan='2'>",
+			    "    <p class='hd'>" . html($tag) . "</p>",
+			    "  </td>",
+			    "</tr>"),
+		  "\n");
+	}
+
+	unless ( $el->dest_name ) {
+	    $onecol->($el->annotation);
+	    next;
+	}
+
+	$twocol->($el->annotation || "&nbsp;",
+		  "<a name='".sprintf("img%04d",$el->seq)."' ".
+		  "href='../" .
+		  d_medium(sprintf("img%04d.html",$el->seq)) .
+		  "' border='0'>" .
+		  "<img src='../" .
+		  d_thumbnails($el->dest_name) . "'></a>");
+    }
+
+    $pr->("    </table>\n") if $havetb;
+    $pr->(" </body>\n",
+	  "</html>\n");
+    update_if_needed(d_journal("index.html"), $jnl);
 }
 
 sub button($$;$$) {
@@ -1687,14 +1830,15 @@ sub new {
     my ($pkg, $file) = @_;
     $pkg = ref($pkg) if ref($pkg);
 
-    my $self = { orig_name    => $file,
-		 dest_name    => ::basename($file),
+    my $self = { $file ?
+		 (orig_name    => $file,
+		  dest_name    => ::basename($file)) : (),
 		 description  => "",
 		 annotation   => "",
 		 tag	      => "",
 	       };
 
-    if ( -f $file ) {
+    if ( $file && -f $file ) {
 	my @st = stat(_);
 	my $ii = ::cache_entry($file);
 	if ( $ii  ){
@@ -1758,8 +1902,9 @@ sub html_name {
 package FileList;
 
 use Class::Struct "FileList" =>
-  [ _data        => '$',
-    _hash	 => '$',
+  [ _tally	=> '$',
+    _data       => '$',
+    _hash	=> '$',
   ];
 
 sub add {
@@ -1768,9 +1913,10 @@ sub add {
     my $hash = $self->_hash;
     $self->_hash($hash = {}) unless $hash;
     $self->_data($data = []) unless $data;
-    $el->seq(@$data+1);
     push(@$data, $el);
-    $hash->{$name || $el->dest_name} = $el;
+    $hash->{$name || $el->dest_name || ""} = $el;
+    $self->_tally(($self->_tally||0)+1);
+    $el->seq($self->_tally);
     $self;
 }
 
@@ -1787,7 +1933,7 @@ sub entries {
 
 sub tally {
     my ($self) = @_;
-    $self->_data ? scalar(@{$self->_data}) : 0;
+    $self->_tally || 0;
 }
 
 sub byseq {
