@@ -6,8 +6,8 @@ my $RCS_Id = '$Id$ ';
 # Author          : Johan Vromans
 # Created On      : Tue Sep 15 15:59:04 1992
 # Last Modified By: Johan Vromans
-# Last Modified On: Fri Apr 25 16:46:33 2003
-# Update Count    : 496
+# Last Modified On: Sat Apr 26 13:46:53 2003
+# Update Count    : 500
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -381,10 +381,16 @@ sub write_image_page {
     $base = $htmllist[0];
     $t = button("first", $base, $i > 0) . $t;
 
-    $t = "<a href=\"../index" .
-      (($i >= $entries_per_page) ? int($i / $entries_per_page) : "") .
-	".html\">" .
-	  "<img align=\"top\" src=\"../index.png\" border=\"0\" alt=\"[Index]\"></a>" . $t;
+    if ( $dir eq "large" && $medium ) {
+	$t = "<a href=\"../medium/".$htmllist[$i]."\">" .
+	      "<img align=\"top\" src=\"../index.png\" border=\"0\" alt=\"[Medium size]\"></a>" . $t;
+    }
+    else {
+	$t = "<a href=\"../index" .
+	  (($i >= $entries_per_page) ? int($i / $entries_per_page) : "") .
+	    ".html\">" .
+	      "<img align=\"top\" src=\"../index.png\" border=\"0\" alt=\"[Index]\"></a>" . $t;
+    }
 
     # Link to next image.
     $base = $htmllist[$i+1] if $i < $num_entries-1;
