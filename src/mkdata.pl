@@ -4,8 +4,8 @@ my $RCS_Id = '$Id$ ';
 # Author          : Johan Vromans
 # Created On      : Sun May  9 17:49:55 2004
 # Last Modified By: Johan Vromans
-# Last Modified On: Sun May 16 14:16:55 2004
-# Update Count    : 8
+# Last Modified On: Mon May 17 21:50:41 2004
+# Update Count    : 36
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -54,18 +54,53 @@ EOD
 foreach my $dir ( @ARGV ) {
     warn("$dir: Not a directory\n"), next unless -d $dir;
     opendir(my $dh, $dir);
-    my @files = grep { /^\d{12}\.jpg/i } readdir($dh);
+    my @files = grep { /^(dsc0\d+|\d{14})\.jpg/i } readdir($dh);
     closedir($dh);
     warn("$dir: ", scalar(@files), " files\n") if $verbose;
+
+    my %f;
+    foreach my $f ( @files ) {
+	my $file = $f;
+	my $exif = get_exif("$dir/$file");
+	if ( $file =~ /^dsc/i ) {
+	    my $fd = $exif->{"date/time"} || "";
+	    if ( $fd =~ /(\d\d\d\d):(\d\d):(\d\d) (\d\d):(\d\d):(\d\d)/ ) {
+		my $new = "$1$2$3$4$5"."00";
+		while ( -e "$dir/$new.jpg" ) {
+		    $new++;
+		}
+		$new .= ".jpg";
+		unless ( rename("$dir/$file", "$dir/$new") ) {
+		    warn("Rename $file -> $new: $!\n");
+		    next;
+		}
+		$file = $new;
+	    }
+	    else {
+		warn("$file: Missing or unparsable file date [$fd]\n");
+	    }
+	}
+	if ( $exif->{orientation} && $exif->{orientation} =~ /^rotate (\d+)$/i  ) {
+	    $f{$file} = "-O:" . int($1/90) . " ";
+	}
+	else {
+	    $f{$file} = "-O:0 ";
+	}
+	if ( $exif->{comment} ) {
+	    $f{$file} .= $exif->{comment};
+	}
+    }
+
+
     my $date = "";
-    foreach my $file ( sort(@files ) ) {
-	my ($y,$m,$d) = $file =~ /^(\d{4})(\d\d)(\d\d)\d{4}\.jpg/i;
+    foreach my $file ( sort(keys(%f) ) ) {
+	my ($y,$m,$d) = $file =~ /^(\d{4})(\d\d)(\d\d)\d{4,6}\.jpg/i;
 	if ( "$y$m$d" ne $date ) {
 	    $date = "$y$m$d";
 	    print "\n!tag ", 0+$d, " ",
 	      MONTHS->[$m-1], "\n";
 	}
-	print "$file -O:0 \n";
+	print "$file $f{$file} \n";
     }
 }
 
@@ -73,6 +108,19 @@ foreach my $dir ( @ARGV ) {
 exit 0;
 
 ################ Subroutines ################
+
+sub get_exif {
+    my ($file) = @_;
+    use 5.008;
+    open(my $p, "-|", "jhead", $file) or die("$file: $!\n");
+    my %h;
+    while ( <$p> ) {
+	s/\s+:\s+/: /;
+	$h{lc($1)} = $2 if /^(.*?): (.*)/;
+    }
+    close($p) or die("$file: $!\n");
+    \%h;
+}
 
 ################ Command Line Options ################
 
