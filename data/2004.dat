@@ -2,7 +2,7 @@
 
 !title Diversen 2004
 
-!mediumsize 1024
+!medium
 
 !tag januari
 16750018.jpg -O:1 Happy newyear!
@@ -41,7 +41,7 @@
 16750026.jpg -O:0 Er is er een jarig
 16750027.jpg -O:0 Er is er een jarig
 16750028.jpg -O:0 Er is er een jarig
-#16750029.jpg -O:0 
+16750029.jpg -O:0 -- 
 16750030.jpg -O:0 Er is er een jarig
 
 !tag 12 april
@@ -52,54 +52,93 @@
 16750033.jpg -O:0 Uffelte
 16750034.jpg -O:0 Uffelte
 
+!tag mei
+21140011.jpg  Ben en Flo op bezoek
+21140012.jpg  Computerpoes
+
 # Foto's YYYYMMDDHHMMSS.jpg zijn van onze nieuwe Sony Cybershot DSC-V1
 
 !tag 6 mei
 #++ foto's P/M
-20040506121700.jpg -O:0 We bekijken P/M's nieuwe huis
-20040506124000.jpg -O:0 We bekijken P/M's nieuwe huis
+200405061217100035.jpg -O:0 We bekijken P/M's nieuwe huis
+200405061240030036.jpg -O:0 We bekijken P/M's nieuwe huis
 #--
-20040506170900.jpg -O:0 Smotty
-20040506171000.jpg -O:0 Smotty
-20040506175300.jpg -O:0 Joan
+200405061709170037.jpg -O:0 Smotty
+200405061710080038.jpg -O:0 Smotty
+200405061753180039.jpg -O:0 Joan
 
 !tag 7 mei
-20040507090500.jpg -O:0 Hedy
-20040507231500.jpg -O:0 Joan in bed (met poezen)
+200405070905070040.jpg -O:0 Hedy
+200405072315240041.jpg -O:0 Joan in bed (met poezen)
 
 !tag 8 mei
-20040508114100.jpg -O:0 Arvid foto!
-20040508114800.jpg -O:0 Arvid
-20040508121500.jpg -O:1 Arvid puzzel
-20040508123800.jpg -O:0 Moos under cover
+200405081141240042.jpg -O:0 Arvid foto!
+200405081148530043.jpg -O:0 Arvid
+200405081215470044.jpg -O:1 Arvid puzzel
+200405081238110045.jpg -O:0 Moos under cover
 
 !tag 9 mei
-20040509123000.jpg -O:0 Ma's schaapskooi
-20040509133700.jpg -O:0 Ma
-20040509162400.jpg -O:0 Joan in de zon
-20040509170000.jpg -O:0 Moos bewaakt de boedda
+200405091230020046.jpg -O:0 Ma's schaapskooi
+200405091337330047.jpg -O:0 Ma
+200405091624010048.jpg -O:0 Joan in de zon
+200405091700470049.jpg -O:0 Moos bewaakt de boedda
 
 !tag 16 mei
-20040516100700.jpg -O:0 Clematis
+200405161007340050.jpg -O:0 Clematis
 
 !tag 17 mei
-20040517183700.jpg -O:0 Smotty
-20040517184300.jpg -O:0 Smotty
-20040517184500.jpg -O:3 Testfoto rotatie
+200405171837290051.jpg -O:0 Smotty
+200405171843310052.jpg -O:0 Smotty
+200405171845030053.jpg -O:3 Testfoto rotatie
 
 !tag 8 juni
 # In de tuin bloeit iets wat nog nooit eerder heeft gebloeid.
-20040608201000.jpg  Bloei
-20040608201100.jpg  Bloei
+200406082010460295.jpg  Bloei
+200406082011090296.jpg  Bloei
 
 !tag 10 juni
-20040610105100.jpg  Moos in het hoge gras
+200406101051110300.jpg  Moos in het hoge gras
 
 !tag 12 juni
-20040612100900.jpg  Een nieuw schaap voor Ma
+200406121009590305.jpg  Een nieuw schaap voor Ma
 
-20040612214200.jpg  Oirschot jazz weekend
-20040612214300.jpg  Oirschot jazz weekend
-20040612215100.jpg  Oirschot jazz weekend
-20040612215200.jpg  Oirschot jazz weekend
+200406122142340356.jpg  Oirschot jazz weekend
+200406122143290357.jpg  Oirschot jazz weekend
+200406122145300358.mpg  Oirschot jazz weekend
+200406122151000359.jpg -T:V Oirschot jazz weekend
+200406122152000360.jpg -T:V Oirschot jazz weekend
+
+!tag 15 juni
+200406152010160361.jpg  Jaarvergadering Wijkraad
+200406152010360362.jpg  Jaarvergadering Wijkraad
+200406152011040363.jpg  Jaarvergadering Wijkraad
+200406152030510364.jpg  Jaarvergadering Wijkraad
+
+!tag 17/06/2004
+200406172120020365.jpg  Drastisch
+
+!tag 21/06/2004
+200406212008360368.jpg  Joan drinkt Irish Coffee
+200406212008440369.jpg  Joan drinkt Irish Coffee
+200406212008510370.jpg  Joan drinkt Irish Coffee
+
+!tag 22/06/2004
+200406221937200371.jpg  Etentje Wijkraad
+200406221952380372.jpg  Etentje Wijkraad
+200406222014580373.jpg  Etentje Wijkraad
+200406222015210374.jpg  Etentje Wijkraad
+200406222015480375.jpg  Etentje Wijkraad
+200406222016280376.jpg  Etentje Wijkraad
+200406222017030377.jpg  Etentje Wijkraad
+200406222025220378.mpg  Etentje Wijkraad
+200406222025430379.jpg  Etentje Wijkraad
+200406222027020380.jpg  Etentje Wijkraad
+200406222129020381.jpg  Etentje Wijkraad
+200406222129410382.jpg  Etentje Wijkraad
+200406222130450383.jpg  Etentje Wijkraad
+200406222130560384.jpg  Etentje Wijkraad
+
+!tag 25/06/2004
+200406250939390385.jpg  Bloem
+200406250941060386.jpg  Bloem
 

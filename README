@@ -32,6 +32,7 @@ it as follows:
   Number of entries = 7 (7 added)
   mkdir ./thumbnails
   mkdir ./icons
+  Creating icons first-gr.png first.png ... sound.png movie.jpg done
   im023.jpg: thumbnail size (known) OK
   im024.jpg: thumbnail size (known) OK
   im025.jpg: thumbnail size (known) OK
@@ -43,7 +44,6 @@ it as follows:
   (Needed to write 7 image pages)
   Creating pages for 1 index
   (Needed to write 1 index page)
-  Creating icons/first.png... icons/index.png... icons/medium.png... icons/last.png... icons/next.png... icons/prev.png... icons/first-gr.png... icons/last-gr.png... icons/next-gr.png... icons/prev-gr.png... done
 
 Your results will vary, but be similar to this example run. What you
 can see is that 'album' found 7 images in the 'large' directory,
@@ -59,13 +59,13 @@ It is interesting to run 'album' again:
   No info.dat, adding images from ./large
   ./info.dat: Cannot update (does not exist)
   Number of entries = 7 (7 added)
-  im023.png: OK
-  im024.png: OK
-  im025.png: OK
-  im026.png: OK
-  im027.png: OK
-  im028.png: OK
-  im029.png: OK
+  im023.jpg: size (cached) OK
+  im024.jpg: size (cached) OK
+  im025.jpg: size (cached) OK
+  im026.jpg: size (cached) OK
+  im027.jpg: size (cached) OK
+  im028.jpg: size (cached) OK
+  im029.jpg: size (cached) OK
   Creating pages for 7 images
   (No image pages needed updating)
   Creating pages for 1 index
@@ -86,13 +86,13 @@ To add medium sized images (and specify an album title):
   ./info.dat: Cannot update (does not exist)
   Number of entries = 7 (7 added)
   mkdir ./medium
-  im023.png: medium OK
-  im024.png: medium OK
-  im025.png: medium OK
-  im026.png: medium OK
-  im027.png: medium OK
-  im028.png: medium OK
-  im029.png: medium OK
+  im023.jpg: medium size (cached) OK
+  im024.jpg: medium size (cached) OK
+  im025.jpg: medium size (cached) OK
+  im026.jpg: medium size (cached) OK
+  im027.jpg: medium size (cached) OK
+  im028.jpg: medium size (cached) OK
+  im029.jpg: medium size (cached) OK
   Creating pages for 7 images
   (Needed to write 14 image pages)
   Creating pages for 1 index
@@ -131,25 +131,25 @@ Upon completion, 'info.dat' will look similar to:
   !medium
   # New entries added by album 1.19, Tue Jun  1 22:39:41 2004
   !tag 
-  im023.png  
-  im024.png  
-  im025.png  
-  im026.png  
-  im027.png  
-  im028.png  
-  im029.png  
+  im023.jpg  
+  im024.jpg  
+  im025.jpg  
+  im026.jpg  
+  im027.jpg  
+  im028.jpg  
+  im029.jpg  
 
 You can now add a description for each image following the file name,
 for example:
 
   !tag 2004/06/01
-  im023.png  Sunrise
-  im024.png  Overview
-  im025.png  Across the lake
-  im026.png  Catch of the day
-  im027.png  Fishermen
-  im028.png  Swimming cows
-  im029.png  Moon over Clew Bay
+  im023.jpg  Sunrise
+  im024.jpg  Overview
+  im025.jpg  Across the lake
+  im026.jpg  Catch of the day
+  im027.jpg  Fishermen
+  im028.jpg  Swimming cows
+  im029.jpg  Moon over Clew Bay
 
 Re-run the program (no need for --medium and --title anymore):
 
@@ -163,7 +163,8 @@ the only images shown are the ones named in the control file. New
 images added to the 'large' directory will be ignored. We'll see later
 what to do about that.
 
-Summary of control commands:
+Summary of control commands. Most settings can also obtained with
+command line options, as shown.
 
   !title XXX       set the title to XXX, override with --title
   !page NxM        set the layout to N rows (--rows) and 
@@ -188,13 +189,13 @@ follows:
   $ album -v --import /mnt/cdrom --update
   Updating ./info.dat
   Number of entries = 9 (2 added)
-  im023.png: OK
+  im023.jpg: size (cached) OK
   ...
-  im029.png: OK
-  im030.png: copy medium thumbnail size (known) OK
-  im031.png: copy medium thumbnail size (known) OK
+  im029.jpg: size (cached) OK
+  im030.jpg: copy medium thumbnail size (known) OK
+  im031.jpg: copy medium thumbnail size (known) OK
   Creating pages for 9 images
-  (Needed to write 9 image pages)
+  (Needed to write 18 image pages)
   Creating pages for 1 index
   (Needed to write 1 index page)
 
@@ -206,8 +207,8 @@ exist in 'large' (i.e., have the same name) are skipped.
 When importing images from a digital camera, 'album' can use the EXIF
 information that is present in these files:
 
-  - it will use the time stamp rename it to YYYYMMDDhhmmSS (where SS
-    is a sequence number, not seconds);
+  - it will use the time stamp rename it to YYYYMMDDhhmmssSSSS (where SSSS
+    is a sequence number);
   - it will set the modification time of the file to the time stamp;
   - while copying the image, it will be rotated if necessary,
     according to the 'orientation' property in the EXIF information.
@@ -216,20 +217,29 @@ To enable EXIF processing, add the --exif command line option, or
 specify the import directory with --dcim:
 
   $ ls -l /mnt/camera/dcim/101msdcf
-  -rwxr-xr-x  1 jv  jv   157030 Jun  1 22:07 /mnt/camera/dcim/101msdcf/dsc00202.jpg
+  -rwxr-xr-x 1 jv jv 2347808 Jun 25 12:08 /mnt/camera/dcim/101msdcf/dsc00052.jpg
+  -rwxr-xr-x 1 jv jv 1327475 Jun 25 12:05 /mnt/camera/dcim/101msdcf/dsc00053.jpg
   $ album -v --dcim /mnt/camera/dcim/101msdcf --update
   Updating ./info.dat
   Number of entries = 10 (1 added)
-  im023.png: OK
+  im023.jpg: size (cached) OK
   ...
-  im031.png: OK
-  20040601220700.jpg: copy rotate medium thumbnail size (known) OK
+  im031.jpg: size (cached) OK
+  200405171843310052.jpg: link copy medium thumbnail size (known) OK
+  200405171845030053.jpg: copy rotate medium thumbnail size (known) OK
   Creating pages for 10 images
-  (Needed to write 10 image pages)
+  (Needed to write 20 image pages)
   Creating pages for 1 index
   (Needed to write 1 index page)
 
-The file 'dsc00202.jpg' has now been imported as '20040601220700.jpg'.
+The file 'dsc00052.jpg' has now been imported as
+'200405171843310052.jpg'. 'album' tries to link to the image, if that
+is not possible, the image will be coped. File 'dsc00053.jpg' must be
+rotated, so it will always be a copy.
+
+If you hover the mouse over the file name in the index page, or over
+the title on the image pages, a pop-up will show a selection of
+information from the EXIF data.
 
 Additional notes.
 
@@ -239,10 +249,10 @@ re-import of the 'large' images. To completely rebuild everything
 save info.dat, remove all the files in the album directory (including
 .cache), restore info.dat and re-run the 'album' program.
 
-An 'info.dat' line with only an asterisk will insert all images from
-the 'large' directory that have not yet been processed. This is
-similar to what happens when there's no 'info.dat' file.
+Much of the digital camera import is designed for my Sony DSC-V1. 
 
-If, when renaming a source image according to the EXIF timestamp, a
-clash occurs, the sequence number part of the file name is incremented
-and a warning message is generated.
+When importing images from different camera's, there's an extremely
+small chance that the EXIF information would lead to identical file
+names. This can only happen if the pictures were taken at the exact
+same time (according to the camera's notion of time!), and have the
+same internal sequence number.
