@@ -6,8 +6,8 @@ my $RCS_Id = '$Id$ ';
 # Author          : Johan Vromans
 # Created On      : Tue Sep 15 15:59:04 1992
 # Last Modified By: Johan Vromans
-# Last Modified On: Sun Apr 27 18:28:07 2003
-# Update Count    : 508
+# Last Modified On: Sat May  3 13:58:00 2003
+# Update Count    : 516
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -449,7 +449,7 @@ sub write_index_page {
 	$t = button1("prev", "index.html", 0) . " " . $t unless $x;
 	$t = button1("prev", "index.html") . " " . $t if $x == 1;
 	$t = button1("prev", "index".($x-1).".html") . " " . $t if $x > 1;
-	$t = button1("first", "index.html") . $t;
+	$t = button1("first", "index.html", $x > 0) . $t;
 	$tt .= " " . ($x+1) . " of $num_indexes";
 	if ( $index_buttons ) {
 	    $t .= " " . ($x+1) . " of $num_indexes";
@@ -467,7 +467,8 @@ sub write_index_page {
 	}
 	$t .= " " . button1("next", "index.html", 0) if $x == $num_indexes-1;
 	$t .= " " . button1("next", "index".($x+1).".html") if $x < $num_indexes-1;
-	$t .= button1("last", "index".($num_indexes-1).".html");
+	$t .= button1("last", "index".($num_indexes-1).".html",
+		     $x < $num_indexes - 1);
     }
 
     print $html ("<style type=\"text/css\">\n",
@@ -486,15 +487,15 @@ sub write_index_page {
 
     if ( $index_buttons ) {
 	if ( $x > 0 ) {
-	    print $html (button("first"), "\n")
+	    print $html (button1("first"), "\n")
 	      if $num_indexes > 2;
-	    print $html (button("prev",
+	    print $html (button1("prev",
 				"index".($x > 1 ? $x-1 : "").".html"), "\n");
 	}
 
 	if ( $x < $num_indexes-1 ) {
-	    print $html (button("next", "index".($x+1).".html"), "\n");
-	    print $html (button("last", "index".($num_indexes-1).".html"), "\n")
+	    print $html (button1("next", "index".($x+1).".html"), "\n");
+	    print $html (button1("last", "index".($num_indexes-1).".html"), "\n")
 	      if $num_indexes > 2;
 	}
     }
@@ -610,7 +611,7 @@ sub write_alt_index_page {
 
     if ( $index_buttons ) {
 	if ( $x > 0 ) {
-	    print $html (button("first"), "\n")
+	    print $html (button("first", "index.html"), "\n")
 	      if $num_indexes > 2;
 	    print $html (button("prev",
 				"index".($x > 1 ? $x-1 : "").".html"), "\n");
@@ -727,7 +728,7 @@ sub button {
 	  "<img align=\"top\" src=\"../$tag.png\" border=\"0\" alt=\"[$Tag]\">".
 	    "</a>";
     }
-    "<img align=\"top\" src=\"../$tag.png\" border=\"0\" alt=\"[$Tag]\">";
+    "<img align=\"top\" src=\"../$tag-gr.png\" border=\"0\" alt=\"[$Tag]\">";
 }
 
 sub button1 {
@@ -739,7 +740,7 @@ sub button1 {
 	  "<img align=\"top\" src=\"$tag.png\" border=\"0\" alt=\"[$Tag]\">".
 	    "</a>";
     }
-    "<img align=\"top\" src=\"$tag.png\" border=\"0\" alt=\"[$Tag]\">";
+    "<img align=\"top\" src=\"$tag-gr.png\" border=\"0\" alt=\"[$Tag]\">";
 }
 
 sub html {
@@ -951,5 +952,70 @@ MHRBW"4Z;C4Q``!1%83`8X#A.N2#P\QJ&PR&V;9<+`J"J*J/1B-5J%<&E5>:=
 MM=%H,!Z/N5ZO;#:;\D``FLTFAF'0;K=3S\GMI]=JM>AVN^6#2))4;!_)2D^0
 MN!*K)MXALU;2_2NST@N-RJQ]0YC2=@,JLS_R#<Z)JM5*)O89`````$E%3D2N
 #0F""
+`
+end
+begin 644 first-gr.png
+MB5!.1PT*&@H````-24A$4@```"(````B"`8````Z1PO"````!&=!34$``+&/
+M"_QA!0````9B2T=$`*L`JP"K:IW=&0````EP2%ES```+$0``"Q$!?V1?D0``
+M``=T24U%!],%`PH;""A1(L$```$U241!5'B<[9@Q;H0P$$5?XHB"C@Z)<]`A
+M,1>@L,05J',%KI":=DL.09]SY`I0)LUZ1;PH,<$&%.V7D#S2V/,8C\:RX21Z
+MLNP<B'>,/P+O-D@.O`+9CB`?P)N!,1`7$?D$=ONN\2Y`;C)2`BT@`"+B^\_O
+M-`S#;0BT+[:#B)!E&4W3!(/HN@X1F<-P!P+0-`UE608#`6C;]IO]'#3:"CU`
+M;"W6R)+ZOK^-Z[IVGE,4!6F:_NH;+",&?)HF)_\@(//L15%T#,@<`B".W8XN
+MKR`V!$"2)/N"+$&LD1>0K1!PHC[B!<2UK_PD;QG9"N-U:[;`>*^1O\($*5:M
+M->,X'@^BE**J*I12SG.<3]^U*4^2!*VUL___ZB,^]`"QM5BL7=<%#;JT_FEN
+C>L8XS=W7P!SV&G":]Y$O&I:#2F!<C%$`````245.1*Y"8((`
+`
+end
+begin 644 index-gr.png
+MB5!.1PT*&@H````-24A$4@```"(````B"`8````Z1PO"````!&=!34$``+&/
+M"_QA!0````9B2T=$`/\`_P#_H+VGDP````EP2%ES```+$0``"Q$!?V1?D0``
+M``=T24U%!],%`PH<"_X9Y;P```%2241!5'B<[9BQ:H1`$(:_A'!R@7L"G\/:
+MZ:Z_=[#.*_@*J6VOM#@.1`0+P3+/D>H:&R.W"J:)<MDSB1ZGL?"'A1UWG/F<
+M95=V829ZT&P+>)XP_P?PIH-8P`M@3@CR#KPV,`W$7D1J8++VE6\/6$U%;,`%
+M!$!$[OWE5TJ2I.T"[I/N("*8IHGC.*-!>)Z'B%S"<`4"X#@.MFV/!@+@NNXW
+M^W'4;`,T&Y#.J>FKJJHX'`X`;+=;-IO-S;%NKHA2JH4`B**(HBBF!2F*@N/Q
+M>/4\"`*JJIH&),]S@B#X<?RR2J.!9%E&&(9_^OF^/PY(7=><3B?B..X=>"A,
+M+Y"R+$G3=%#@H3"]EN]JM6*WV_WJ<SZ?VZ:40BG%>KV^+T@?&8:!81@WOS^;
+MG74!T;6`Z%I`="T@NA8079W_&L_S1DW:%7\V)[W&F,W9MX'YM]N`V=R/?`+I
+3!JQ-F!I[D`````!)14Y$KD)@@@``
+`
+end
+begin 644 last-gr.png
+MB5!.1PT*&@H````-24A$4@```"(````B"`8````Z1PO"````!&=!34$``+&/
+M"_QA!0````9B2T=$`*L`JP"K:IW=&0````EP2%ES```+$0``"Q$!?V1?D0``
+M``=T24U%!],%`PH<.$')A*H```$,241!5'B<[=C/#<(@&(?A%^/)%3I'S_V&
+MZ`J<78$5/'/UU@[1NW.X@E>]B%'41/Y\M2;^$I*2-/"TA0:`A<1$]1;8S-C_
+M"3C$D!;8`LV,D".P"YB`V(O(&9BM7/O;`VUX(QW@``$0D=I/_I1IFFZ7@%O'
+M-X@(3=-@K55#>.\1D7L,3Q``:RU=UZE!`)QS#_65:F\)^4/B?`P9AN'C1L=Q
+MO)7J$&-,$B8U29]&$Y,\1K0P68-5`Y,]:VICBJ9O34SQ?\28>$F3EV)(W_<U
+M'&606@@H@-1$0":D-@(R(!H(2(1H(>#-"JT4D0/^O?6(=OZ0."\'J_=>M=-7
+G[2]FIQ<JB]G[!LS73@,6<SYR`:R7?Q#7F]Z8`````$E%3D2N0F""
+`
+end
+begin 644 next-gr.png
+MB5!.1PT*&@H````-24A$4@```"(````B"`8````Z1PO"````!&=!34$``+&/
+M"_QA!0````9B2T=$`/\`_P#_H+VGDP````EP2%ES```+$0``"Q$!?V1?D0``
+M``=T24U%!],%`PH7"?/C75L```$$241!5'B<[=@_#H(P%,?Q+^KD%3@'<]\9
+MC%?H[!5Z!>>N;ER"W7-X!5==K-'"8/\\Q,1?0D(3POL`+6D+"TD3M3M@.V/]
+M*W".(1UP`-H9(1?@&#`!<1*1&S#;\:AW`KKP1@S@``$0D=I//LHP#,]3P&WB
+M"T2$MFVQUJHAO/>(R"N&$03`6HLQ1@T"X)Q[:Z]4JR7D#XGS,:3O>TW'YY!U
+MTZABDCZ-)B:YCVAALCJK!B9[U-3&%`W?FICB_\BZB:<T>2F&[/;[&HXR2"T$
+M%$!J(B`34AL!&1`-!"1"M!"0`-%$P"_.1[3SA\297$YX[U6+3MU_,2N]T%C,
+?VC=@OK8;L)C]D3M7S7@&)IXTW`````!)14Y$KD)@@@``
+`
+end
+begin 644 prev-gr.png
+MB5!.1PT*&@H````-24A$4@```"(````B"`8````Z1PO"````!&=!34$``+&/
+M"_QA!0````9B2T=$`*L`JP"K:IW=&0````EP2%ES```+$0``"Q$!?V1?D0``
+M``=T24U%!],%`PH=-%%D^<````%2241!5'B<[=BQ:H-`&,#QOR(&ZY+!S>=P
+MOF_($@PA+^'<5_`5.KMF='!Q<'//<Q2R!^H2T@ZMI3$63.MY#OE`\$[]OI_B
+M<=S!3,+JM"/@:<+Z;\"A"XF`9R"<$/(*O+28%K$7D7=@LN.KWAZ(VB^B@!00
+M`!$9^\UOHJ[K[U,@=;HWB`AA&)(DB39$EF6(R$\,-Q"`)$E02FF#`*1I>M6V
+MM5:[(QZ0;FB%Y'G.\7@T"\GS'("F:<Q!6@2`Z[J#GND=OG^-\_E,4117?9-#
+MFJ:A+,N;_L5B,1WD=#I1557OM:&04?Z1WQ"30BZ7RW]3`"-`;-MFM]N9AP`X
+MCL-VNS4/@<]A&L>Q>0B`YWFLUVOS$`#?]UFM5N8A`,OE$J44MCT\O;9)+P@"
+M-IN->8AE68/G&:V0>^,!Z4;O[)MEF=:B??EGL])K&[-9^[888[L!L]D?^0#`
+3M8HSIG;M-P````!)14Y$KD)@@@``
 `
 end
