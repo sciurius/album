@@ -4,8 +4,8 @@ my $RCS_Id = '$Id$ ';
 # Author          : Johan Vromans
 # Created On      : Tue Sep 15 15:59:04 2002
 # Last Modified By: Johan Vromans
-# Last Modified On: Tue Sep 14 22:24:29 2004
-# Update Count    : 2128
+# Last Modified On: Wed Sep 15 22:05:43 2004
+# Update Count    : 2183
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -245,6 +245,16 @@ if ( $journal ) {
     $mod = write_journal();
     uptodate("journal", $mod) if $verbose > 1;
 }
+
+print STDERR ("Creating index icon\n") if $verbose > 1;
+if ( indexicon() ) {
+    # Update cache.
+    update_cache();
+}
+else {
+    print STDERR ("(Index icon not modified)\n") if $verbose > 1;
+}
+
 exit 0;
 
 ################ Subroutines ################
@@ -434,7 +444,11 @@ sub load_info {
 		$rotate = 90 * ($2 % 4);
 	    }
 	    elsif ( lc($1) eq 'i' ) {
-		$assc = $2;
+		$assc = basename($file)."/".$2;
+		unless ( -s $assc && -r _ ) {
+		    warn("$file (info): $assc [$!]\n");
+		    undef $assc;
+		}
 	    }
 	    elsif ( lc($1) eq 't' ) {
 		$type = $typemap{lc($2)}
@@ -467,7 +481,10 @@ sub load_info {
 	    $type = T_REF;
 	}
 	if ( $type == T_REF ) {
-	    $assc = "icons/movie.jpg" unless defined $assc;
+	    for ( dirname($file)."/icon.jpg" ) {
+		$assc = $_ if !defined $assc && -f $_;
+	    }
+	    $assc = "icons/extern.jpg" unless defined $assc;
 	    $el->assoc_name($assc);
 	    $el->dest_name($file);
 	    $el->type($type);
@@ -659,6 +676,7 @@ sub update_filelist {
 		$entry->description($el->description);
 		$entry->annotation($el->annotation);
 		$entry->_rotation($el->_rotation);
+		# Add and create prev/next links.
 		$entry->prev($prev->seq) if $prev;
 		$todo->add($entry);
 		$prev->next($entry->seq) if $prev;
@@ -666,6 +684,7 @@ sub update_filelist {
 	    }
 	    else {
 		print STDERR (" (ignored)\n") if $trace;
+		undef $entry;
 	    }
 	}
 	elsif ( $trace ) {
@@ -1032,7 +1051,11 @@ sub write_image_page {
     my $tt = "$album_title: Image " . ($i+1);
     $tt .= " of " . $num_entries if $num_entries > 1;
     $tt = html($tt);
-    my $it = html($el->description) || $tt;
+    my $it = html($el->description);
+    unless ( $it ) {
+	$it = $tt;
+	$tt = "";
+    }
 
     my $next = ($el->next || $num_entries+1) - 1;
     my $prev = ($el->prev || 0) - 1;
@@ -1428,12 +1451,12 @@ sub button($$;$$) {
     $active ? "<a class='info' href='$link' alt='[$Tag]'>$b</a>" : $b;
 }
 
-# These are to aid XHTML compliancy.
 sub ixname($) {
     my ($x) = @_;
     "index" . ($x ? $x : "") . ".html";
 }
 
+# These are to aid XHTML compliancy.
 sub br {
     "<br>";
 }
@@ -1845,6 +1868,48 @@ sub copy_voice {
     die("${res}Aborted\n") unless -s $new;
 
     utime($time, $time, $new);
+}
+
+sub indexicon {
+
+    my @imgs;
+    for ( my $i = 0; $i < $index_rows*$index_columns; $i++ ) {
+	next if $i >= $num_entries;
+	my $el = $filelist->byseq($i+1);
+	my $file = $el->dest_name;
+	my $img;
+	if ( $el->type == T_REF ) {
+	    $img = $el->assoc_name;
+	}
+	else {
+	    $img = $el->type == T_MPG ? $el->assoc_name : $file;
+	    $img = "thumbnails/$img";
+	}
+	push(@imgs, $img);
+    }
+
+    my $iconfile = "icon.jpg";
+    my $ii = ::cache_entry(" indexicon ");
+    if ( -f $iconfile && $ii && $ii->dest_name eq "@imgs" ) {
+	return 0;
+    }
+    my $el = new ImageInfo($iconfile);
+    $el->dest_name("@imgs");
+    ::cache_entry(" indexicon ", $el);
+
+    my $image = new Image::Magick->new;
+    foreach ( @imgs ) {
+	$image->Read($_);
+    }
+
+    my $width = $thumb;
+    my $height = int($thumb*0.75);
+
+    $image = $image->Montage(tile=>"${index_columns}x${index_rows}",
+			     texture=>"xc:gray90");
+    $image->Resize(geometry=>"${width}x${height}");
+    $image->Write($iconfile);
+    1;
 }
 
 ################ Subroutines ################
