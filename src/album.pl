@@ -4,8 +4,8 @@ my $RCS_Id = '$Id$ ';
 # Author          : Johan Vromans
 # Created On      : Tue Sep 15 15:59:04 2002
 # Last Modified By: Johan Vromans
-# Last Modified On: Tue Jun  1 19:49:47 2004
-# Update Count    : 959
+# Last Modified On: Tue Jun  1 23:33:43 2004
+# Update Count    : 972
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -130,7 +130,7 @@ die("Nothing to do?\n") unless $num_entries > 0;
 if ( $clobber ) {
     rmtree(["$dest_dir/thumbnails", "$dest_dir/medium"], 1);
 }
-mkpath(["$dest_dir/large", "$dest_dir/thumbnails", "$dest_dir/images"], 1);
+mkpath(["$dest_dir/large", "$dest_dir/thumbnails", "$dest_dir/icons"], 1);
 mkpath(["$dest_dir/medium"], 1) if $medium;
 
 # Copy images in place, rotate if necessary, and create the thumbnails.
@@ -164,7 +164,8 @@ for (my $i = $num_entries ; ; $i++ ) {
 }
 
 # Write the individual pages.
-print STDERR ("Creating pages for ", $num_entries, " images\n") if $verbose;
+print STDERR ("Creating pages for ", $num_entries, " image",
+	      $num_entries == 1 ? "" : "s", "\n") if $verbose;
 my $mod = 0;
 for my $i ( 0 .. $num_entries-1 ) {
     write_image_page($i, "large") && $mod++;
@@ -173,7 +174,8 @@ for my $i ( 0 .. $num_entries-1 ) {
 uptodate("image", $mod) if $verbose;
 
 # Write the index pages.
-print STDERR ("Creating pages for ", $num_indexes, " indexes\n") if $verbose;
+print STDERR ("Creating pages for ", $num_indexes, " index",
+	      $num_indexes == 1 ? "" : "es", "\n") if $verbose;
 $mod = 0;
 for my $i ( 0 .. $num_indexes-1 ) {
     write_index_page($i) && $mod++;
@@ -305,8 +307,8 @@ sub load_image_info {
 
 sub load_src_files {
     my $dh = do { local *DH; *DH; };
-    opendir($dh, $dest_dir)
-      or die("Cannot opendir $dest_dir: $!\n");
+    opendir($dh, "$dest_dir/large")
+      or die("Cannot opendir $dest_dir/large: $!\n");
 
     foreach my $f ( grep { !/^\./ && /$suffixpat$/ } readdir($dh) ) {
 	$newfiles{$f} = [$f];
@@ -380,11 +382,6 @@ sub do_exif {
 
 sub get_image_names {
 
-    use constant MONTHS => [qw(january february march april
-			   may june july august
-			   september oktober november december)];
-
-
     my $newinfo = "";
     my $pdate = qr/(\d{4})(\d\d)(\d\d)\d{4}(?:\d\d|\w)/;
     my $date = "";
@@ -400,7 +397,7 @@ sub get_image_names {
 
 	my ($y,$m,$d) = $file =~ /^$pdate\./io;
 	($y,$m,$d) = (0,0,0) unless defined($y);
-	if ( defined($y) && "$y$m$d" ne $date ) {
+	if ( "$y$m$d" ne $date ) {
 	    $newinfo .= "\n!tag ";
 	    $date = "$y$m$d";
 	    if ( $date ne "000" ) {
@@ -429,12 +426,26 @@ sub get_image_names {
 	     ")\n");
 	return;
     }
+    my $infosize = -s $image_info;
 
     # Append new info.
     warn("Updating $image_info\n") if $verbose;
     my $fh = do { local *F; *F };
     open($fh, ">>", $image_info) || die("$image_info: $!\n");
-    print $fh ("\n# New entries added by $my_name $my_version, ".
+    unless ( $infosize ) {
+	print $fh ("# album control file created by $my_name $my_version, ".
+	       localtime(time), "\n\n");
+	print $fh ("!title $album_title\n") if $album_title;
+	print $fh ("!medium\n") if $medium;
+	print $fh ("!mediumsize $medium\n") if $medium != 915;
+	print $fh ("!thumbsize $thumb\n") if $thumb != 200;
+	print $fh ("!page ${index_rows}x${index_columns}\n")
+	  if $index_rows != 3 || $index_columns != 4;
+    }
+    else {
+	print $fh ("\n");
+    }
+    print $fh ("# New entries added by $my_name $my_version, ".
 	       localtime(time), "\n",
 	       $newinfo,
 	       "\n");
@@ -742,7 +753,7 @@ sub button($$;$$) {
     $active = 1 unless defined $active;
     $tag .= "-gr" unless $active;
     $level = "../" x $level;
-    my $b = img("${level}images/$tag.png", align => "top",
+    my $b = img("${level}icons/$tag.png", align => "top",
 		border => 0, alt => "[$Tag]");
     $active ? "<a href='$link' alt='[$Tag]'>$b</a>" : $b;
 }
@@ -1043,7 +1054,7 @@ sub app_options {
 
     app_ident() if $ident;
     $dest_dir = shift(@ARGV) if @ARGV;
-    $medium = 915 if $medium && $medium == 1;
+    $medium = 915 if defined($medium) && !$medium;
     if ( $add_new && !$import_dir ) {
 	warn("--update ignored -- no import dir specified\n");
 	$add_new = 0;
@@ -1148,7 +1159,7 @@ sub ImageInfo::Entry::tostr {
     my ($self) = @_;
     "[" . join(" ",
 	       $self->large_size,
-	       $self->medium_size,
+	       $self->medium_size || 0,
 	       $self->width,
 	       $self->height,
 	      ) . "]";
@@ -1157,7 +1168,7 @@ sub ImageInfo::Entry::tostr {
 package main;
 
 __END__
-begin 644 images/first.png
+begin 644 icons/first.png
 MB5!.1PT*&@H````-24A$4@```"(````B"`8````Z1PO"````!&=!34$``+&/
 M"_QA!0````9B2T=$`/\`_P#_H+VGDP````EP2%ES```+$@``"Q(!TMU^_```
 M``=T24U%!](&'@P%!C&J:IP```&O241!5'B<[9BQBL)`$(8_UZ#D;"SL?`"?
@@ -1173,7 +1184,7 @@ M%9K-IG)\:NN17"Z7;1])2D^0N*Y.UGB'3%K7GO\P.[W0>)B];PASM].`ASD?
 6^0(75+;=MXIF$0````!)14Y$KD)@@@``
 `
 end
-begin 644 images/index.png
+begin 644 icons/index.png
 MB5!.1PT*&@H````-24A$4@```"(````B"`8````Z1PO"````!&=!34$``+&/
 M"_QA!0````9B2T=$`/\`_P#_H+VGDP````EP2%ES```+$@``"Q(!TMU^_```
 M``=T24U%!](&'@P%-8YZ"XH```&?241!5'B<[9A!BN)`%$!?#XW1OH(K#^':
@@ -1189,7 +1200,7 @@ M2VY$3OYKI)29%CW5?VYV>FF0F[UO*O/?3@-R<S[R"XFFX$N)OY`F`````$E%
 &3D2N0F""
 `
 end
-begin 644 images/medium.png
+begin 644 icons/medium.png
 MB5!.1PT*&@H````-24A$4@```"(````B"`8````Z1PO"````!&=!34$``+&/
 M"_QA!0````9B2T=$`/\`_P#_H+VGDP````EP2%ES```+$@``"Q(!TMU^_```
 M``=T24U%!](&'@P%-8YZ"XH```&?241!5'B<[9A!BN)`%$!?#XW1OH(K#^':
@@ -1205,7 +1216,7 @@ M2VY$3OYKI)29%CW5?VYV>FF0F[UO*O/?3@-R<S[R"XFFX$N)OY`F`````$E%
 &3D2N0F""
 `
 end
-begin 644 images/last.png
+begin 644 icons/last.png
 MB5!.1PT*&@H````-24A$4@```"(````B"`8````Z1PO"````!&=!34$``+&/
 M"_QA!0````9B2T=$`/\`_P#_H+VGDP````EP2%ES```+$@``"Q(!TMU^_```
 M``=T24U%!](&'@P%'U7!PEP```$5241!5'B<[=BQ;80P%,;Q?^+09`7FH.8M
@@ -1218,7 +1229,7 @@ MB;,Z6;WWJD77QB_F3R]TBOGW#9B;G084<S[R!058F0YBC22O`````$E%3D2N
 #0F""
 `
 end
-begin 644 images/next.png
+begin 644 icons/next.png
 MB5!.1PT*&@H````-24A$4@```"(````B"`8````Z1PO"````!&=!34$``+&/
 M"_QA!0````9B2T=$`/\`_P#_H+VGDP````EP2%ES```+$@``"Q(!TMU^_```
 M``=T24U%!](&'@P$$T5LOS8```#]241!5'B<[=@Q#H(P%(#A7^/D%3@'<]\E
@@ -1230,7 +1241,7 @@ M@F@@DB%:B"2()B()HHF`7_P?T8X_)([)=L)[KUITZO[%='HA*:;W#9BO[084
 8LS]R![)HC08-&VZ(`````$E%3D2N0F""
 `
 end
-begin 644 images/prev.png
+begin 644 icons/prev.png
 MB5!.1PT*&@H````-24A$4@```"(````B"`8````Z1PO"````!&=!34$``+&/
 M"_QA!0````9B2T=$`/\`_P#_H+VGDP````EP2%ES```+$@``"Q(!TMU^_```
 M``=T24U%!](&'@P$*VUN!Z@```&<241!5'B<[9B_:L)0%(>_A*"D+@YN>0"?
@@ -1246,7 +1257,7 @@ MN!*K)MXALU;2_2NST@N-RJQ]0YC2=@,JLS_R#<Z)JM5*)O89`````$E%3D2N
 #0F""
 `
 end
-begin 644 images/first-gr.png
+begin 644 icons/first-gr.png
 MB5!.1PT*&@H````-24A$4@```"(````B"`8````Z1PO"````!&=!34$``+&/
 M"_QA!0````9B2T=$`*L`JP"K:IW=&0````EP2%ES```+$0``"Q$!?V1?D0``
 M``=T24U%!],%`PH;""A1(L$```$U241!5'B<[9@Q;H0P$$5?XHB"C@Z)<]`A
@@ -1259,7 +1270,7 @@ M->,X'@^BE**J*I12SG.<3]^U*4^2!*VUL___ZB,^]`"QM5BL7=<%#;JT_FEN
 C>L8XS=W7P!SV&G":]Y$O&I:#2F!<C%$`````245.1*Y"8((`
 `
 end
-begin 644 images/last-gr.png
+begin 644 icons/last-gr.png
 MB5!.1PT*&@H````-24A$4@```"(````B"`8````Z1PO"````!&=!34$``+&/
 M"_QA!0````9B2T=$`*L`JP"K:IW=&0````EP2%ES```+$0``"Q$!?V1?D0``
 M``=T24U%!],%`PH<.$')A*H```$,241!5'B<[=C/#<(@&(?A%^/)%3I'S_V&
@@ -1271,7 +1282,7 @@ M'&606@@H@-1$0":D-@(R(!H(2(1H(>#-"JT4D0/^O?6(=OZ0."\'J_=>M=-7
 G[2]FIQ<JB]G[!LS73@,6<SYR`:R7?Q#7F]Z8`````$E%3D2N0F""
 `
 end
-begin 644 images/next-gr.png
+begin 644 icons/next-gr.png
 MB5!.1PT*&@H````-24A$4@```"(````B"`8````Z1PO"````!&=!34$``+&/
 M"_QA!0````9B2T=$`/\`_P#_H+VGDP````EP2%ES```+$0``"Q$!?V1?D0``
 M``=T24U%!],%`PH7"?/C75L```$$241!5'B<[=@_#H(P%,?Q+^KD%3@'<]\9
@@ -1283,7 +1294,7 @@ M%$!J(B`34AL!&1`-!"1"M!"0`-%$P"_.1[3SA\297$YX[U6+3MU_,2N]T%C,
 ?VC=@OK8;L)C]D3M7S7@&)IXTW`````!)14Y$KD)@@@``
 `
 end
-begin 644 images/prev-gr.png
+begin 644 icons/prev-gr.png
 MB5!.1PT*&@H````-24A$4@```"(````B"`8````Z1PO"````!&=!34$``+&/
 M"_QA!0````9B2T=$`*L`JP"K:IW=&0````EP2%ES```+$0``"Q$!?V1?D0``
 M``=T24U%!],%`PH=-%%D^<````%2241!5'B<[=BQ:H-`&,#QOR(&ZY+!S>=P
