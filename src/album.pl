@@ -4,13 +4,13 @@ my $RCS_Id = '$Id$ ';
 # Author          : Johan Vromans
 # Created On      : Tue Sep 15 15:59:04 2002
 # Last Modified By: Johan Vromans
-# Last Modified On: Wed Aug 25 10:10:55 2004
-# Update Count    : 2054
+# Last Modified On: Wed Aug 25 10:57:38 2004
+# Update Count    : 2059
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
 
-$VERSION = 0.07;
+$VERSION = 0.08;
 
 use strict;
 
@@ -854,7 +854,7 @@ sub prepare_images {
 	# Check for directory names, e.g. f01/p01.jpg.
 	my $dn = dirname($file);
 	if ( $dn && $dn ne "." ) { # we have a dir name.
-	    mkpath([d_thumbnails($dn), d_large($dn)], 1);
+ 	    mkpath([d_thumbnails($dn), d_large($dn)], 1);
 	    mkpath([d_medium($dn)], 1) if $medium;
 	}
 
@@ -1133,7 +1133,13 @@ sub write_index_page {
 		$t .= ($x+1) . "\n";
 	    }
 	    else {
-		$t .= "<a href='" . ixname($_) . "'>" . ($_+1) . "</a>\n";
+		my $el = $filelist->byseq(($_ * $index_rows * $index_columns) + 1);
+		$t .= "<a";
+		if ( my $tag = $el->tag ) {
+		    $t .= " onmouseover='return tip(\"$tag\")'" .
+		      " onmouseout='return tip(\"\")' onclick='return tip(\"\")'";
+		}
+		$t .= " href='" . ixname($_) . "'>" . ($_+1) . "</a>\n";
 	    }
 	}
 	$t .= "...\n" if $ixlist[-1] < $num_indexes-1;
@@ -1204,6 +1210,14 @@ sub write_index_page {
 	  border:0px; background-color:$MGREY; color:$BLACK;text-align: center}
       -->
     </style>
+    <script language="JavaScript">
+    <!--
+    function tip(tipText) {
+      window.status = tipText;
+      return true;
+    }
+    -->
+    </script>
     <title>$tt</title>
   </head>
   <body $bodyatts>
