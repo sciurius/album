@@ -6,8 +6,8 @@ my $RCS_Id = '$Id$ ';
 # Author          : Johan Vromans
 # Created On      : Tue Sep 15 15:59:04 1992
 # Last Modified By: Johan Vromans
-# Last Modified On: Sun Jun 13 22:17:49 2004
-# Update Count    : 55
+# Last Modified On: Tue Dec 20 21:34:50 2005
+# Update Count    : 62
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -70,13 +70,35 @@ find(sub {
 print STDOUT ("<html><title>Foto Albums</title>\n",
 	      "<body bgcolor=\"#C0C0C0\">\n",
 	      "<h1>Foto Albums</h1>\n",
-	      "<ul>\n");
-foreach my $file ( reverse sort(keys(%index)) ) {
-    my $title = $index{$file};
-    $file =~ s/^\.\///;
-    print STDOUT ("  <li><a href=\"$file\">$title</a></li><p>\n");
+	      "<table width='1005' border='1'>\n");
+my @the_list = reverse sort(keys(%index));
+
+my $cols = 3;
+
+while ( @the_list % $cols ) {
+    push(@the_list, "");
 }
-print STDOUT ("</ul>\n",
+
+my $h = @the_list / $cols;
+
+foreach my $i ( 0 .. $h-1 ) {
+    my $index = $i;
+    print STDOUT (" <tr bgcolor=\"#E0E0E0\">\n");
+    my $file;
+    my $title;
+
+    foreach ( 1..$cols ) {
+	$file = $the_list[$index];
+	$title = $file ? $index{$file} : "";
+	$file =~ s/^\.\///;
+	print STDOUT ("   <td>",
+		      $file ? "<a href=\"$file\">$title</a>" : "&nbsp;",
+		      "</td>\n");
+	$index += $h;
+    }
+    print STDOUT (" </tr>\n");
+}
+print STDOUT ("</table>\n",
 	      "</body>\n",
 	      "</html>\n");
 
