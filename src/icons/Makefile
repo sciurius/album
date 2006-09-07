@@ -5,7 +5,7 @@ ICONS = index medium \
 	last last-gr \
 	next next-gr \
 	prev prev-gr \
-	journal sound
+	up journal sound
 
 all :
 	rm -f uu
@@ -13,6 +13,7 @@ all :
 	  tgif -print -ppm $$icon.obj; \
 	  pnmscale -width=33 -height=33 $$icon.ppm | pnmtopng > $$icon.png; \
 	  uuencode $$icon.png < $$icon.png >> uu; \
+	  rm $$icon.ppm $$icon.png; \
 	done
 	uuencode movie.jpg < movie.jpg >> uu
 
