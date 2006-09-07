@@ -6,8 +6,8 @@ my $RCS_Id = '$Id$ ';
 # Author          : Johan Vromans
 # Created On      : Tue Sep 15 15:59:04 1992
 # Last Modified By: Johan Vromans
-# Last Modified On: Tue Dec 20 21:34:50 2005
-# Update Count    : 62
+# Last Modified On: Sat Dec 24 11:36:42 2005
+# Update Count    : 67
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -50,6 +50,8 @@ my $TMPDIR = $ENV{TMPDIR} || $ENV{TEMP} || '/usr/tmp';
 
 ################ The Process ################
 
+use constant COLUMNS => 3;
+
 use File::Find;
 
 @ARGV = qw(.) unless @ARGV;
@@ -71,15 +73,16 @@ print STDOUT ("<html><title>Foto Albums</title>\n",
 	      "<body bgcolor=\"#C0C0C0\">\n",
 	      "<h1>Foto Albums</h1>\n",
 	      "<table width='1005' border='1'>\n");
-my @the_list = reverse sort(keys(%index));
+my @the_list =
+  map { $_->[0] }
+  sort { $a->[1] cmp $b->[1] }
+  map { [ $_, $index{$_} ] } keys(%index);
 
-my $cols = 3;
-
-while ( @the_list % $cols ) {
+while ( @the_list % COLUMNS ) {
     push(@the_list, "");
 }
 
-my $h = @the_list / $cols;
+my $h = @the_list / COLUMNS;
 
 foreach my $i ( 0 .. $h-1 ) {
     my $index = $i;
@@ -87,7 +90,7 @@ foreach my $i ( 0 .. $h-1 ) {
     my $file;
     my $title;
 
-    foreach ( 1..$cols ) {
+    foreach ( 1..COLUMNS ) {
 	$file = $the_list[$index];
 	$title = $file ? $index{$file} : "";
 	$file =~ s/^\.\///;
