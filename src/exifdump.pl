@@ -4,8 +4,8 @@
 # Author          : Johan Vromans
 # Created On      : Fri Jun 11 11:24:27 2004
 # Last Modified By: Johan Vromans
-# Last Modified On: Wed Jul 21 14:27:08 2004
-# Update Count    : 3
+# Last Modified On: Fri Jun 24 16:27:38 2005
+# Update Count    : 6
 # Status          : Unknown, Use with caution!
 
 use strict;
@@ -29,7 +29,11 @@ foreach my $img ( @ARGV ) {
 		      $val->as_float(), "\n");
 		next;
 	    }
-	    print($key, " -> ", deref(@{$val}), "\n");
+	    if ( UNIVERSAL::isa($val, 'ARRAY') ) {
+		print($key, " -> ", deref(@{$val}), "\n");
+		next;
+	    }
+	    print($key, " => ", ref($val), "\n");
 	    next;
 	}
 	print($key, " -> ", $val, "\n");
