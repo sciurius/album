@@ -51,6 +51,16 @@ init ::
 		echo "!title $$dir" > info.dat; \
 	}
 
+init-nolinks ::
+	mkdir -p $(DCIM)
+	cp $(TOOLS)/shellrun.exe .
+	cp $(TOOLS)/autorun.inf .
+	test -f Makefile || cp $(TOOLS)/generic.mk Makefile
+	test -f info.dat || { \
+		dir="`basename \`pwd\``"; \
+		echo "!title $$dir" > info.dat; \
+	}
+
 clean ::
 	rm -f .cache *png index*html large/*html *~
 	rm -f shellrun.exe ShellRun.exe autorun.inf
