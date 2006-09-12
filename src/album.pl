@@ -4,13 +4,13 @@ my $RCS_Id = '$Id$ ';
 # Author          : Johan Vromans
 # Created On      : Tue Sep 15 15:59:04 2002
 # Last Modified By: Johan Vromans
-# Last Modified On: Sun Nov 21 18:48:47 2004
-# Update Count    : 2443
+# Last Modified On: Tue Sep 12 20:53:04 2006
+# Update Count    : 2672
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
 
-$VERSION = "1.02";
+$VERSION = "1.03";
 
 use strict;
 
@@ -41,6 +41,7 @@ my $info_file;
 my $linkthem = 1;		# link orig to large, if possible
 my $clobber = 0;
 my $mediumonly = 0;		# only medium size (for web export)
+my $externalize_formats = 0;	# create external format files
 my $verbose = 1;		# verbose processing
 
 # These are left undefined, for set_defaults. Note: our, not my.
@@ -53,14 +54,7 @@ our $caption;
 our $datefmt;
 our $icon;
 our $locale;
-
-# Format (files).
-our $fmt_dir;
-our $fmt_index;
-our $fmt_image;
-our $fmt_large;
-our $fmt_medium;
-our $fmt_journal;
+our $lib_common;
 
 # These are not command line options.
 my $journal;			# create journal
@@ -115,6 +109,7 @@ my $prog_mencoder  = findexec("mencoder");
 
 ################ The Process ################
 
+use File::Spec;
 use File::Path;
 use File::Basename;
 use Time::Local;
@@ -265,13 +260,14 @@ exit 0;
 ################ Subroutines ################
 
 # Image types.
-use constant T_JPG   => 1;
-use constant T_MPG   => 2;
-use constant T_VOICE => 3;	# still image + sound
+use constant T_JPG    => 1;
+use constant T_MPG    => 2;
+use constant T_VOICE  => 3;	# still image + sound
 # Pseudo types.
-use constant T_TAG   => -1;
-use constant T_ANN   => -2;
-use constant T_REF   => -3;
+use constant T_PSEUDO => 0;
+use constant T_TAG    => -1;
+use constant T_ANN    => -2;
+use constant T_REF    => -3;
 
 # List of possible subdirs to process.
 my @subdirs;
@@ -280,14 +276,18 @@ my @subdirs;
 my %jnltags;
 
 # Note: the HTML generators use the file names relatively.
+sub fjoin	 { File::Spec->catfile(@_); }
+sub d_dest       { unshift(@_, $dest_dir) unless $dest_dir eq ".";
+		   fjoin(@_); }
 sub d_large      { unshift(@_, "large");      goto &d_dest; }
 sub d_medium     { unshift(@_, "medium");     goto &d_dest; }
 sub d_thumbnails { unshift(@_, "thumbnails"); goto &d_dest; }
-sub d_icons      { unshift(@_, "icons");      goto &d_dest; }
-sub d_css        { unshift(@_, "css");        goto &d_dest; }
 sub d_journal    { unshift(@_, "journal");    goto &d_dest; }
-sub d_dest       { unshift(@_, $dest_dir) unless $dest_dir eq ".";
-		   join("/", @_); }
+
+sub d_destc      { unshift(@_, $lib_common) if $lib_common ne ""; goto &d_dest; }
+sub d_icons      { unshift(@_, "icons");   goto &d_destc; }
+sub d_css        { unshift(@_, "css");     goto &d_destc; }
+sub d_fmt        { unshift(@_, "formats"); goto &d_destc;}
 
 my %optcfg;			# option set from config files
 
@@ -318,7 +318,7 @@ sub parse_line {
 	elsif ( /^mediumsize\s*(\d+)/ ) {
 	    setopt("medium", $1);
 	}
-	elsif ( /^medium\s*(\d+)?/ ) {
+	elsif ( /^medium\s*(-?\d+)?/ ) {
 	    setopt("medium", $1 || DEFAULTS->{mediumsize});
 	}
 	elsif ( /^dateformat\s*(.*)/ ) {
@@ -333,23 +333,8 @@ sub parse_line {
 	elsif ( /^locale\s*(.*)/ ) {
 	    setopt("locale", $1);
 	}
-	elsif ( /^formats\s*(.*)/ ) {
-	    setopt("fmt_dir", $1);
-	}
-	elsif ( /^format\s+index\s*(.*)/ ) {
-	    setopt("fmt_index", $1);
-	}
-	elsif ( /^format\s+medium\s*(.*)/ ) {
-	    setopt("fmt_medium", $1);
-	}
-	elsif ( /^format\s+large\s*(.*)/ ) {
-	    setopt("fmt_large", $1);
-	}
-	elsif ( /^format\s+image\s*(.*)/ ) {
-	    setopt("fmt_image", $1);
-	}
-	elsif ( /^format\s+journal\s*(.*)/ ) {
-	    setopt("fmt_journal", $1);
+	elsif ( /^depth\s+(\d+)/ ) {
+	    setopt("lib_common", join("/", ("..") x $1));
 	}
 	else {
 	    warn("Unknown control: $_[0]\n");
@@ -394,6 +379,7 @@ sub set_defaults {
     setopt("icon",          DEFAULTS->{icon});
 
     $medium = DEFAULTS->{mediumsize} if defined($medium) && !$medium || $mediumonly;
+    $medium = 0 if $medium < 0;
 
     # Caption values.
     setopt("caption", DEFAULTS->{( -s $info_file || $import_dir) ?
@@ -406,6 +392,11 @@ sub set_defaults {
 	setlocale(LC_TIME, $locale);
 	setlocale(LC_COLLATE, $locale);
     }
+
+    if ( defined($lib_common) ) {
+	$lib_common =~ s;/+$;;;
+    }
+    $lib_common ||= "";
 }
 
 sub load_info {
@@ -519,10 +510,10 @@ sub load_info {
 	    $type = T_REF;
 	}
 	if ( $type == T_REF ) {
-	    for ( dirname($file)."/icon.jpg" ) {
+	    for ( fjoin(dirname($file), "icon.jpg") ) {
 		$assc = $_ if !defined $assc && -f $_;
 	    }
-	    $assc = "icons/extern.jpg" unless defined $assc;
+	    $assc = d_icons("extern.jpg") unless defined $assc;
 	    $el->assoc_name($assc);
 	    $el->dest_name($file);
 	    $el->type($type);
@@ -660,17 +651,32 @@ sub load_info_journal {
 	    $type = T_REF;
 	}
 	if ( $type == T_REF ) {
-	    for ( dirname($file)."/icon.jpg" ) {
+	    for ( fjoin(dirname($file), "icon.jpg") ) {
 		$assc = $_ if !defined $assc && -f $_;
 	    }
-	    $assc = "icons/extern.jpg" unless defined $assc;
+	    $assc = d_icons("extern.jpg") unless defined $assc;
 	    $el->assoc_name($assc);
 	    $el->dest_name($file);
 	    $el->type($type);
 	}
+
+	if ( $type > T_PSEUDO ) {
+	    my @a = ($annotation);
+	    my $pi = scalar(@journal) - 1;
+	    while ( $pi >= 0 ) {
+		my $e = $journal[$pi];
+		last if $e->type != T_ANN;
+		push(@a, $e->annotation);
+		$pi--;
+	    }
+	    $el->annotation([@a]) if @a;
+	}
+
 	$filelist->add($el);
 	push(@journal, $el) if !$a || $a !~ /^--/;
+
 	$dirs{$1} = 1 if $type != T_REF && $file =~ m;^(.+)/[^/]+$;;
+
     }
     close($fh);
     die("Aborted\n") if $err;
@@ -908,9 +914,10 @@ sub update_filelist {
 	}
 	if ( !defined($date) || $nd ne $date ) {
 	    $newinfo .= "\n!tag $nd\n";
+	    $newinfo .= "\n" if $journal;
 	    $date = $nd;
 	}
-	$newinfo .= $f . "\n";
+	$newinfo .= $journal ? "* $f\n\n" : "$f\n";
 	$el->tag($date) if $date;
 	$el->prev($prev->seq) if $prev;
 	$todo->add($el);
@@ -935,12 +942,15 @@ sub update_filelist {
 	}
 	if ( !defined($date) || $nd ne $date ) {
 	    $newinfo .= "\n!tag $nd\n";
+	    $newinfo .= "\n" if $journal;
 	    $date = $nd;
 	}
-	$newinfo .= "$f " .
-	  ($el->rotation ? ("-O:".int($el->rotation/90)." ") : "") .
-	    ($el->type == T_VOICE ? "-T:V " : "") .
-	      " \n";
+	$newinfo .=
+	  ($journal ? "* " : "") .
+	    "$f " .
+	      ($el->rotation ? ("-O:".int($el->rotation/90)." ") : "") .
+		($el->type == T_VOICE ? "-T:V " : "") .
+		  ($journal ? " \n\n" : " \n");
 	$el->tag($date) if $date;
 	$el->prev($prev->seq) if $prev;
 	$todo->add($el);
@@ -1164,7 +1174,7 @@ sub prepare_images {
 		$msg->("link ");
 		unless ( link($i_src, $i_large) == 1 ) {
 		    unlink($i_large); # just in case
-		    substr($msg,-5) = "copy ";
+		    $msg->("[copy] ");
 		    copy($i_src, $i_large, $time);
 		}
 	    }
@@ -1224,6 +1234,39 @@ my $fmt_journal_page;
 
 sub init_formats {
 
+    my $lib_common = $lib_common;
+    $lib_common .= "/" if $lib_common ne "";
+
+    my $did = 0;
+    my $load = sub {
+	my ($req, $data) = @_;
+	my $fmt = d_fmt($req);
+	if ( -s $fmt ) {
+	    local($/);
+	    open (my $fh, $fmt) || die("$fmt: $!\n");
+	    $data = <$fh>;
+	    close($fh);
+	}
+	elsif ( $externalize_formats ) {
+	    unless ( $did ) {
+		my $fdir = d_fmt("");
+		$fdir =~ s/\/+$//;
+		unless ( -d $fdir ) {
+		    print STDERR ("mkdir $fdir\n");
+		    mkdir(d_fmt(""));
+		}
+	    }
+	    print STDERR ("Creating formats: ") if $verbose > 1 && !$did++;
+	    print STDERR ("$req ") if $verbose > 1;
+	    open (my $fh, '>', $fmt) || die("$fmt: $!\n");
+	    print {$fh} $data;
+	    close($fh);
+	}
+	$data =~ s/\$\{lib_common\}/$lib_common/g;
+	$data =~ s/^([ \t]+)/detab($1)/gem;
+	$data;
+    };
+
     # Format for index pages (mostly).
     #
     # Variables:
@@ -1231,36 +1274,30 @@ sub init_formats {
     #  $title
     #  $ltop
     #  $rtop
-    #  $vbuttons
+    #  $vbuttons / $hbuttons
+    #  $jscript
     #  $contents
 
-    $fmt_index = "$fmt_dir/index.fmt"
-      if $fmt_dir && !$fmt_index && -s "$fmt_dir/index.fmt";
-    if ( $fmt_index ) {
-	local($/);
-	open (my $fh, $fmt_index) || die("$fmt_index: $!\n");
-	$fmt_index_page = <$fh>;
-	close($fh);
-    }
-    else {
-	$fmt_index_page = <<'EOD';
+    $fmt_index_page = $load->("index.fmt", <<'EOD');
+<?xml version="1.0" encoding="iso-8859-15"?>
 <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
 <html>
   <head>
-    <link rel="stylesheet" href="css/index.css">
+    <link rel="stylesheet" href="${lib_common}css/index.css">
     <title>$title</title>
+    $jscript
   </head>
   <body>
     <table>
       <tr>
 	<td></td>
 	<td align='left'>
-	  <p class='hd'>
+	  <p class='hdl'>
             $ltop
           </p>
 	</td>
 	<td align='right'>
-	  <p class='hdx'>
+	  <p class='hdr'>
             $rtop
           </p>
 	</td>
@@ -1277,7 +1314,6 @@ sub init_formats {
   </body>
 </html>
 EOD
-    }
 
     # Format for image pages (mostly).
     #
@@ -1286,38 +1322,32 @@ EOD
     #  $title
     #  $ltop
     #  $rtop
-    #  $vbuttons
+    #  $vbuttons / $hbuttons
+    #  $jscript
     #  $image
     #  $lbot
     #  $rbot
 
-    $fmt_image = "$fmt_dir/image.fmt"
-      if $fmt_dir && !$fmt_image && -s "$fmt_dir/image.fmt";
-    if ( $fmt_image ) {
-	local($/);
-	open(my $fh, $fmt_image) || die("$fmt_image: $!\n");
-	$fmt_image_page = <$fh>;
-	close($fh);
-    }
-    else {
-	$fmt_image_page = <<'EOD';
+    $fmt_image_page = $load->("image.fmt", <<'EOD');
+<?xml version="1.0" encoding="iso-8859-15"?>
 <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
 <html>
   <head>
     <title>$title</title>
-    <link rel="stylesheet" href="../css/$dir.css">
+    <link rel="stylesheet" href="../${lib_common}css/$dir.css">
+    $jscript
   </head>
   <body>
     <table>
       <tr>
 	<td></td>
 	<td align='left' valign='top'>
-	  <p class='hd'>
+	  <p class='hdl'>
             $ltop
           </p>
 	</td>
 	<td align='right' valign='top'>
-	  <p class='hd'>
+	  <p class='hdr'>
             $rtop
           </p>
 	</td>
@@ -1333,12 +1363,12 @@ EOD
       <tr>
 	<td></td>
 	<td align='left' valign='top'>
-	  <p class='ft'>
+	  <p class='ftl'>
             $lbot
           </p>
 	</td>
 	<td align='right' valign='top'>
-	  <p class='ft'>
+	  <p class='ftr'>
             $rbot
           </p>
 	</td>
@@ -1347,32 +1377,9 @@ EOD
   </body>
 </html>
 EOD
-    }
 
-    $fmt_large = "$fmt_dir/large.fmt"
-      if $fmt_dir && !$fmt_large && -s "$fmt_dir/large.fmt";
-    if ( $fmt_large ) {
-	local($/);
-	open(my $fh, $fmt_large) || die("$fmt_large: $!\n");
-	$fmt_large_page = <$fh>;
-	close($fh);
-    }
-    else {
-	$fmt_large_page = $fmt_image_page;
-    }
-
-    $fmt_medium = "$fmt_dir/medium.fmt"
-      if $fmt_dir && !$fmt_medium && -s "$fmt_dir/medium.fmt";
-    if ( $fmt_medium ) {
-	local($/);
-	open(my $fh, $fmt_medium) || die("$fmt_medium: $!\n");
-	$fmt_medium_page = <$fh>;
-	close($fh);
-    }
-    else {
-	$fmt_medium_page = $fmt_image_page;
-    }
-
+    $fmt_large_page  = $load->("large.fmt",  $fmt_image_page);
+    $fmt_medium_page = $load->("medium.fmt", $fmt_image_page);
 
     # Format for journal pages (mostly).
     #
@@ -1380,24 +1387,18 @@ EOD
     #
     #  $title
     #  $tag
-    #  $hbuttons
+    #  $vbuttons / $hbuttons
     #  $journal
+    #  $jscript
 
-    $fmt_journal = "$fmt_dir/journal.fmt"
-      if $fmt_dir && !$fmt_journal && -s "$fmt_dir/journal.fmt";
-    if ( $fmt_journal ) {
-	local($/);
-	open(my $fh, $fmt_journal) || die("$fmt_journal: $!\n");
-	$fmt_journal_page = <$fh>;
-	close($fh);
-    }
-    else {
-	$fmt_journal_page = <<'EOD';
+    $fmt_journal_page = $load->("journal.fmt", <<'EOD');
+<?xml version="1.0" encoding="iso-8859-15"?>
 <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
 <html>
   <head>
-    <link rel='stylesheet' href='../css/journal.css'>
+    <link rel='stylesheet' href='../${lib_common}css/journal.css'>
     <title>$title</title>
+    $jscript
   </head>
   <body>
     <table class='outer'>
@@ -1422,16 +1423,51 @@ EOD
   </body>
 </html>
 EOD
-    }
 
-    # Remove tabs for indent processing.
-    for ( $fmt_index_page,
-	  $fmt_large_page,
-	  $fmt_medium_page,
-	  $fmt_journal_page ) {
-	s/^([ \t]+)/detab($1)/gem;
-    }
+    print STDERR ("\n") if $did;
+}
 
+sub jscript {
+    my (%nav) = @_;
+    my $next = $nav{next};
+    my $prev = $nav{prev};
+    my $up   = $nav{up};
+    my $down = $nav{down};
+    my $idx  = $nav{idx};
+    my $jnl  = $nav{jnl};
+    my $js = <<EOD;
+<script type='text/javascript'>
+function handleKey(e) {
+  var key;
+  if ( e == null ) { // IE
+    key = event.keyCode
+  }
+  else { // Mozilla
+    if ( e.altKey || e.ctrlKey ) {
+      return true
+    }
+    key = e.which
+  }
+  switch(key) {
+EOD
+
+    $js .= "    case   8: window.location = '$prev'; break // Backspace\n" if $prev;
+    $js .= "    case  32: window.location = '$next'; break // Space\n"     if $next;
+    $js .= "    case  13: window.location = '$down'; break // Enter\n"     if $down;
+    $js .= "    case 117: window.location = '$up'; break // 'u'\n"         if $up;
+    $js .= "    case 100: window.location = '$idx'; break // 'd'\n"        if $idx;
+    $js .= "    case 106: window.location = '$jnl'; break // 'j'\n"        if $jnl;
+
+    $js .= <<EOD;
+   default:
+  }
+  return false
+}
+
+document.onkeypress = handleKey
+</script>
+EOD
+    $js;
 }
 
 sub button($$;$$);
@@ -1447,7 +1483,10 @@ sub process_fmt {
 sub write_image_page {
     my ($el, $dir) = @_;
 
-    return unless $el->type > 0;
+    if ( $el->type <= T_PSEUDO ) {
+	warn("PSEUDO: ", Dumper($el)) unless $el->type == T_REF;
+	return;
+    }
 
     my $i = $el->seq - 1;
     my $file = $el->dest_name;
@@ -1461,35 +1500,37 @@ sub write_image_page {
 
     my $tt = "$album_title: Image " . ($i+1);
     $tt .= " of " . $num_entries if $num_entries > 1;
-    $tt = html($tt);
-    my $it = html($el->description);
-    unless ( $it ) {
-	$it = $tt;
-	$tt = "";
-    }
+    $tt = htmln($tt);
+    my $it = htmln($el->description) || " ";
+#    unless ( $it ) {
+#	$it = $tt;
+#	$tt = "";
+#    }
 
     my $next = ($el->next || $num_entries+1) - 1;
     my $prev = ($el->prev || 0) - 1;
+    my %nav = (next => $next < $num_entries ? $htmllist[$next] : "",
+	       prev => $prev > 0 ? $htmllist[$prev] : "",
+	       idx  => "../".ixname(int($i/$entries_per_page)),
+	       up   => "../".ixname(int($i/$entries_per_page)));
 
-    my $b = join("$br\n",
-		 ($dir eq "large" && $medium) ?
-		 button("medium", "../medium/".$htmllist[$i],              1, 1) :
-		 button("index",  "../".ixname(int($i/$entries_per_page)), 1, 1),
-		 button("first",  $htmllist[0],                            1, $i > 0),
-		 button("prev",   $htmllist[$prev] || "",                  1, $prev >= 0),
-		 button("next",   $htmllist[$next] || "",                  1, $next < $num_entries),
-		 button("last",   $htmllist[-1],                           1, $i < $num_entries-1));
+    my @b = (
+	     ($dir eq "large" && $medium) ?
+	     button("medium", "../medium/".$htmllist[$i],              1, 1) :
+	     button("index",  "../".ixname(int($i/$entries_per_page)), 1, 1),
+	     button("first",  $htmllist[0],                            1, $i > 0),
+	     button("prev",   $htmllist[$prev] || "",                  1, $prev >= 0),
+	     button("next",   $htmllist[$next] || "",                  1, $next < $num_entries),
+	     button("last",   $htmllist[-1],                           1, $i < $num_entries-1));
 
-    if ( $journal ) {
-	$b .= "$br\n" .
-	  button("journal",
-		 "../journal/jnl" . $jnltags{$el->tag} . ".html#img".sprintf("%04d", $i+1),
-		 1, 1);
+    if ( $journal && exists $jnltags{$el->tag} ) {
+	my $page = "../journal/jnl" . $jnltags{$el->tag} . ".html#img".sprintf("%04d", $i+1);
+	push(@b, button("journal", $page, 1, 1));
+	$nav{jnl} = $page;
     }
     if ( $el->type == T_VOICE ) {
 	my $sound = $el->assoc_name;
-	$b .= "$br\n" .
-	  button("sound", "../large/$sound", 1, 1);
+	push(@b, button("sound", "../large/$sound", 1, 1));
     }
 
     my $imglink;
@@ -1501,11 +1542,13 @@ sub write_image_page {
 	    $imglink = "<a href='../large/" . $el->dest_name . "'>" .
 	      img($file, alt => "[Click to play movie]", border => 2) .
 		"</a>";
+	    $nav{down} = "../large/" . $el->dest_name;
 	}
 	else {
 	    $imglink = "<a href='../large/".$htmllist[$i]."'>" .
 	      img($file, alt => "[Click for bigger image]", border => 2) .
 		"</a>";
+	    $nav{down} = "../large/" . $htmllist[$i];
 	}
     }
     else {
@@ -1517,13 +1560,14 @@ sub write_image_page {
 	else {
 	    $imglink = img($file, alt => "[Image]", border => 2);
 	}
+	$nav{up} = "../medium/" . $htmllist[$i];
     }
 
-    my $auxright = html($el->dest_name);
+    my $auxright = htmln($el->dest_name);
     my $s = size_info($el);
     $auxright .= " ($s)" if $s;
     $auxright .= "&nbsp;&nbsp;&nbsp;$creator" if $creator;
-    my $auxleft  = html($el->tag || "");
+    my $auxleft  = htmln($el->tag || "");
 
     my $it2 = $it;
     if ( $el->Make ) {		# EXIF info
@@ -1533,6 +1577,26 @@ sub write_image_page {
 	      restyle_exif($el) . "</table>\n" .
 		"</span></a>";
     }
+    my $tt2 = $tt;
+
+    if ( $dir eq "medium" && $el->annotation ) {
+	my @a = UNIVERSAL::isa($el->annotation, "ARRAY")
+	  ? @{$el->annotation} : ($el->annotation);
+	my $t = "";
+	foreach ( reverse(@{$el->annotation}) ) {
+	    next unless $_;
+	    my $x = $_;		# copy
+	    $x = html($x) unless $x =~ /^</;
+	    $t .= "<p>\n" if $t;
+	    $t .= $x;
+	}
+	$tt2 = "<a href='#' class='info'>" . $tt .
+	  "<span>" .
+	    "<table border='1' width='100%'>\n" .
+	      "<tr><td>$t</td></tr>" .
+		"</table>\n" .
+		  "</span></a>" if $t;
+    }
 
     update_if_needed(d_dest($dir, $htmllist[$i]),
 		     process_fmt($dir eq "medium" ?
@@ -1541,8 +1605,10 @@ sub write_image_page {
 				 title	  => $it,
 				 dir	  => $dir,
 				 ltop	  => $it2,
-				 rtop	  => $tt,
-				 vbuttons => $b,
+				 rtop	  => $tt2,
+				 hbuttons => join("", @b),
+				 vbuttons => join("$br\n", @b),
+				 jscript  => jscript(%nav),
 				 image	  => $imglink,
 				 lbot	  => $auxleft,
 				 rbot	  => $auxright,
@@ -1554,15 +1620,22 @@ sub write_index_page {
 
     my $tt = $album_title.": Index"; # left title
     my $t = "";			# right (index select)
-    my $b = "";			# buttons (vertical)
+    my @b;			# buttons
+    my %nav;
 
     # Construct buttons and index selector.
     if ( $num_indexes > 1 ) {
-	$b = join("$br\n",
-		  button("first", ixname(0),              0, $x > 0             ),
-		  button("prev",  ixname($x-1),           0, $x > 0             ),
-		  button("next",  ixname($x+1),           0, $x < $num_indexes-1),
-		  button("last",  ixname($num_indexes-1), 0, $x < $num_indexes-1));
+	$nav{next} = ixname($x+1) if $x < $num_indexes-1;
+	$nav{prev} = ixname($x-1) if $x > 0;
+	$nav{up}   = join("/",$lib_common,"index.html") if $lib_common ne "";
+
+	push(@b, button("up", join("/",$lib_common,"index.html"),  0, 1))
+	  unless $lib_common eq "";
+	push(@b,
+	     button("first", ixname(0),              0, $x > 0             ),
+	     button("prev",  ixname($x-1),           0, $x > 0             ),
+	     button("next",  ixname($x+1),           0, $x < $num_indexes-1),
+	     button("last",  ixname($num_indexes-1), 0, $x < $num_indexes-1));
 	$tt .= " " . ($x+1) . " of $num_indexes";
 	my @ixlist = ( 0..$num_indexes-1 );
 	if ( @ixlist > IXLIST ) {
@@ -1590,16 +1663,18 @@ sub write_index_page {
 	}
 	$t .= "...\n" if $ixlist[-1] < $num_indexes-1;
     }
+    elsif ( $lib_common ) {
+	push(@b, button("up", join("/",$lib_common,"index.html"),  0, 1));
+	$nav{up} = join("/",$lib_common,"index.html");
+    }
 
     my $first_in_row = $x * $entries_per_page;
 
-    if ( $journal ) {
-	$b .= "$br\n" if $b;
-	$b .= button("journal",
-		     "journal/jnl".
-		     $jnltags{$filelist->byseq($first_in_row+1)->tag}.
-		     ".html#img".sprintf("%04d", $first_in_row+1),
-		     0, 1);
+    if ( $journal && exists $jnltags{$filelist->byseq($first_in_row+1)->tag} ) {
+	my $page = "journal/jnl". $jnltags{$filelist->byseq($first_in_row+1)->tag} .
+	  ".html#img" . sprintf("%04d", $first_in_row+1);
+	push(@b, button("journal", $page, 0, 1));
+	$nav{jnl} = $page;
     }
 
     # Construct the actual index part.
@@ -1656,7 +1731,9 @@ sub write_index_page {
 				 title    => $tt,
 				 ltop     => $tt,
 				 rtop     => $t,
-				 vbuttons => $b,
+				 hbuttons => join("", @b),
+				 vbuttons => join("$br\n", @b),
+				 jscript  => jscript(%nav),
 				 contents => $cc,
 				));
 }
@@ -1671,22 +1748,27 @@ sub write_journal {
     my $seq = 1;
     my $x = 0;
     my $tag;
+    my %nav;
+    my @b;
 
     my $flush = sub {
 	my $jnl = "";
 	my $ix = int($seq / ($index_rows * $index_columns)) || "";
 	foreach my $e ( @ann ) {
+	    my $t = $e->annotation;
+	    $t = (UNIVERSAL::isa($t, "ARRAY") ? $t->[0] : $t) || "";
+	    $t = html($t) unless $t =~ /^</i;
 	    if ( $e->type == T_ANN ) {
 		$jnl .= "<tr>\n".
-			"  <td colspan='2' valign='middle' align='left'>".
-			"    " . indent($e->annotation, 4) . "\n".
+			"  <td colspan='2' valign='middle' align='left'>\n".
+			"    " . indent($t, 4) . "\n".
 			"  </td>\n".
 			"</tr>\n";
 		next;
 	    }
 
 	    # We cannot use $el->seq, since that's the info.dat order
-	    # which and includes the skipped entries.
+	    # which includes the skipped entries.
 	    my $dst = ($e->type == T_REF) ? $e->assoc_name :
 	      d_thumbnails($e->type == T_MPG ? $e->assoc_name : $e->dest_name);
 	    my $img = "<a name='" . sprintf("img%04d", $seq) . "' " .
@@ -1699,7 +1781,7 @@ sub write_journal {
 
 	    $jnl .= "<tr>\n".
 	            "  <td valign='middle' align='left'>\n".
-		    "    " . indent($e->annotation || "&nbsp;", 4) . "\n".
+		    "    " . indent($t || "&nbsp;", 4) . "\n".
 		    "  </td>\n".
 		    "  <td valign='top' align='left'>\n".
 		    "    " . indent($img, 4) . "\n".
@@ -1707,22 +1789,26 @@ sub write_journal {
 		    "</tr>\n";
 	    $seq++;
 	}
-	my $b =
-	  join("",
-	       button("first", $jname->(1),         1, $x > 0         ),
+	@b = ( button("first", $jname->(1),         1, $x > 0         ),
 	       button("prev",  $jname->($x),        1, $x > 0         ),
 	       button("next",  $jname->($x+2),      1, $x < $journal-1),
 	       button("last",  $jname->($journal),  1, $x < $journal-1),
 	       button("index", "../index$ix.html",  1, 1             ),
-	      );
+	     );
+	$nav{prev} = $jname->($x) if $x > 0;
+	$nav{next} = $jname->($x+2) if $x < $journal-1;
+	$nav{up} = $nav{idx} = "../index$ix.html";
+
 	$x++;
 
 	update_if_needed(d_journal("jnl" . $jnltags{$tag} . ".html"),
 			 process_fmt($fmt_journal_page,
-				     title    => "Journal: " . html($tag),
-				     tag      => html($tag),
-				     hbuttons => $b,
+				     title    => "Journal: " . htmln($tag),
+				     tag      => htmln($tag),
+				     hbuttons => join("", @b),
+				     vbuttons => join("$br\n", @b),
 				     journal  => $jnl,
+				     jscript  => jscript(%nav),
 				    ));
     };
 
@@ -1752,6 +1838,7 @@ sub button($$;$$) {
     $active = 1 unless defined $active;
     $tag .= "-gr" unless $active;
     $level = "../" x $level;
+    $level .= $lib_common . "/" if $lib_common ne "";
     my $b = img("${level}icons/$tag.png", align => "top",
 		border => 0, alt => "[$Tag]");
     $active ? "<a class='info' href='$link' alt='[$Tag]'>$b</a>" : $b;
@@ -1769,13 +1856,47 @@ sub br {
 
 #### HTML helpers.
 
-sub html {
-    # Escape HTML sensitive characters, and turn newlines into <br>.
-    my $t = shift;
+sub _html {
+    my ($t) = @_;
     return '' unless $t;
-    $t =~ s/\&/&amp;/g;
-    $t =~ s/\</&lt;/g;
-    $t =~ s/\>/&gt;/g;
+    HTML::Entities::encode($t);
+}
+
+sub __html {
+    my ($t) = @_;
+    return '' unless $t;
+    $t =~ s/&/&amp;/g;
+    $t =~ s/</&lt;/g;
+    $t =~ s/>/&gt;/g;
+    $t;
+}
+
+sub html {
+    # Escape HTML sensitive characters.
+    eval {
+	require HTML::Entities;
+	# Force Latin-15 (well, partly).
+	no warnings 'once';
+	for ( \%HTML::Entities::char2entity ) {
+	    $_->{chr(0204)} = '&euro;';
+	    $_->{chr(0246)} = '&Scaron;';
+	    $_->{chr(0250)} = '&scaron;';
+	    $_->{chr(0264)} = '&Zcaron;';
+	    $_->{chr(0270)} = '&zcaron;';
+	    $_->{chr(0274)} = '&OE;';
+	    $_->{chr(0275)} = '&oe;';
+	    $_->{chr(0276)} = '&Yuml;';
+	}
+    };
+    no warnings 'redefine';
+    *html = $@ ? \&__html : \&_html;
+    goto &html;
+}
+
+sub htmln {
+    # Escape HTML sensitive characters, and turn newlines into <br>.
+    my $t = html(shift);
+    return '' unless $t;
     $t =~ s/\n+/$br/go;
     $t;
 }
@@ -1806,8 +1927,8 @@ sub restyle_exif {
     my $v;
 
     my $app = sub {
-	$ret .= "<tr><td>".html($_[0])."</td>".
-	            "<td>".html($_[1])."</td></tr>\n";
+	$ret .= "<tr><td>".htmln($_[0])."</td>".
+	            "<td>".htmln($_[1])."</td></tr>\n";
     };
 
     $app->("Date", $v) if $v = $el->DateTime;
@@ -1843,7 +1964,7 @@ sub restyle_exif {
 
 sub f_caption {
     my ($el) = @_;
-    my $s = html($el->dest_name);
+    my $s = htmln($el->dest_name);
     if ( $el->Make ) {
 	$s = "&nbsp;$s<a href='#' class='info'>&nbsp;<span>".
 	  "<table border='1' width='100%'>\n".
@@ -1860,14 +1981,14 @@ sub s_caption {
 
 sub t_caption {
     my ($el) = @_;
-    $el->tag  ? html($el->tag) : "";
+    $el->tag  ? htmln($el->tag) : "";
 }
 
 sub c_caption {
     my ($el) = @_;
     my $t = $el->description || "";
     $t =~ s/\n.*//;
-    html($t);
+    htmln($t);
 }
 
 #### Persistent info (cache) helpers.
@@ -2010,11 +2131,11 @@ body {
 td {
     font-size:  80%; $css_fontfam;
 }
-p.hd {
+p.hdl, p.hdr {
     font-size: 140%; font-weight: bold;
     $css_fontfam;
 }
-p.ft {
+p.ftl, p.ftr {
     font-size:  80%; $css_fontfam;
 }
 a:link {
@@ -2068,17 +2189,17 @@ table.inner {
 table.inner td {
     border: inset 0px;
 }
-p.hdx {
+p.hdr {
     font-size: 140%; font-weight: bold;
     font-family: Verdana, Arial, Helvetica;
 }
-p.hdx a:link {
+p.hdr a:link {
     color: #000000; text-decoration: underline;
 }
-p.hdx a:visited {
+p.hdr a:visited {
     color: #000000; text-decoration: underline;
 }
-p.hdx a:hover {
+p.hdr a:hover {
     color: #FF0000; text-decoration: underline;
 }
 EOD
@@ -2151,7 +2272,7 @@ sub add_stylesheet {
     my ($css, $data) = @_;
     return if -e d_css("$css.css");
     print STDERR ("Creating style sheets: ")
-      unless $add_stylesheet_msg++;
+      unless $verbose <= 1 || $add_stylesheet_msg++;
     print STDERR ("$css.css ");
     $css = d_css("$css.css");
     open(my $out, ">".$css) or die("$css: $!\n");
@@ -2261,15 +2382,18 @@ sub still {
     my $still = new Image::Magick;
     if ( $prog_mplayer ) {
 	my $tmp = "00000001.jpg";
+	my $tmp2 = "00000002.jpg";
 	if ( -e $tmp ) {
 	    die("ERROR: mplayer needs to create a file $tmp, but it already exists!\n");
 	}
-	my $cmd = "$prog_mplayer -really-quiet -nosound -frames 1 -vo jpeg " .
+	# Sometimes, -frames 1 does not produce anything. Need -frames 2.
+	my $cmd = "$prog_mplayer -really-quiet -nojoystick -nolirc -nosound -frames 2 -vo jpeg " .
 	  squote(d_large($el->dest_name));
+	warn("\n+ $cmd\n") if $verbose > 2;
 	my $t = `$cmd 2>&1`;
 	warn("$t\n") unless -s $tmp;
 	$still->Read($tmp);
-	unlink($tmp);
+	unlink($tmp, $tmp2);
     }
     else {
 	# This may take minutes.
@@ -2340,7 +2464,7 @@ sub copy_voice {
     return unless $prog_mplayer;
 
     # This will produce an MP2 file. Good enough for now...
-    my $cmd = "$prog_mplayer -vo null ".
+    my $cmd = "$prog_mplayer -nojoystick -nolirc -vo null ".
       "-dumpaudio -dumpfile " . squote($new) . " " . squote($orig);
     warn("\n+ $cmd\n") if $trace;
     my $res = `$cmd 2>&1`;
@@ -2413,6 +2537,7 @@ sub app_options {
 	'link!'          => \$linkthem,
 	'update'         => \$update,
 	'mediumonly'     => \$mediumonly,
+	'extformats'	 => \$externalize_formats,
 
         # Album options. Can also be set in info/config files.
 	'caption=s'      => \$caption,
@@ -2536,7 +2661,7 @@ sub new {
 		 (orig_name    => $file,
 		  dest_name    => basename($file)) : (),
 		 description  => "",
-		 annotation   => "",
+		 annotation   => [],
 		 tag	      => "",
 	       };
 
@@ -2771,151 +2896,162 @@ GNU General Public License or the Artistic License for more details.
 __END__
 
 begin 644 index.png
-MB5!.1PT*&@H````-24A$4@```"$````A"`,```!@.C)=````=5!,5$4```"M
-MK:VKJZN5E963DY-U=W4[.SLW-S<O+R\I*2DF)R8A(2$='1W.SL[,S,S*RLK(
-MR,@5%14/#P^^PKZ\O+P'!P>TN+2JJJJHK*B6EI9\?'QJ:FI86%@P,C`H*"@B
-M(B+-S<W'Q\?!P<&_O[^[O[L&!@:UN;44R\/V````R4E$051XG,V4VQ*"(!1%
-M3R:F&&GE+14U-?[_$QN.D0YJV%.M%_:,:U28LX&K"7BM?:;33PU!J`\Z/B5"
-M&0D'B%V=&(`G@R$X>&G'=+J;!UR@0:`*9L\E004$#0II$RGNK%6Q97N@TNC]
-MN`O?_Y<S1T6'18.1@<M">'B2,QJUC+5N'/'+!1J6C-9OC$LA.:!1RECJAFFW
-MIURQ8[:*]M18X:MW;#EU\U[^Y=0_S8=YQLQSNF'6L2_1G+$OV+E%5.>PMTN,
-;O=UV.ZSS!'/7.?2F!-OE`````$E%3D2N0F""
+MB5!.1PT*&@H````-24A$4@```"$````A"`````!RCYVS```!?TE$050XC;V3
+MOTM"413'/^JSAR))B3B;0F[A%KGDT-(D+D(0!*W^`[T6EPP:0W`2A":7>+N#
+M+C4(\D9U4&?Q1QB1^"L:>M?W>$HNT7>YY][[.>=^W^$=6Y4MDO1U.;3>^!PF
+M8E)1YUTK$70FXB[`5H7/6PTY8B6:4Z)W;K!5F2A:)./W6HEQ(]>,9EW8H:)%
+MBN$U`.]Q,:)50`*5C/0FSMWRQUP/G9YT6CU'8CF7_;,S02A)Y54/3QX/?[YE
+MV#WRSM@)`0SZ``<R,.U8^A%X`BCD`>Y#0#NEW]C7'%KU%X3P\5X`J`/PO`^,
+MK,0X;V25-M20%+&/DCK5PX"9L">-G-A&'U_JJD;PI2=JQ$S$(BL()5A:==U,
+M@/<"H%X#2.T#(^%7$+O7`-0`DB&@+8C_[7KO$F``P(T,3`W"%VR.7<P:1E8'
+MLR0<SFD_7!9[-]G5?TI+?R7QD"GN&3F>5;3(D0`)XF7M*N-;M]C*-:-Q8^8V
+C2LP<3"KJ)L"8V]^UO6/?/_-HCRMMEKD`````245.1*Y"8((`
 `
 end
 begin 644 medium.png
-MB5!.1PT*&@H````-24A$4@```"$````A"`,```!@.C)=````:5!,5$4```"G
-MIZ>5E96'AX=Y>7EU=W5U=74O+R\I*2DF)R8A(2'.SL[*RLH1$1$/#P^^PKZ\
-MO+P'!P>TN+0#`P,!`0&JJJJHK*BFIJ:6EI9V=G9T='0P,C`H*"@0$!#!P<&_
-MO[^[O[NUN;4"`@+$?8!#````P$E$051XG,74[0Z"(!B&X:</5-1,+;7$$CK_
-M@TPAAP&&6VO=?_SAM>GD?<71%UY77IOQN1"$QC"+*1&3*!E0A&8%P$HE!$-4
-M]8E9?XG`A!0$76K='TL[$"DH*B=(DBWH*'A<V(]0Y4K4"!?`7T7O$^VA^2S:
-M!V;$(=K3<&2:V"(XRU.]-4LBF`X^:]PBT+.1;5QB>$F=>I=W<=]?Y^V^^:8_
-M$OX9\\_IBEF7^Y+;Z7V1.^=LVCFYMZ[TWJ[[.RSW!!/T,=8!(V$7`````$E%
-&3D2N0F""
+MB5!.1PT*&@H````-24A$4@```"$````A"`````!RCYVS```!(DE$050XC;W3
+MOTZ#4!3'\2\4TM3$="!]@"8FLK*Y]@U(]`&<VSJYZ<)2)ZT./$`GZ<CN`&_`
+M*+@T<34-HHE-TS^ZM$+@`I/^EDLXGW`N]^9(/C51=NMFGJ]HC8Q8>.YJEA==
+MU>RU`,F'K^N`IIX7X1)C=`"2S^(JT*U..R^29SLT;EK(X`7ZY*@`:)],],`#
+M&5PLI5`'4(:X(+-9-3LE/WH,(#.?Z<46F<A5Q;\3'W7".8VJQ>-]/`RKA/.P
+M);Z(RL5TO`7B050FG-MO`-[[D5A,[_9/2?]%))QQ^C89I-O]O=5/]3+;_54O
+MB,,SQ/FOF].Z85(M&NKRK:08[;J86&LA6-N8H$#O*3BW-,$7[-#HI3,GS'[F
+@8.&Y(I#.;77JS^,'X]I4;J49'ZH`````245.1*Y"8((`
 `
 end
 begin 644 first.png
-MB5!.1PT*&@H````-24A$4@```"$````A"`,```!@.C)=````;U!,5$4```"5
-ME95U=W5O;V]555534U,]/3T[.SLO+R\I*2DF)R8A(2'.SL[,S,S*RLJ^PKZ\
-MO+P'!P>TN+0#`P.JJJJHK*BBHJ*@H*">GIZ6EI9P<'!86%A45%0P,C`H*"C-
-MS<W+R\N_O[^[O[NUN;4"`@)5ZT`7````T$E$051XG(W4V0Z",!`%T"N([`@(
-M+L@BR_]_HW9&`BEMVOLR"9Q`:6?`U13\ZU3+F?9B=J(8<N+(F5=1=D`1R"F`
-MKF0Q=PBK,9$SOD)T,PD'?7:X+Y+U<$A$J)0@24Z(A)CBXO@*3LZB1K"[^."2
-MWG7"O7#UWAK1+#[5%FHQN(`0J0>-^`$A/F=H1`,2!)3"74@,+32"`7P&"O%D
-M@!MTPOP,BW58?(O%?ECLJ?E<;,Y6W1_F'C/WJ46OT[SDQVSS0C.GS#IS-+>J
-<;'-K]W?0YPL&.S)%W$I>4`````!)14Y$KD)@@@``
+MB5!.1PT*&@H````-24A$4@```"$````A"`````!RCYVS```!;4E$050XC873
+MNT["4!C`\7]+"<&%@?``)"9V,`8F77D#XF4$W44G0Q"7+BI1)X75(*QBV!P<
+M8'6QQAC%B0<P#"P2PLVAI3TMK9[E.SGGU^_2Y$AM_EF*&2<]]TTT((A!JSGJ
+MND4\F$Z%`:D-/R<Z(=4M.D.2ITL@M1D4=56+1=RB_UGN),_"R-#2U>KR`B"R
+M457U%LC01%,6[@&4'$V0F8Q",9]!5P!D>EU5*/%FA.F[=2([OZK=&K'TZ"/J
+MY2D`YP]"-\+]K'YME"@)P"%,,+D4@5AE#J[N'97M''<5H]1%P]F\E:-6,9HL
+MN8"5X]6<XGGB`E:.1,[8K6_Y";+[QK;@)O8LNP<`2/D=/T'F$(#`T;:?L$A^
+M4Q3B/Y6RT@V`7)0:W@(RLQ<`CF=^@FS"B(4/H8]HO-.WR9IYO"J(0'#XC??Z
+M,F=)HXT]P;A,&A1(/>E[6M0C0[F33-EOSG/-WQP,6DTO8+_;OY?\'^`7/!!E
+1K2\A))\`````245.1*Y"8((`
 `
 end
 begin 644 first-gr.png
-MB5!.1PT*&@H````-24A$4@```"$````A"`,```!@.C)=````8U!,5$4```"R
-MK[*QK[&?FY^5E95U=W4O+R\I*2DF)R8A(2'.SL[*RLK#PL.^PKZ\O+R[NKL'
-M!P>XMKBTN+2JJJJHK*BIIJF>FIZ6EI8P,C`H*"C-S<W+R\O"P<*_O[^[O[N[
-MN;NUN;4M,E&?````STE$051XG(W4VPZ#(`P&X.J&HF[.TSK4J;S_4T[*C$9I
-MX+]I(E\\0"L\?8%_G;MSYJ/00F9P3B:%WD2C`*KDG`I`-59H!6D[Y>=,GQ24
-M)B&@+R[K)D4/@H2$U@GR_`[2B#FKKH^P*:WH(#E<'&T91D[4+UOC+R-J7*A&
-MR(@:20PQ,F(%1@P1,L*`51!P"@*K(.`2%N`2(R,>-[OR1D[X[Q'P'@'?$K`?
-M`7L:<"X!9^ON#W^/^?LTH-=I7LIK]GFAF7-FFSF:6U?VN0W[._#Y`1,--!>D
-/,0GZ`````$E%3D2N0F""
+MB5!.1PT*&@H````-24A$4@```"$````A"`````!RCYVS```!2DE$050XC873
+M36K"0!3`\7]B1"P%H5&$?@A"H=EFUZTW\`@]0$_0;K)I3Y`#>(3LNX@WR++I
+M2M"V(-520131U"XF'Y,QJ6_S(//+O)?,/&W(D3#B',W5%;,BB;7O;4>JZ%;[
+MO3J@#6'U&%"S5!%NL)].0!NR?@@LI]50Q>+5#>WG.CKX@36X/@`T;@=6X(,.
+M'HYQL`Y@W..!3K2MM4H^]`9`9SZRI!*12/LH?:+GWYK^B#Q9E8CIQQZ`\4SJ
+M)@]$B8D$<GLDX%T&LDC!%\4B!B@@ZR,!XQG%8ODI\O=2`6F5TW.1SYIE@O:%
+MR!WU"+).$W+9*A,)T10B_[&4-,M$2CHRR=^=-IIHMU30CN_%U:]4Q>R&BXS$
+M0Z)5)%&I;I232.,M[K2/LRL$.Y<^&-![">X<LV`'-[1[V<P51C)SL/:](I#-
+;[?^A'P/\`;NE8"0C>L''`````$E%3D2N0F""
 `
 end
 begin 644 last.png
-MB5!.1PT*&@H````-24A$4@```"$````A"`,```!@.C)=````;U!,5$4```"5
-ME95U=W5O;V]555534U,]/3T[.SLO+R\I*2DF)R8A(2'.SL[,S,S*RLJ^PKZ\
-MO+P'!P>TN+0#`P.JJJJHK*BBHJ*@H*">GIZ6EI9P<'!86%A45%0P,C`H*"C-
-MS<W+R\N_O[^[O[NUN;4"`@)5ZT`7````T$E$051XG)V4V0Z",!!%KR`"!1$0
-M7)!%EO__1M.I!`.=#/&\3&A/*+1SBXL$OG4HUPR_QNBH"&LBY8RSD3=`%JS)
-M@"8WQM@@+/IX3?\,T8QD.&B3S;PF:>&0H5!8A3@^0&ECB++M$H;4&"4">KR=
-MS?"=-5Z>&3ZYK(&:JC]5K`%/+^0#;L<9.+[)@,L:6M$&*M9`W9$QN:R!F@RC
-MV`U<39D>?[]#_`[Q7\3]$/=4/!?Q;/G^D'M,[M,=O4YY2;<L>:',69DS1[FU
-<L>1VW^W`\P$(+S)%*AO?S0````!)14Y$KD)@@@``
+MB5!.1PT*&@H````-24A$4@```"$````A"`````!RCYVS```!<4E$050XC863
+M/4M"41C'?_>HB"T.X@<0@BX1HE.MCFVB-1K1FC9)6"TNO2`MU6T-J[$4MX8&
+M_087(L@F/T`XM"2B7AN.+_?E6/_E.3SGQ__YWWMXM!;_R#^IHZ[[)N*S$;UF
+M8]!Q$[%`.A4"M!;\G)@$=3?1[I,\70*M1>_8U,O1L)OX_C#:R;,0`IJF7EWV
+M`(0WJKK9!`$-RG[//8`_3P,$HT$PNN!#5P`$W8X>!GBW9/O-A8G9Z>5"UKN'
+M103U<P`LX]&9QG:NC4L"L*[&.4WI`?7*"(!KNXN#X/G2BS@)GBIC`&[NE3D`
+M:K)8M]K.`H*:?'3+B">44R"[+OOYA#H'V9)L[T^'N*=L%^6?*.1F+:?'5E&F
+M.)@#3H_,H?``#B)[)&T+=L`^)3,!\@[`YK&Y*NM>W!E>$(FUOP'6)G8N`($O
+MT/]"K<])CC3EH1(8&J3!#ZE7<[<<43@8[61JOG-*37<.>LV&"ICO[=_RO+Y'
+5OU]T8)`W'C>9`````$E%3D2N0F""
 `
 end
 begin 644 last-gr.png
-MB5!.1PT*&@H````-24A$4@```"$````A"`,```!@.C)=````=5!,5$4```"O
-MK:^LJ:REH:6AG:&?FY^5E95U=W4O+R\I*2DF)R8A(2'.SL[,S,S*RLJ^PKZ_
-MOK^\O+P'!P>TN+2TLK2SL+.JJJJHK*BGI*>BGJ*AGJ&@G*">FIZ6EI8P,C`H
-M*"C+R\O$P\3`O\"_O[^_O;^[O[NUN;7'-O7)````UDE$051XG)V4ZQ*"(!!&
-M-\M0-/-26DE>4GG_1RP7S09AUNG\V1'/`,)^PID"ICH4.L.O(1D/0"?@3,Y&
-M5@&DGDX*4&7*D!7X>1?J=$\?*HD&@SI:O1^):F!H<,B-0A@>@8_&$*3K)12)
-M,@KP\+&9AANK<8G5\*ZU&5?WA=6YMS9#N#B+(PZMS1!NC\9761NB[-&8%8,A
-MRA@-\6AMQF<O:"C%:(CRINK^].\<Y#[(;R'/@SQ3\E[HN[7W!]UC=)]NZ'7,
-H2[)FR0MFSLB<.<RMB26WV_X.=M[O[#PGJ]"<S`````!)14Y$KD)@@@``
+MB5!.1PT*&@H````-24A$4@```"$````A"`````!RCYVS```!3DE$050XC873
+M34K#0!3`\7\F*:5U4:$4W`A&"V;;G=O>H$?P`)Y`-]GH"7J`'B%[%^D-LC3B
+M1P0W@A3LHBVE^7"1IDDF,_HV$_)^O'G#FS'F_!/6?DT6<J9O5L3&]W:1+.S6
+M9-P!C#FL[P+:CBS"+:/[+AAS-K>!XPYZLE@^3</10P<!?N#,A@U`[VKF!#X(
+M\'"M1A[`NL$#0;)K#S0'O000+"*G!Y`4YY:8.'Q]_>3KYTHGTF@)0/RVU@BR
+M][Q*_++2"+(H)\GK2B/(/@JRU@A2!:F+LMV22((LBG,2I1IAV/D$+%NHA;#S
+M$5K#KGH7<78,@%F"NC`4H"8,NP!'E;^5FV&<-WJHUS@T>5$#E1HG^]M_:M8`
+M@KX=+@&*A`00F*WM-^IXWO<QP8V5()XR`0O&C\&UVU=4F(:C<?GFE%&\.=CX
+?G@J4[_;OD*??C%],IF=*M!8^B@````!)14Y$KD)@@@``
 `
 end
 begin 644 next.png
-MB5!.1PT*&@H````-24A$4@```"$````A"`,```!@.C)=````8U!,5$4```"5
-ME95U=W4Y.3DO+R\I*2DF)R8A(2$='1W.SLX;&QO*RLJ^PKZ\O+P'!P>VMK:T
-MN+2TM+2RLK*JJJJHK*B6EI8P,C`P,#`H*"@<'!P:&AH8&!C!P<&_O[^[O[NU
-MN;6SL[-4@WEY````LDE$051XG*64:P^"(!B%3Z08FN8MLHO2__^53<C1$'?<
-M>KZPP3.N[P%G!K[MU(=,OX81,D-()H59C%H#51)2`;IVAM%(NU&%C-<4VEA#
-M8"A6XS/%`&$-B2XJ*'6`G(TIJ]9+.$IG]$A\WXL:QS<S3H\+,_!LF(&\90;N
-M+3.\LFD@;YB!V]]ST'W0L]#[H'=*WX6_;;0^>(WQ.MU1ZS8OY1J?%YNY*$OF
-?;&YC^-SN^QVV^0#@"BB#A-7F#0````!)14Y$KD)@@@``
+MB5!.1PT*&@H````-24A$4@```"$````A"`````!RCYVS```!,4E$050XC873
+MOTK#0!S`\6^O*:6"=`B%_EL*@EF[N?8-^@@.0A'[`BI"0-07B$C!H8^0W2%Y
+M@XS&J4N2%J1#$2RE+;A4T]S%WF\Y?G<?[O<[CE_!1Q/&;MW.Y1.SN">6GKN>
+MR*)3ZO<J0,&'[]N`LB6+<$7WX0@*/LN;P+)K55DLWIVP^UA!@!=8XQ,%4#T;
+M6X$'`EQL0SD',(:X(-BNR[5_'GH*()A/K+3$E\I$-KU.="(>S#2"Z<54(Y@-
+M8HT@N8HT@F@8:P31Y50C2.YTHGFO$>V7QF'1=EK[J?JKS><,4$5]U,ANR%4:
+MKQ*016M4ER^5JCP=*WT)S$ZX^$M5@*!86GVJ^P!\[/KH8V]RP<:A#P;TWH)S
+MV\RYP0F[O73F<N-WYF#IN7D@G=O#D?O[F?@!Z/M.5(VCE!4`````245.1*Y"
+"8((`
 `
 end
 begin 644 next-gr.png
-MB5!.1PT*&@H````-24A$4@```"$````A"`,```!@.C)=````6E!,5$4```"E
-MH:6DH:25E95U=W4O+R\I*2DF)R8A(2'.SL[*RLK(R,B^PKZ\O+P'!P>TN+2J
-MJJJKJ*NHK*BIIJFDH*2>FIZ6EI8P,C`H*"C+R\O(Q\B_O[^[O[NUN;7NS3(>
-M````LDE$051XG*64V0Z#(!1$1XOB4I?:4JS*__]F(]1@$#,F/2\D<,)Z!]P9
-M^+7+$++L#2-D@9!""K,9G0;:+*0%=.<,HY'W<QDROW-H8PV!L3J,KU0CA#4D
-M^JA0EC?(U5B*]KB$HW'&@,SW?:CQF)B1O&IFJ+T2-U0Z,4,E$S.\<FJHM&:&
-M>OX]!]T'/0N]#WJG]%WXVT;K@]<8K],+M6[STASQ>;&9B[)ESN8VAL_MM=_A
-6G"\3.BJ6%4:2\P````!)14Y$KD)@@@``
+MB5!.1PT*&@H````-24A$4@```"$````A"`````!RCYVS```!'TE$050XC873
+M,4[#,!2`X3]NFJ@L':*.2$0*D#4;:V[0(W``3@!+%GJ"'J!'R,Z0WB`C@2*%
+M'77H0N6TD5@*;9Y-\Q;KV9^>GV4]9TE/N(>U7<N38'`BMD6^JZ4(A]-T!#A+
+M^'XJ\6,I*DWR?`'.DNUC&6>3L12;UWF5S$8H*,IX$1F`\=TB+@M0D).YQCF`
+M^T`.BG;G3_YYZ"V`8EW'QRM:DZEN6NL^H5=-CZ!YET0*FI7N$>@/W2,DL0C1
+MKDW0?/8)[^HDL?V('WGG:_B1SUDA@'F+=^UU-V0-[T8`6<._E$"*<&#TI0C"
+M:O.7F@#%8*B_S'T`W@Z=3LGV5K"?,P47TI?R/@LL%>95DAYGSAJ_,P?;(K>!
+=X]R>#^OO=^('W$Y.6'!/."L`````245.1*Y"8((`
 `
 end
 begin 644 prev.png
-MB5!.1PT*&@H````-24A$4@```"$````A"`,```!@.C)=````:5!,5$4```"5
-ME96+BXN)B8F'AX=U=W4O+R\I*2DF)R8A(2'.SL[*RLJ^PKZ\O+RZNKH'!P<%
-M!06TN+0#`P.JJJJHK*B6EI:*BHJ(B(AD9&1>7EXP,C`H*"C!P<&_O[^[O[L&
-M!@:UN;4$!`0"`@*5DT73````N$E$051XG(V4VQ*"(!1%=Q<4-4/3M#"5^O^/
-M;,0<"XESU@LSL(;KV>!$@4\[U"[#MV&$3."22&$6H]2`BEP4H,O9,!IQU:<N
-M_36&-M80Z++-^$3605A#HO(*:;J#G(PA4=LE9O+9J!']]C\HXW`CC/WE'C::
-M%\)&6R!L'$>$C7820D93(&R<GR`,>@[&/AAG8=P'XTX9[\)X6T]]T#5&URFC
-KUFU>\BUK7FSFO"R9L[GUL>:6]SO\YPUUDRQAT]LVZ@````!)14Y$KD)@@@``
+MB5!.1PT*&@H````-24A$4@```"$````A"`````!RCYVS```!-TE$050XC863
+M34["0!S%?RU%@HEA43D`B8G==L>V*JPY@@?P``90&R/&`_0`+#Q`UZ"V-^C2
+MNN(`RH*8V/!E7(BA\R%]FTEF?O/FS4O^1DR!K,VZGLHG=BE'9%&XG,A$H]SQ
+MJH`1PU<OH>+(1#K''>R#$9-U$\>OUV1B]AJD[GT5$Z+$&1XI`+7FT$DB,"'$
+MMY1S`.N"$$S6RTK]GX\>`YA,)X[XQ*>(F<K%\6,!\=)?[":>+M?L),;];]E4
+M)$8W*R670(S\A0*0[^KY6G40/#YZ.B!/'`ZTY>=SG-[N%1"T?0TB&K>-*R6+
+M]'3+Z,J5R:V?/90*"$[NI"SJ!UM-V<-NI#-AZT`F2N7YNV+TJ[=-C@Z^MFY6
+M`1VPP!LGY[ZM<0A2U]O.G%9_,P=9%.J`[=SNECH-LGX`6BE1+/?*'38`````
+(245.1*Y"8((`
 `
 end
 begin 644 prev-gr.png
-MB5!.1PT*&@H````-24A$4@```"$````A"`,```!@.C)=````6E!,5$4```"?
-MFY^5E95U=W4O+R\I*2DF)R8A(2'.SL[*RLJ^PKZ^O+Z\O+P'!P>TN+2TLK2J
-MJJJHK*B>FIZ6EI8P,C`H*"C+R\O)R<F_O[^_O;^^O;Z[O[NUN;6UL[4C?\V)
-M````M4E$051XG*74ZQ*"(!`%X&,H8GD/RY3>_S4;EQP+"':F\\<9_<8+[!'G
-M5/`^KH.;]5,8(4NX*:4PNV@UT.1N&D"W5AB-HI^5F_E:0!L2`E/E7=]231`D
-M)/H@4.H$N8FU;/Q'V-16#,B_S]]28GDFQ"/KXF(9Q[BX9`FQ@:@@$!,+@8BX
-M6_#7/1COP?@6QGHPUI2Q+XR]#<Q'>L;2<\J8=>I+[>?H"W4NF+USU-M0CM[R
-9_@Z_\P*'^R8LF<,MN@````!)14Y$KD)@@@``
+MB5!.1PT*&@H````-24A$4@```"$````A"`````!RCYVS```!(4E$050XC873
+M,6[",!0&X-].(D2'TBAB)Q(27K.QY@8Y0@_0$[1+EO8$.0!'R,Z0W,`CZ136
+M"B'*T@B%B`ZE`K]GR%LLQ5^>GU_R1(F><,]KMZ4[@7,EFB)O:RI"+XF'`$0)
+M_+QI#!05U0'1^P,@2C2O6J7C$17[559%'T-(H-!J,64`H_E"Z0*00([49?L`
+MX+X@!R2Z=C"^<=$9`$AL:V4>T9E,LA=W7SWB>WTBU=`,K',DQV[-3I4$G.X+
+M&S`$*Y**MK:!:^&%HD?@:6(C1J6^C9BWM1'2,7_"!.VZ+VC;V9=CY?*_RW^D
+M.8*PVAN/'"H<[[!AB?[B\UQ'@O1H!<<,">`"\5(_IX$E0U9%\67FK/$_<T!3
+?Y#9PF=O[P:>!QB_1RTX:[.:Q%@````!)14Y$KD)@@@``
+`
+end
+begin 644 up.png
+MB5!.1PT*&@H````-24A$4@```"$````A"`````!RCYVS```!)TE$050XC;73
+ML4K#0!S'\6^2%IK!$FA?H%,A3]#)1Y`.3I+!P2(:'\!"44=?((LX]@$RMRJ9
+MQ+%3H#AT2=,B+92ZE+01E[8F,<GAX&^Y/]P'_G?'_24'00K;-9PG=RI*1,RZ
+M[GJ4%+6B;E0!R8&W^P742W&P&H)VW0#)87:V:)J4E;@(EUBV]EA%.>5AT.RH
+MJIQH(JOJX<<@:""#BYEQ#1,79,)U[F61F8_JY7P!)44D1%WB>3J:Y(M^QS\?
+MYXG>[0;?]+)%[RX`O*MQEGB^"0#P+B;IXJ6]V59^:YHF^NVO?3UM^?MZ]X/X
+M?#^)=G\]_B4.+DG/W]_T_\0JS!>5VG"9+Y2BL(N.E;%IH4,!#,=._^V6K1F1
+EF4O+;N9@UG73P,_<"D\JR#<E0U*RN@H0E`````!)14Y$KD)@@@``
 `
 end
 begin 644 journal.png
-MB5!.1PT*&@H````-24A$4@```"$````A"`,```!@.C)=````MU!,5$4```"Q
-ML;&OKZ^GIZ>EI:6CHZ.AH:&?GY^5E96-C8V!@8%U=W5'1T<U-34O+R\I*2DF
-M)R8C(R,A(2$='1W.SL[,S,S*RLH7%Q?(R,C$Q,3"PL*^PKZ\O+P'!P>VMK:T
-MN+2TM+2JJJJHK*B8F)B6EI:*BHJ(B(B`@(!\?'QP<'!L;&QJ:FID9&1>7EY8
-M6%A24E)`0$`P,C`H*"@<'!S-S<W)R<G'Q\?%Q<7!P<&_O[\,#`R[O[NUN;6:
-M;P.+```!'4E$051XG)64[5:"0!"&IP]-@Y3%B=1`4\M0LL+*(+C_ZVIWEE5:
-M=LN>/\,Y/&?.N\L,</L74-5BKE/4C=+Q?-#Q/:=4QC0%B'HZ$4`ZE4:90G^6
-MHTY^WX>T),.!;=!X+PBVX)#AP0QW,><2L1U+[DCI@">,PH]R#$6V+\1-%;-+
-M1BB-.?00/Q/."G&12$X;AIFZ,>PJ6KR1J)EFA/N+<A&9J.>:,7I6/"*N19W\
-M.T=P09S9C2H'LQMCE]CP;JYB8<DQW)\J_F%<GT@R;MQ0I!?-4/>QXL:`>B6:
-MD5U)EE:CGL-LO(^)D3#>Z/')G(/9SY(SXA7Q@RD>E$$S]NMWH3DU4\WI$;-.
-J^Q(V.>P+[9P1M7.TMR8.>WO<W\'.-U^06#7=M;9;`````$E%3D2N0F""
+MB5!.1PT*&@H````-24A$4@```"$````A"`````!RCYVS```!I$E$050XC863
+M/4B"412&'_4STS(CZ8>@(0SZ:@E)I+8<B@@"FYJ"HBD(6FHI")=L<71H#)R:
+M<JBE(%V:"KXA(B.BJ:F"I!\QS1JNM_Q^K+.\EW,>[GG/@6/+\D\H5?U\,E;\
+MCAJBD$F7[HQ$KS,:<0.V++QO:+A4(Y$K$MSR@"U+85U38^T^(Y&_2N:"<3=V
+MR&CJ;I\)P#>RJVH94"!-3"D>`LYI+FY$>:0;4):7TU,H?)9<[;S'@>9I3E*"
+M2'0#](M9GNZ&?+B7@`88;:X.8MI'XZ+0<-CDITJ43F6B8Y"S-V#8JR=>5R4Q
+M$2=Q"Z0&](1K5A(J3#X";88NGK6:S@M6/LJ7PG"_R:@D7L0L@;VZ1,,$`)U0
+MWI2E:+B6:(K+?.5(OD(ZHG(OM-4+'=L`!_OZ+OD9H2MSX!H".#?X4$)"N^HZ
+M]>Z82WKBZPT`NP>HO`)\&(CG<:"ZC_LQJS\<`0!ZP!:0I19)^'MS>5_+SS*=
+MQK7:<3B+#W5,7@N"*+&R)5!.$@4%(L?:?,QO\4,R%XS\WIQER)N#0B9M!?S>
+;[=]A_P_@&\BG:"&P_Q,B`````$E%3D2N0F""
 `
 end
 begin 644 sound.png
-MB5!.1PT*&@H````-24A$4@```"$````A"`,```!@.C)=````]E!,5$4```"G
-MIZ>;FYN5E96-C8V'AX=[>WMY>7EU=W5S<W-M;6UK:VMC8V-/3T\[.SLY.3DW
-M-S<O+R\I*2DF)R8C(R,A(2$='1W.SL[,S,P9&1G*RLK(R,@5%17&QL;`P,"^
-MPKZ^OKZ\O+P'!P<%!06VMK:TN+0#`P.PL+"NKJZLK*RJJJJHK*BHJ*B>GIZ8
-MF)B6EI:4E)22DI*0D)"&AH9\?'QX>'AT='1P<'!J:FIF9F9D9&1>7EY86%A4
-M5%1$1$1"0D(^/CXZ.CHP,C`L+"PH*"@F)B;+R\O)R<G'Q\<4%!00$!"_O[\,
-M#`R[O[L("`BUN;4$!`2SL[/L_AE0```!,4E$051XG+W4:5.#,!`&X/6HHO6B
-M"*G$*VBKMM[BA7@AI6J+V/__9X0TH8$FZHPSOE_(9)\9$F87V/HIP)YQNYQ8
-M%(EFF%".:6@)%XT`P-'+<0""QE`D`=1:/51.[Z0&04*%!J$]5D?=\PH.0:/"
-M@%:Q:)-3;ZD/@*?`R$1L.L(K!I/73QUV5DR&H@UZ7I]9;0JWD8F;PGW_))K]
-MY?OI-Y5XM_S9B6QM*<3")E^KA(O^36R30V)_(_:?=](;=QRE./J0?['=2__!
-MOUI,Q:/\FUZLLUVW'DK%7K[KHBI?OM0%,2>([MTG7:T,D"#.<E%)SW10]3SO
-M&",NLAZ+=`;"#22$"=JGK_-66E^[+0#$^I3U>H0QC@IU9/->I_-"QC.:%SIS
-CTO"9HW,KRVAN?_=W4.<+?R9D,6RK%5X`````245.1*Y"8((`
+MB5!.1PT*&@H````-24A$4@```"$````A"`````!RCYVS```!FTE$050XC9V3
+MOTL"<1C&G_/.S"(;5"@20HF\P7Y($$5#V"@$_0$5$FT);0VYN"31$`5"2X1+
+M0TO<%$3#'10M#5<.>0:A!(:D$DJD<ITTJ.?=^2MZE[OO^WR^[_N\W+T$ARY!
+MU9Y23JN820519!DQH27L^A6/$0#!`=\!'@9:2PAEN/?Z`()#<9>G@]9!+9&/
+MA05WR`@=P/)T9*P)$*.%,YIG`0I@$*14HE2(/0K1+]S[_8P7%"318&VHJ?0S
+MGWZI'9S567*)*;G%Y452TK93U_]\U>J`KCG5L48M2*-K9'X_VX88'%BP3S@!
+M'+>IL;%JZN)C2`O\P>D_9\E7LA93!R)Y^"`"XQ]MB:>M$@#4OXU,I&^368LM
+M!>"\U-+']5&FEJB\:VI69WD+9.3$4OW-12F(.\6=];6J,AO2*;J,RGH_J.UE
+MK@S,3/?4?9CM0GYN,EH]THL`'`ZU#U)?SI`G?AN`X<W37J48!P""P]4!':$@
+M20!)JJ;X\0D[7E"`YX;W!<UHBGA8<'L:.]<RZCL'%%FF%=#8V\[1_?_X!<SK
+2=/BT1/6\`````$E%3D2N0F""
 `
 end
 begin 644 movie.jpg
