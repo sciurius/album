@@ -4,8 +4,8 @@ my $RCS_Id = '$Id$ ';
 # Author          : Johan Vromans
 # Created On      : Tue Sep 15 15:59:04 2002
 # Last Modified By: Johan Vromans
-# Last Modified On: Tue Sep 12 20:53:04 2006
-# Update Count    : 2672
+# Last Modified On: Fri Sep 15 20:27:58 2006
+# Update Count    : 2762
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -213,44 +213,16 @@ for (my $i = $num_entries ; ; $i++ ) {
 init_formats();
 
 # Write the individual pages.
-print STDERR ("Creating ", $num_entries, " image page",
-	      $num_entries == 1 ? "" : "s", "\n") if $verbose > 1;
-my $mod = 0;
-
-for my $el ( $filelist->entries ) {
-    write_image_page($el, "large") && $mod++;
-    write_image_page($el, "medium") && $mod++ if $medium;
-}
-uptodate("image", $mod) if $verbose > 1;
+write_image_pages();
 
 # Write the index pages.
-print STDERR ("Creating ", $num_indexes, " index page",
-	      $num_indexes == 1 ? "" : "s", "\n") if $verbose > 1;
-$mod = 0;
-for my $i ( 0 .. $num_indexes-1 ) {
-    write_index_page($i) && $mod++;
-}
-uptodate("index", $mod) if $verbose > 1;
+write_index_pages();
 
-# Cleanup excess indices.
-for (my $i = $num_indexes ; ; $i++ ) {
-    unlink(d_dest("index$i.html")) or last;
-}
+# Write the journal.
+write_journal_pages();
 
-if ( $journal ) {
-    print STDERR ("Creating ", $journal, " journal page",
-		  $journal == 1 ? "" : "s", "\n") if $verbose > 1;
-    mkpath([d_journal()], $verbose > 1);
-    $mod = write_journal();
-    uptodate("journal", $mod) if $verbose > 1;
-}
-
-if ( $icon ) {
-    print STDERR ("Creating index icon\n") if $verbose > 1;
-    unless ( indexicon() ) {
-	print STDERR ("(Index icon not modified)\n") if $verbose > 1;
-    }
-}
+# Create index icon.
+create_index_icon();
 
 # Final update, if needed.
 update_cache() if $cache_update;
@@ -349,7 +321,6 @@ sub parse_line {
 }
 
 sub set_defaults {
-
     # Load settings from user files.
     my $sl = $ENV{ALBUMCONFIG} || ".albumrc:".$ENV{HOME}."/.albumrc";
     foreach my $cf ( split(/:/, $sl) ) {
@@ -400,7 +371,6 @@ sub set_defaults {
 }
 
 sub load_info {
-
     my %typemap = ( 'p' => T_JPG, 'm' => T_MPG, 'v' => T_VOICE );
 
     # If an info has been supplied, it'd better exist.
@@ -1008,7 +978,6 @@ sub update_filelist {
 }
 
 sub prepare_images {
-
     my $ddot = 0;
     my $tdot = 0;
     my $fmt = "[%" . length($filelist->tally) . "d]\n";
@@ -1059,7 +1028,7 @@ sub prepare_images {
 	$image = new Image::Magick;
 	my $t = $image->Read($file);
 	warn("read($file): $t\n") if $t;
-#	$image->Profile(name => "*", profile => undef);
+	#$image->Profile(name => "*", profile => undef);
     };
 
     my $resize = sub {
@@ -1069,40 +1038,6 @@ sub prepare_images {
 	 my $t = $image->Resize(width => $origx/$ratio, height => $origy/$ratio);
 	 warn("resize: $t\n") if $t;
     };
-
-=begin checked_by_Makefile_PL
-
-    unless ( $prog_jpegtran ) {
-	foreach my $el ( $filelist->entries ) {
-	    next unless $el->rotation || $el->mirror;
-	    next if -s d_large($el->dest_name);
-	    warn("WARNING: Helper program 'jpegtran' not found.\n",
-		 "JPG files will be rotated with loss of information.\n");
-	    last;
-	}
-    }
-
-    unless ( $prog_mplayer ) {
-	foreach my $el ( $filelist->entries ) {
-	    next unless $el->type == T_MPG;
-	    next if -s d_large($el->dest_name);
-	    warn("WARNING: Helper program 'mplayer' not found.\n",
-		 "\tNo stills will be produced, and VOICE files will remain silent.\n");
-	    last;
-	}
-    }
-
-    unless ( $prog_mencoder ) {
-	foreach my $el ( $filelist->entries ) {
-	    next unless $el->type == T_VOICE;
-	    next if -s d_large($el->assoc_name);
-	    warn("WARNING: Helper program 'mencoder' not found.\n",
-		 "\tMPG files will be copied, and cannot be rotated.\n");
-	    last;
-	}
-    }
-
-=cut
 
     foreach my $el ( $filelist->entries ) {
 	$msg->(), next unless $el->type > 0;
@@ -1224,7 +1159,7 @@ sub prepare_images {
     printf STDERR ($fmt, $tdot) if $ddot && $tdot;
 }
 
-#### Output generation.
+################ Formats ################
 
 my $fmt_image_page;
 my $fmt_large_page;
@@ -1232,8 +1167,20 @@ my $fmt_medium_page;
 my $fmt_index_page;
 my $fmt_journal_page;
 
-sub init_formats {
+# <<HereDoc helper to retain a nice program layout.
+sub heredoc($$) {
+    my ($doc, $indent) = @_;
+    $indent = " " x $indent;
+    my $res = "";
+    foreach ( split(/\n/, $doc) ) {
+	my $line = detab($_);
+	$line =~ s/^$indent//;
+	$res .= $line . "\n";
+    }
+    $res;
+}
 
+sub init_formats {
     my $lib_common = $lib_common;
     $lib_common .= "/" if $lib_common ne "";
 
@@ -1278,42 +1225,42 @@ sub init_formats {
     #  $jscript
     #  $contents
 
-    $fmt_index_page = $load->("index.fmt", <<'EOD');
-<?xml version="1.0" encoding="iso-8859-15"?>
-<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
-<html>
-  <head>
-    <link rel="stylesheet" href="${lib_common}css/index.css">
-    <title>$title</title>
-    $jscript
-  </head>
-  <body>
-    <table>
-      <tr>
-	<td></td>
-	<td align='left'>
-	  <p class='hdl'>
-            $ltop
-          </p>
-	</td>
-	<td align='right'>
-	  <p class='hdr'>
-            $rtop
-          </p>
-	</td>
-      </tr>
-      <tr>
-	<td valign='top'>
-	  $vbuttons
-	</td>
-	<td valign='top' colspan='2'>
-	  $contents
-	</td>
-      </tr>
-    </table>
-  </body>
-</html>
-EOD
+    $fmt_index_page = $load->("index.fmt", heredoc(<<'    EOD', 4));
+    <?xml version="1.0" encoding="iso-8859-15"?>
+    <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+    <html>
+      <head>
+	<link rel="stylesheet" href="${lib_common}css/index.css">
+	<title>$title</title>
+	$jscript
+      </head>
+      <body>
+	<table>
+	  <tr>
+	    <td></td>
+	    <td align='left'>
+	      <p class='hdl'>
+		$ltop
+	      </p>
+	    </td>
+	    <td align='right'>
+	      <p class='hdr'>
+		$rtop
+	      </p>
+	    </td>
+	  </tr>
+	  <tr>
+	    <td valign='top'>
+	      $vbuttons
+	    </td>
+	    <td valign='top' colspan='2'>
+	      $contents
+	    </td>
+	  </tr>
+	</table>
+      </body>
+    </html>
+    EOD
 
     # Format for image pages (mostly).
     #
@@ -1328,55 +1275,55 @@ EOD
     #  $lbot
     #  $rbot
 
-    $fmt_image_page = $load->("image.fmt", <<'EOD');
-<?xml version="1.0" encoding="iso-8859-15"?>
-<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
-<html>
-  <head>
-    <title>$title</title>
-    <link rel="stylesheet" href="../${lib_common}css/$dir.css">
-    $jscript
-  </head>
-  <body>
-    <table>
-      <tr>
-	<td></td>
-	<td align='left' valign='top'>
-	  <p class='hdl'>
-            $ltop
-          </p>
-	</td>
-	<td align='right' valign='top'>
-	  <p class='hdr'>
-            $rtop
-          </p>
-	</td>
-      </tr>
-      <tr>
-	<td valign='top'>
-	  $vbuttons
-	</td>
-	<td align='center' valign='top' colspan='2'>
-	  $image
-	</td>
-      </tr>
-      <tr>
-	<td></td>
-	<td align='left' valign='top'>
-	  <p class='ftl'>
-            $lbot
-          </p>
-	</td>
-	<td align='right' valign='top'>
-	  <p class='ftr'>
-            $rbot
-          </p>
-	</td>
-      </tr>
-    </table>
-  </body>
-</html>
-EOD
+    $fmt_image_page = $load->("image.fmt", heredoc(<<'    EOD', 4));
+    <?xml version="1.0" encoding="iso-8859-15"?>
+    <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+    <html>
+      <head>
+	<title>$title</title>
+	<link rel="stylesheet" href="../${lib_common}css/$dir.css">
+	$jscript
+      </head>
+      <body>
+	<table>
+	  <tr>
+	    <td></td>
+	    <td align='left' valign='top'>
+	      <p class='hdl'>
+		$ltop
+	      </p>
+	    </td>
+	    <td align='right' valign='top'>
+	      <p class='hdr'>
+		$rtop
+	      </p>
+	    </td>
+	  </tr>
+	  <tr>
+	    <td valign='top'>
+	      $vbuttons
+	    </td>
+	    <td align='center' valign='top' colspan='2'>
+	      $image
+	    </td>
+	  </tr>
+	  <tr>
+	    <td></td>
+	    <td align='left' valign='top'>
+	      <p class='ftl'>
+		$lbot
+	      </p>
+	    </td>
+	    <td align='right' valign='top'>
+	      <p class='ftr'>
+		$rbot
+	      </p>
+	    </td>
+	  </tr>
+	</table>
+      </body>
+    </html>
+    EOD
 
     $fmt_large_page  = $load->("large.fmt",  $fmt_image_page);
     $fmt_medium_page = $load->("medium.fmt", $fmt_image_page);
@@ -1391,41 +1338,49 @@ EOD
     #  $journal
     #  $jscript
 
-    $fmt_journal_page = $load->("journal.fmt", <<'EOD');
-<?xml version="1.0" encoding="iso-8859-15"?>
-<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
-<html>
-  <head>
-    <link rel='stylesheet' href='../${lib_common}css/journal.css'>
-    <title>$title</title>
-    $jscript
-  </head>
-  <body>
-    <table class='outer'>
-      <tr class='grey'>
-	<td>
-	  <p class='hd'>
-            $tag
-          </p>
-	</td>
-        <td align='right'>
-          $hbuttons
-        </td>
-      </tr>
-      $journal
-      <tr class='grey'>
-	<td>&nbsp;</td>
-        <td align='right'>
-          $hbuttons
-        </td>
-      </tr>
-    </table>
-  </body>
-</html>
-EOD
+    $fmt_journal_page = $load->("journal.fmt", heredoc(<<'    EOD', 4));
+    <?xml version="1.0" encoding="iso-8859-15"?>
+    <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+    <html>
+      <head>
+	<link rel='stylesheet' href='../${lib_common}css/journal.css'>
+	<title>$title</title>
+	$jscript
+      </head>
+      <body>
+	<table class='outer'>
+	  <tr class='grey'>
+	    <td>
+	      <p class='hd'>
+		$tag
+	      </p>
+	    </td>
+	    <td align='right'>
+	      $hbuttons
+	    </td>
+	  </tr>
+	  $journal
+	  <tr class='grey'>
+	    <td>&nbsp;</td>
+	    <td align='right'>
+	      $hbuttons
+	    </td>
+	  </tr>
+	</table>
+      </body>
+    </html>
+    EOD
 
     print STDERR ("\n") if $did;
 }
+
+sub process_fmt {
+    my ($fmt, %map) = @_;
+    $fmt =~ s/^(.*?)\$(\w+)\b/$1.indent($map{$2}, length($1))/gme;
+    $fmt;
+}
+
+################ Helpers for Image/Index/Journal pages ################
 
 sub jscript {
     my (%nav) = @_;
@@ -1435,21 +1390,21 @@ sub jscript {
     my $down = $nav{down};
     my $idx  = $nav{idx};
     my $jnl  = $nav{jnl};
-    my $js = <<EOD;
-<script type='text/javascript'>
-function handleKey(e) {
-  var key;
-  if ( e == null ) { // IE
-    key = event.keyCode
-  }
-  else { // Mozilla
-    if ( e.altKey || e.ctrlKey ) {
-      return true
-    }
-    key = e.which
-  }
-  switch(key) {
-EOD
+    my $js = heredoc(<<"    EOD", 4);
+    <script type='text/javascript'>
+    function handleKey(e) {
+      var key;
+      if ( e == null ) { // IE
+	key = event.keyCode
+      }
+      else { // Mozilla
+	if ( e.altKey || e.ctrlKey ) {
+	  return true
+	}
+	key = e.which
+      }
+      switch(key) {
+    EOD
 
     $js .= "    case   8: window.location = '$prev'; break // Backspace\n" if $prev;
     $js .= "    case  32: window.location = '$next'; break // Space\n"     if $next;
@@ -1458,26 +1413,275 @@ EOD
     $js .= "    case 100: window.location = '$idx'; break // 'd'\n"        if $idx;
     $js .= "    case 106: window.location = '$jnl'; break // 'j'\n"        if $jnl;
 
-    $js .= <<EOD;
-   default:
-  }
-  return false
-}
-
-document.onkeypress = handleKey
-</script>
-EOD
+    $js .= heredoc(<<"    EOD", 4);
+       default:
+      }
+      return false
+    }
+    
+    document.onkeypress = handleKey
+    </script>
+    EOD
     $js;
 }
 
-sub button($$;$$);
+sub button($$;$$) {
+    my ($tag, $link, $level, $active) = @_;
+    my $Tag = ucfirst($tag);
 
-sub ixname($);
+    $level  = 0 unless defined $level;
+    $active = 1 unless defined $active;
+    $tag .= "-gr" unless $active;
+    $level = "../" x $level;
+    $level .= $lib_common . "/" if $lib_common ne "";
+    my $b = img("${level}icons/$tag.png", align => "top",
+		border => 0, alt => "[$Tag]");
+    $active ? "<a class='info' href='$link' alt='[$Tag]'>$b</a>" : $b;
+}
 
-sub process_fmt {
-    my ($fmt, %map) = @_;
-    $fmt =~ s/^(.*?)\$(\w+)\b/$1.indent($map{$2}, length($1))/gme;
-    $fmt;
+sub ixname($) {
+    my ($x) = @_;
+    "index" . ($x ? $x : "") . ".html";
+}
+
+# To aid XHTML compliancy.
+sub br { "<br>" }
+
+# Pseudo-smart approach to creating paired single/double quotes.
+# Note that the (s-|s\s|t\s) case is specific to the dutch language,
+# but probably won't harm other languages...
+# Yes, you'll get stupid results with input like rock'n'roll.
+
+sub fixquotes($) {
+    my ($t) = @_;
+
+    # HTML::Entities will already have turned " into &quot; -- undo.
+    $t =~ s/\&quot;/"/g;
+    while ( $t =~ /^([^"]*)"([^"]+)"(.*)/s ) {
+	$t = $1 . "&ldquo;" . $2 . "&rdquo;" . $3;
+    }
+    $t =~ s/"/&quot;/g;
+
+    # HTML::Entities will already have turned ' into &#39; -- undo.
+    $t =~ s/\&#39;/'/g;
+    while ( $t =~ /^(.*?)'(s-|s\s|t\s)(.*)/s ) {
+	$t = $1 . "&apos;" . $2 . $3;
+    }
+    while ( $t =~ /^([^']*)'([^']+)'(.*)/s ) {
+	$t = $1 . "&lsquo;" . $2 . "&rsquo;" . $3;
+    }
+    $t;
+}
+
+# Escape sensitive characters in HTML.
+# Two variants: one using HTML::Entities, the other a dumber stub.
+# If HTML::Entities is available, it will be used.
+
+sub html($) {
+    eval {
+	require HTML::Entities;
+	# Apply Latin-9 instead of Latin-1.
+	no warnings 'once';
+	for ( \%HTML::Entities::char2entity ) {
+	    $_->{chr(0204)} = '&euro;';
+	    $_->{chr(0246)} = '&Scaron;';
+	    $_->{chr(0250)} = '&scaron;';
+	    $_->{chr(0264)} = '&Zcaron;';
+	    $_->{chr(0270)} = '&zcaron;';
+	    $_->{chr(0274)} = '&OE;';
+	    $_->{chr(0275)} = '&oe;';
+	    $_->{chr(0276)} = '&Yuml;';
+	}
+	no warnings 'redefine';
+	*html = sub($) {
+	    my ($t) = @_;
+	    return '' unless $t;
+	    $t = HTML::Entities::encode($t);
+	    fixquotes($t);
+	};
+    };
+    no warnings 'redefine';
+    *html = sub($) {
+	my ($t) = @_;
+	return '' unless $t;
+	$t =~ s/&/&amp;/g;
+	$t =~ s/</&lt;/g;
+	$t =~ s/>/&gt;/g;
+	fixquotes($t);
+    } if $@;
+    goto &html;
+}
+
+sub htmln($) {
+    # Escape HTML sensitive characters, and turn newlines into <br>.
+    my $t = html(shift);
+    return '' unless $t;
+    $t =~ s/\n+/$br/go;
+    $t;
+}
+
+sub indent($$) {
+    # Shift contents to the right so it fits pretty.
+    my ($t, $n) = @_;
+    $n = " " x $n;
+    return $n unless $t;
+    $t = detab($t);
+    $t =~ s/\n+$//;
+    $t =~ s/\n/\n$n/g;
+    $t;
+}
+
+sub img($%) {
+    my ($file, %atts) = @_;
+    my $ret = "<img src='" . $file . "'";
+    foreach ( sort(keys(%atts)) ) {
+	$ret .= " $_='" . $atts{$_} . "'";
+    }
+    $ret . ">";
+}
+
+#### Size helpers.
+
+sub bytes($) {
+    my $t = shift;
+    return $t . "b" if $t < 10*1024;
+    return ($t >> 10) . "kb" if $t < 10*1024*1024;
+    ($t >> 20) . "Mb";
+}
+
+sub size_info($;$) {
+    my ($el, $med) = @_;
+    return unless $el->width;
+
+    my $ret = "";
+    $ret .= $el->width . "x" . $el->height if $el->width;
+    for ( $med ? $el->medium_size : $el->file_size ) {
+	next unless $_;
+	$ret .= "," if $ret;
+	$ret .= bytes($_);
+    }
+    $ret;
+}
+
+#### EXIF helpers.
+
+sub restyle_exif($) {
+    my ($el) = @_;
+    my $ret = "";
+    my $v;
+
+    my $app = sub {
+	$ret .= "<tr><td>".htmln($_[0])."</td>".
+	            "<td>".htmln($_[1])."</td></tr>\n";
+    };
+
+    $app->("Date", $v) if $v = $el->DateTime;
+    my $t = $el->ExposureTime || 0;
+    if ( $t && $t <= 0.5 ) {
+	$t = "1/".int(0.5 + 1/$t)."s";
+    }
+    $app->("Exposure",
+	   join(" ", $el->ExposureMode || "",
+		$el->ExposureProgram || "", $t));
+    $app->("Aperture", sprintf("%.1f", $v))
+      if $v = $el->FNumber;
+    if ( $v = $el->FocalLength ) {
+	if ( $el->Model eq "DSC-V1" ) {
+	    $v .= sprintf("mm  (%.1fmm equiv.)", $v*4.857);
+	}
+	else {
+	    $v .= "mm";
+	}
+	$app->("Focal length", $v);
+    }
+    $app->("ISO", $v) if $v = $el->ISOSpeedRatings;
+    $app->("Flash", $v)
+      if ($v = $el->Flash) && $v ne "Flash did not fire";
+    $app->("Metering", $v) if $v = $el->MeteringMode;
+    $app->("Scene", $v) if $v = $el->SceneCaptureType;
+    $app->("Camera",
+	   join(" ", $v, $el->Model))
+      if $v = $el->Make;
+}
+
+#### Caption helpers.
+
+sub f_caption($) {
+    my ($el) = @_;
+    my $s = htmln($el->dest_name);
+    if ( $el->Make ) {
+	$s = "&nbsp;$s<a href='#' class='info'>&nbsp;<span>".
+	  "<table border='1' width='100%'>\n".
+	    restyle_exif($el) . "</table>\n".
+	      "</span></a>";
+    }
+    $s;
+}
+
+sub s_caption($) {
+    my ($el) = @_;
+    size_info($el, $medium);
+}
+
+sub t_caption($) {
+    my ($el) = @_;
+    $el->tag  ? htmln($el->tag) : "";
+}
+
+sub c_caption($) {
+    my ($el) = @_;
+    my $t = $el->description || "";
+    $t =~ s/\n.*//;
+    htmln($t);
+}
+
+#### Misc.
+
+sub update_if_needed($$) {
+    my ($fname, $new) = @_;
+
+    # Do not overwrite unless modified.
+    if ( -s $fname && -s _ == length($new) ) {
+	local($/);
+	my $hh = do { local *F; *F };
+	my $old;
+	open($hh, $fname) && ($old = <$hh>) && close($hh);
+	if ( $old eq $new ) {
+	    return 0;
+	}
+    }
+
+    my $fh = do { local *F; *F };
+    open($fh, ">$fname")
+      or die("$fname (create): $!\n");
+    print $fh $new;
+    close($fh);
+    1;
+}
+
+sub uptodate($$) {
+    my ($type, $mod) = @_;
+    if ( $mod ) {
+	print STDERR ("(Needed to write ", $mod,
+		      " $type page", $mod == 1 ? "" : "s", ")\n");
+    }
+    else {
+	print STDERR ("(No $type pages needed updating)\n");
+    }
+}
+
+################ Image Pages ################
+
+sub write_image_pages {
+    print STDERR ("Creating ", $num_entries, " image page",
+		  $num_entries == 1 ? "" : "s", "\n") if $verbose > 1;
+    my $mod = 0;
+
+    for my $el ( $filelist->entries ) {
+	write_image_page($el, "large") && $mod++;
+	write_image_page($el, "medium") && $mod++ if $medium;
+    }
+    uptodate("image", $mod) if $verbose > 1;
 }
 
 sub write_image_page {
@@ -1502,10 +1706,6 @@ sub write_image_page {
     $tt .= " of " . $num_entries if $num_entries > 1;
     $tt = htmln($tt);
     my $it = htmln($el->description) || " ";
-#    unless ( $it ) {
-#	$it = $tt;
-#	$tt = "";
-#    }
 
     my $next = ($el->next || $num_entries+1) - 1;
     my $prev = ($el->prev || 0) - 1;
@@ -1615,6 +1815,23 @@ sub write_image_page {
 				));
 }
 
+################ Index Pages ################
+
+sub write_index_pages {
+    print STDERR ("Creating ", $num_indexes, " index page",
+		  $num_indexes == 1 ? "" : "s", "\n") if $verbose > 1;
+    my $mod = 0;
+    for my $i ( 0 .. $num_indexes-1 ) {
+	write_index_page($i) && $mod++;
+    }
+    uptodate("index", $mod) if $verbose > 1;
+
+    # Cleanup excess indices.
+    for (my $i = $num_indexes ; ; $i++ ) {
+	unlink(d_dest("index$i.html")) or last;
+    }
+}
+
 sub write_index_page {
     my ($x) = @_;
 
@@ -1702,20 +1919,23 @@ sub write_index_page {
 			$base = $medium ? "medium/" : "large/";
 			$base .= $htmllist[$this];
 		    }
-		    $cc .= "    <td align='center' valign='bottom'>\n".
-			  "      <table class='inner'>\n".
-			  "        <tr>\n".
-			  "          <td align='center'>\n".
-			  "            <a href='$base'$target>".img($img, alt => "[Click for bigger image]", border => 0)."</a>\n".
-			  "          </td>\n".
-			  "        </tr>\n".
-			  "        <tr>\n".
-			  "          <td align='center'>\n".
-			  "            <p class='ft'>" . join($br, map { $capfun{$_}->($el) } split(//, $caption)) . "</p>\n".
-			  "          </td>\n".
-			  "        </tr>\n".
-			  "      </table>\n".
-			  "    </td>\n";
+
+		    $cc .= heredoc(<<"                    EOD", 16);
+		    <td align='center' valign='bottom'>
+		      <table class='inner'>
+			<tr>
+			  <td align='center'>
+			    <a href='$base'$target>@{[img($img, alt => "[Click for bigger image]", border => 0)]}</a>
+			  </td>
+			</tr>
+			<tr>
+			  <td align='center'>
+			    <p class='ft'>@{[join($br, map { $capfun{$_}->($el) } split(//, $caption))]}</p>
+			  </td>
+			</tr>
+		      </table>
+		    </td>
+                    EOD
 		}
 		else {
 		    $cc .= "    <td width='$thumb'>&nbsp</td>\n";
@@ -1738,18 +1958,24 @@ sub write_index_page {
 				));
 }
 
-sub write_journal {
+################ Journal Pages ################
 
-    my $jname = sub {
-	sprintf("jnl%04d.html", shift);
-    };
+sub write_journal_pages {
+    return unless $journal;
+    print STDERR ("Creating ", $journal, " journal page",
+		  $journal == 1 ? "" : "s", "\n") if $verbose > 1;
+    mkpath([d_journal()], $verbose > 1);
+    my $mod = write_journal();
+    uptodate("journal", $mod) if $verbose > 1;
+}
+
+sub write_journal {
+    my $jname = sub { sprintf("jnl%04d.html", shift) };
 
     my @ann;
     my $seq = 1;
     my $x = 0;
     my $tag;
-    my %nav;
-    my @b;
 
     my $flush = sub {
 	my $jnl = "";
@@ -1760,7 +1986,7 @@ sub write_journal {
 	    $t = html($t) unless $t =~ /^</i;
 	    if ( $e->type == T_ANN ) {
 		$jnl .= "<tr>\n".
-			"  <td colspan='2' valign='middle' align='left'>\n".
+			"  <td class='twocol' colspan='2' valign='middle' align='left'>\n".
 			"    " . indent($t, 4) . "\n".
 			"  </td>\n".
 			"</tr>\n";
@@ -1789,15 +2015,16 @@ sub write_journal {
 		    "</tr>\n";
 	    $seq++;
 	}
-	@b = ( button("first", $jname->(1),         1, $x > 0         ),
-	       button("prev",  $jname->($x),        1, $x > 0         ),
-	       button("next",  $jname->($x+2),      1, $x < $journal-1),
-	       button("last",  $jname->($journal),  1, $x < $journal-1),
-	       button("index", "../index$ix.html",  1, 1             ),
+	my @b = ( button("first", $jname->(1),         1, $x > 0         ),
+		  button("prev",  $jname->($x),        1, $x > 0         ),
+		  button("next",  $jname->($x+2),      1, $x < $journal-1),
+		  button("last",  $jname->($journal),  1, $x < $journal-1),
+		  button("index", "../index$ix.html",  1, 1             ),
 	     );
+	my %nav = ( up  => "../index$ix.html",
+		    idx => "../index$ix.html" );
 	$nav{prev} = $jname->($x) if $x > 0;
 	$nav{next} = $jname->($x+2) if $x < $journal-1;
-	$nav{up} = $nav{idx} = "../index$ix.html";
 
 	$x++;
 
@@ -1830,166 +2057,7 @@ sub write_journal {
     $mod;
 }
 
-sub button($$;$$) {
-    my ($tag, $link, $level, $active) = @_;
-    my $Tag = ucfirst($tag);
-
-    $level  = 0 unless defined $level;
-    $active = 1 unless defined $active;
-    $tag .= "-gr" unless $active;
-    $level = "../" x $level;
-    $level .= $lib_common . "/" if $lib_common ne "";
-    my $b = img("${level}icons/$tag.png", align => "top",
-		border => 0, alt => "[$Tag]");
-    $active ? "<a class='info' href='$link' alt='[$Tag]'>$b</a>" : $b;
-}
-
-sub ixname($) {
-    my ($x) = @_;
-    "index" . ($x ? $x : "") . ".html";
-}
-
-# These are to aid XHTML compliancy.
-sub br {
-    "<br>";
-}
-
-#### HTML helpers.
-
-sub _html {
-    my ($t) = @_;
-    return '' unless $t;
-    HTML::Entities::encode($t);
-}
-
-sub __html {
-    my ($t) = @_;
-    return '' unless $t;
-    $t =~ s/&/&amp;/g;
-    $t =~ s/</&lt;/g;
-    $t =~ s/>/&gt;/g;
-    $t;
-}
-
-sub html {
-    # Escape HTML sensitive characters.
-    eval {
-	require HTML::Entities;
-	# Force Latin-15 (well, partly).
-	no warnings 'once';
-	for ( \%HTML::Entities::char2entity ) {
-	    $_->{chr(0204)} = '&euro;';
-	    $_->{chr(0246)} = '&Scaron;';
-	    $_->{chr(0250)} = '&scaron;';
-	    $_->{chr(0264)} = '&Zcaron;';
-	    $_->{chr(0270)} = '&zcaron;';
-	    $_->{chr(0274)} = '&OE;';
-	    $_->{chr(0275)} = '&oe;';
-	    $_->{chr(0276)} = '&Yuml;';
-	}
-    };
-    no warnings 'redefine';
-    *html = $@ ? \&__html : \&_html;
-    goto &html;
-}
-
-sub htmln {
-    # Escape HTML sensitive characters, and turn newlines into <br>.
-    my $t = html(shift);
-    return '' unless $t;
-    $t =~ s/\n+/$br/go;
-    $t;
-}
-
-sub indent {
-    # Shift contents to the right so it fits pretty.
-    my ($t, $n) = @_;
-    $n = " " x $n;
-    return $n unless $t;
-    $t = detab($t);
-    $t =~ s/\n+$//;
-    $t =~ s/\n/\n$n/g;
-    $t;
-}
-
-sub img {
-    my ($file, %atts) = @_;
-    my $ret = "<img src='" . $file . "'";
-    foreach ( sort(keys(%atts)) ) {
-	$ret .= " $_='" . $atts{$_} . "'";
-    }
-    $ret . ">";
-}
-
-sub restyle_exif {
-    my ($el) = @_;
-    my $ret = "";
-    my $v;
-
-    my $app = sub {
-	$ret .= "<tr><td>".htmln($_[0])."</td>".
-	            "<td>".htmln($_[1])."</td></tr>\n";
-    };
-
-    $app->("Date", $v) if $v = $el->DateTime;
-    my $t = $el->ExposureTime || 0;
-    if ( $t && $t <= 0.5 ) {
-	$t = "1/".int(0.5 + 1/$t)."s";
-    }
-    $app->("Exposure",
-	   join(" ", $el->ExposureMode || "",
-		$el->ExposureProgram || "", $t));
-    $app->("Aperture", sprintf("%.1f", $v))
-      if $v = $el->FNumber;
-    if ( $v = $el->FocalLength ) {
-	if ( $el->Model eq "DSC-V1" ) {
-	    $v .= sprintf("mm  (%.1fmm equiv.)", $v*4.857);
-	}
-	else {
-	    $v .= "mm";
-	}
-	$app->("Focal length", $v);
-    }
-    $app->("ISO", $v) if $v = $el->ISOSpeedRatings;
-    $app->("Flash", $v)
-      if ($v = $el->Flash) && $v ne "Flash did not fire";
-    $app->("Metering", $v) if $v = $el->MeteringMode;
-    $app->("Scene", $v) if $v = $el->SceneCaptureType;
-    $app->("Camera",
-	   join(" ", $v, $el->Model))
-      if $v = $el->Make;
-}
-
-#### Caption helpers.
-
-sub f_caption {
-    my ($el) = @_;
-    my $s = htmln($el->dest_name);
-    if ( $el->Make ) {
-	$s = "&nbsp;$s<a href='#' class='info'>&nbsp;<span>".
-	  "<table border='1' width='100%'>\n".
-	    restyle_exif($el) . "</table>\n".
-	      "</span></a>";
-    }
-    $s;
-}
-
-sub s_caption {
-    my ($el) = @_;
-    size_info($el, $medium);
-}
-
-sub t_caption {
-    my ($el) = @_;
-    $el->tag  ? htmln($el->tag) : "";
-}
-
-sub c_caption {
-    my ($el) = @_;
-    my $t = $el->description || "";
-    $t =~ s/\n.*//;
-    htmln($t);
-}
+################ ################
 
 #### Persistent info (cache) helpers.
 
@@ -2028,8 +2096,9 @@ sub c_caption {
 
 sub findexec {
     my ($bin) = @_;
-    foreach ( split(":", $ENV{PATH}) ) {
-	return "$_/$bin" if -x "$_/$bin";
+    foreach ( File::Spec->path ) {
+	my $try = File::Spec->catfile($_, $bin);
+	return $try if -x $try;
     }
     undef;
 }
@@ -2040,30 +2109,9 @@ sub squote {
     "'".$t."'";
 }
 
-sub update_if_needed {
-    my ($fname, $new) = @_;
-
-    # Do not overwrite unless modified.
-    if ( -s $fname && -s _ == length($new) ) {
-	local($/);
-	my $hh = do { local *F; *F };
-	my $old;
-	open($hh, $fname) && ($old = <$hh>) && close($hh);
-	if ( $old eq $new ) {
-	    return 0;
-	}
-    }
-
-    my $fh = do { local *F; *F };
-    open($fh, ">$fname")
-      or die("$fname (create): $!\n");
-    print $fh $new;
-    close($fh);
-    1;
-}
+################ Button Images ################
 
 sub add_button_images {
-
     # Extract button images from DATA section.
 
     my $out = do { local *OUT; *OUT };
@@ -2111,7 +2159,6 @@ sub add_button_images {
 
 my $add_stylesheet_msg;
 sub add_stylesheets {
-
     my $css_fontfam = "font-family: Verdana, Arial, Helvetica";
     my $WHITE = "#FFFFFF";
     my $BLACK = "#000000";
@@ -2122,148 +2169,148 @@ sub add_stylesheets {
 
     $add_stylesheet_msg = 0;
 
-    add_stylesheet("common", <<EOD);
-body {
-    font-size:  80%; $css_fontfam;
-    text: $BLACK;
-    background: $DGREY;
-}
-td {
-    font-size:  80%; $css_fontfam;
-}
-p.hdl, p.hdr {
-    font-size: 140%; font-weight: bold;
-    $css_fontfam;
-}
-p.ftl, p.ftr {
-    font-size:  80%; $css_fontfam;
-}
-a:link {
-    color: $BLACK; text-decoration: none;
-}
-a:visited {
-    color: $BLACK; text-decoration: none;
-}
-a:active {
-    color: $RED; text-decoration: none;
-}
-EOD
+    add_stylesheet("common", heredoc(<<"    EOD", 4));
+    body {
+	font-size:  80%; $css_fontfam;
+	text: $BLACK;
+	background: $DGREY;
+    }
+    td {
+	font-size:  80%; $css_fontfam;
+    }
+    p.hdl, p.hdr {
+	font-size: 140%; font-weight: bold;
+	$css_fontfam;
+    }
+    p.ftl, p.ftr {
+	font-size:  80%; $css_fontfam;
+    }
+    a:link {
+	color: $BLACK; text-decoration: none;
+    }
+    a:visited {
+	color: $BLACK; text-decoration: none;
+    }
+    a:active {
+	color: $RED; text-decoration: none;
+    }
+    EOD
 
-    add_stylesheet("index", <<EOD);
-\@import "common.css";
-a.info {
-    position: relative; z-index: 24; background-color: $LGREY;
-    color: $BLACK; text-decoration:none;
-}
-a.info:hover {
-    z-index: 25; background-color: $LGREY;
-}
-a.info span {
-    display: none;
-}
-a.info:hover span {
-    display: block;
-    position: absolute; top: 2em; left: 2em; width: 25em;
-    border: 0px; background-color: $MGREY; color: $BLACK;
-    text-align: center;
-}
-table.outer {
-    background: #d0d0d0;
-    border-collapse: separate;
-    border-width: 2px;           /* border=2 */
-    border-style: solid;
-    border-color: #e8e8e8 #727272 #727272 #e8e8e8;
-    border-spacing: 3px;        /* cellspacing = 3 */
-}
-table.outer tr {
-    background: #e0e0e0;
-}
-table.outer td {
-    border-width: 1px;
-    border-style: solid;
-    border-color: #7c7c7c #f5f5f5 #f5f5f5 #7c7c7c;
-}
-table.inner {
-    border: outset 0px;
-}
-table.inner td {
-    border: inset 0px;
-}
-p.hdr {
-    font-size: 140%; font-weight: bold;
-    font-family: Verdana, Arial, Helvetica;
-}
-p.hdr a:link {
-    color: #000000; text-decoration: underline;
-}
-p.hdr a:visited {
-    color: #000000; text-decoration: underline;
-}
-p.hdr a:hover {
-    color: #FF0000; text-decoration: underline;
-}
-EOD
+    add_stylesheet("index", heredoc(<<"    EOD", 4));
+    \@import "common.css";
+    a.info {
+	position: relative; z-index: 24; background-color: $LGREY;
+	color: $BLACK; text-decoration:none;
+    }
+    a.info:hover {
+	z-index: 25; background-color: $LGREY;
+    }
+    a.info span {
+	display: none;
+    }
+    a.info:hover span {
+	display: block;
+	position: absolute; top: 2em; left: 2em; width: 25em;
+	border: 0px; background-color: $MGREY; color: $BLACK;
+	text-align: center;
+    }
+    table.outer {
+	background: #d0d0d0;
+	border-collapse: separate;
+	border-width: 2px;           /* border=2 */
+	border-style: solid;
+	border-color: #e8e8e8 #727272 #727272 #e8e8e8;
+	border-spacing: 3px;        /* cellspacing = 3 */
+    }
+    table.outer tr {
+	background: #e0e0e0;
+    }
+    table.outer td {
+	border-width: 1px;
+	border-style: solid;
+	border-color: #7c7c7c #f5f5f5 #f5f5f5 #7c7c7c;
+    }
+    table.inner {
+	border: outset 0px;
+    }
+    table.inner td {
+	border: inset 0px;
+    }
+    p.hdr {
+	font-size: 140%; font-weight: bold;
+	font-family: Verdana, Arial, Helvetica;
+    }
+    p.hdr a:link {
+	color: #000000; text-decoration: underline;
+    }
+    p.hdr a:visited {
+	color: #000000; text-decoration: underline;
+    }
+    p.hdr a:hover {
+	color: #FF0000; text-decoration: underline;
+    }
+    EOD
 
-    add_stylesheet("large", <<EOD);
-\@import "common.css";
-a.info {
-    position: relative; z-index: 24; background-color: $DGREY;
-    color: $BLACK; text-decoration: none;
-}
-a.info:hover {
-    z-index: 25; background-color: $DGREY;
-}
-a.info span {
-    display: none;
-}
-a.info:hover span {
-    display: block;
-    position: absolute; top: 2em; left: 2em; width: 15em;
-    border: 0px; background-color: $MGREY; color :$BLACK;
-    text-align: center;
-}
-EOD
+    add_stylesheet("large", heredoc(<<"    EOD", 4));
+    \@import "common.css";
+    a.info {
+	position: relative; z-index: 24; background-color: $DGREY;
+	color: $BLACK; text-decoration: none;
+    }
+    a.info:hover {
+	z-index: 25; background-color: $DGREY;
+    }
+    a.info span {
+	display: none;
+    }
+    a.info:hover span {
+	display: block;
+	position: absolute; top: 2em; left: 2em; width: 15em;
+	border: 0px; background-color: $MGREY; color :$BLACK;
+	text-align: center;
+    }
+    EOD
 
-    add_stylesheet("medium", <<EOD);
-\@import "common.css";
-a.info {
-    position: relative; z-index: 24; background-color: $DGREY;
-    color:$BLACK; text-decoration:none;
-}
-a.info:hover {
-    z-index: 25; background-color: $DGREY;
-}
-a.info span {
-    display: none;
-}
-a.info:hover span {
-    display: block;
-    position: absolute; top:2em; left: 2em; width: 15em;
-    border: 0px; background-color: $MGREY; color: $BLACK;
-    text-align: center;
-}
-EOD
+    add_stylesheet("medium", heredoc(<<"    EOD", 4));
+    \@import "common.css";
+    a.info {
+	position: relative; z-index: 24; background-color: $DGREY;
+	color:$BLACK; text-decoration:none;
+    }
+    a.info:hover {
+	z-index: 25; background-color: $DGREY;
+    }
+    a.info span {
+	display: none;
+    }
+    a.info:hover span {
+	display: block;
+	position: absolute; top:2em; left: 2em; width: 15em;
+	border: 0px; background-color: $MGREY; color: $BLACK;
+	text-align: center;
+    }
+    EOD
 
-    add_stylesheet("journal", <<EOD);
-body {
-    font-size: 100%; $css_fontfam;
-    text: $BLACK;
-    background: $WHITE;
-}
-p.hd {
-    font-size: 140%; font-weight: bold;
-    margin-left: 0.1in; margin-top: 0.1in; margin-bottom: 0.1in;
-}
-table.outer {
-    width: 500px;
-    border-spacing: 10px;
-}
-tr.grey {
-    background: $DGREY;
-}
-table.outer td {
-}
-EOD
+    add_stylesheet("journal", heredoc(<<"    EOD", 4));
+    body {
+	font-size: 100%; $css_fontfam;
+	text: $BLACK;
+	background: $WHITE;
+    }
+    p.hd {
+	font-size: 140%; font-weight: bold;
+	margin-left: 0.1in; margin-top: 0.1in; margin-bottom: 0.1in;
+    }
+    table.outer {
+	width: 500px;
+	border-spacing: 10px;
+    }
+    tr.grey {
+	background: $DGREY;
+    }
+    table.outer td {
+    }
+    EOD
 
     print STDERR ("\n") if $add_stylesheet_msg;
 }
@@ -2277,43 +2324,11 @@ sub add_stylesheet {
     $css = d_css("$css.css");
     open(my $out, ">".$css) or die("$css: $!\n");
     binmode($out);
-    print $out ($data);
+    print {$out} ($data);
     close($out) or die("$css: $!\n");
 }
 
 ################ End Style Sheets ################
-
-sub bytes {
-    my $t = shift;
-    return $t . "b" if $t < 10*1024;
-    return ($t >> 10) . "kb" if $t < 10*1024*1024;
-    ($t >> 20) . "Mb";
-}
-
-sub size_info {
-    my ($el, $med) = @_;
-    return unless $el->width;
-
-    my $ret = "";
-    $ret .= $el->width . "x" . $el->height if $el->width;
-    for ( $med ? $el->medium_size : $el->file_size ) {
-	next unless $_;
-	$ret .= "," if $ret;
-	$ret .= bytes($_);
-    }
-    $ret;
-}
-
-sub uptodate {
-    my ($type, $mod) = @_;
-    if ( $mod ) {
-	print STDERR ("(Needed to write ", $mod,
-		      " $type page", $mod == 1 ? "" : "s", ")\n");
-    }
-    else {
-	print STDERR ("(No $type pages needed updating)\n");
-    }
-}
 
 sub detab {
     my ($line) = @_;
@@ -2327,6 +2342,8 @@ sub detab {
 
     $line;
 }
+
+################ Copying: plain files ################
 
 sub copy {
     my ($orig, $new, $time) = @_;
@@ -2357,6 +2374,8 @@ sub copy {
     close($out) or die("$new: $!\n");
     utime($time, $time, $new);
 }
+
+################ Copying: MPG files ################
 
 sub copy_mpg {
     my ($orig, $new, $time, $rotate, $mirror) = @_;
@@ -2456,6 +2475,8 @@ sub still {
     $canvas;
 }
 
+################ Copying: Voice files ################
+
 sub copy_voice {
     my ($orig, $new, $time) = @_;
     $time = (stat($orig))[9] unless defined($time);
@@ -2474,8 +2495,17 @@ sub copy_voice {
     utime($time, $time, $new);
 }
 
-sub indexicon {
+################ Index Icon Maintenance ################
 
+sub create_index_icon {
+    return unless $icon;
+    print STDERR ("Creating index icon\n") if $verbose > 1;
+    unless ( indexicon() ) {
+	print STDERR ("(Index icon not modified)\n") if $verbose > 1;
+    }
+}
+
+sub indexicon {
     my @imgs;
     for ( my $i = 0; $i < $index_rows*$index_columns; $i++ ) {
 	next if $i >= $num_entries;
@@ -2583,34 +2613,34 @@ sub app_ident {
 sub app_usage {
     my ($exit) = @_;
     app_ident();
-    print STDERR <<EndOfUsage;
-Usage: $0 [options] [ directory ]
-  Album:
-    --info XXX		description file, default "@{[DEFAULTS->{info}]}" (if it exists)
-    --title XXX		album title, default "@{[DEFAULTS->{title}]}"
-    --[no]icon		[do not] produce an album icon
-  Index:
-    --cols NN		number of columns per page, default @{[DEFAULTS->{indexcols}]}
-    --rows NN		number of rows per page, default @{[DEFAULTS->{indexrows}]}
-    --thumbsize NNN	the max size of thumbnail images, default @{[DEFAULTS->{thumbsize}]}
-    --captions XXX	f: filename s: size c: description t: tag
-  Medium:
-    --medium    	produce medium sized images of size @{[DEFAULTS->{mediumsize}]}
-    --mediumsize NNN	the max size of medium sized images, default @{[DEFAULTS->{mediumsize}]}
-    --mediumonly	ignore large images and links (for web export)
-  Importing:
-    --import XXX	original images
-    --exif		use w/ EXIF info, if possible
-    --dcim XXX		as --import with --exif
-    --update		add new entries from import, if needed
-    --[no]link		[do not] link to original, instead of copying. Default is link.
-  Miscellaneous:
-    --clobber		recreate everything (except large)
-    --test		verify only
-    --help		this message
-    --ident		show identification
-    --verbose		verbose information
-EndOfUsage
+    print STDERR heredoc(<<"    EndOfUsage", 4);
+    Usage: $0 [options] [ directory ]
+      Album:
+	--info XXX          description file, default "@{[DEFAULTS->{info}]}" (if it exists)
+	--title XXX         album title, default "@{[DEFAULTS->{title}]}"
+	--[no]icon          [do not] produce an album icon
+      Index:
+	--cols NN           number of columns per page, default @{[DEFAULTS->{indexcols}]}
+	--rows NN           number of rows per page, default @{[DEFAULTS->{indexrows}]}
+	--thumbsize NNN     the max size of thumbnail images, default @{[DEFAULTS->{thumbsize}]}
+	--captions XXX      f: filename s: size c: description t: tag
+      Medium:
+	--medium            produce medium sized images of size @{[DEFAULTS->{mediumsize}]}
+	--mediumsize NNN    the max size of medium sized images, default @{[DEFAULTS->{mediumsize}]}
+	--mediumonly        ignore large images and links (for web export)
+      Importing:
+	--import XXX        original images
+	--exif              use w/ EXIF info, if possible
+	--dcim XXX          as --import with --exif
+	--update            add new entries from import, if needed
+	--[no]link          [do not] link to original, instead of copying. Default is link.
+      Miscellaneous:
+	--clobber           recreate everything (except large)
+	--test              verify only
+	--help              this message
+	--ident             show identification
+	--verbose           verbose information
+    EndOfUsage
     exit $exit if defined $exit && $exit != 0;
 }
 
