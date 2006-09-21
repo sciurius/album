@@ -20,8 +20,7 @@ mountc :
 	-mount $(CAMERA)
 
 _fetch :
-	rsync -av --modify-window=1 \
-	    --exclude=dsc00000.jpg \
+	rsync -av --modify-window=1 --exclude=dsc00000.jpg \
 	    $(DSC)/ $(RAW)/
 	find $(RAW) -type f -perm +333 -print -exec chmod 0444 {} \;
 
@@ -35,9 +34,9 @@ clobber :
 	$(PERL) -w $(TOOLS)/album.pl $(OPTS) --verbose --clobber --update $(IMPORT) $(HERE)
 
 export-web :
-	$(PERL) -w $(TOOLS)/album.pl $(OPTS) --verbose --mediumonly $(HERE)
+	$(PERL) -w $(TOOLS)/album.pl $(OPTS) --verbose --mediumonly --caption=tc $(HERE)
 	rm -f web.zip
-	zip -r web.zip index*.html icons medium thumbnails journal
+	zip -r web.zip index*.html icons css medium thumbnails journal
 
 init ::
 	mkdir -p $(DCIM)
