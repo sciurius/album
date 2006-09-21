@@ -4,8 +4,8 @@ my $RCS_Id = '$Id$ ';
 # Author          : Johan Vromans
 # Created On      : Tue Sep 15 15:59:04 2002
 # Last Modified By: Johan Vromans
-# Last Modified On: Fri Sep 15 20:27:58 2006
-# Update Count    : 2762
+# Last Modified On: Thu Sep 21 15:42:01 2006
+# Update Count    : 2764
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -2570,7 +2570,7 @@ sub app_options {
 	'extformats'	 => \$externalize_formats,
 
         # Album options. Can also be set in info/config files.
-	'caption=s'      => \$caption,
+	'captions=s'     => \$caption,
 	'cols|columns=i' => \$index_columns,
 	'icon!'          => \$icon,
 	'medium'         => sub { $medium = 0 },
