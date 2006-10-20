@@ -2,8 +2,8 @@
 # Author          : Johan Vromans
 # Created On      : Fri Jul  9 15:45:48 2004
 # Last Modified By: Johan Vromans
-# Last Modified On: Sat Aug  7 19:51:15 2004
-# Update Count    : 21
+# Last Modified On: Sat Sep 23 17:45:29 2006
+# Update Count    : 24
 # Status          : Experimental
 
 use strict;
@@ -60,9 +60,9 @@ WriteMakefile
    PREREQ_PM	=> { 'Getopt::Long' => 2.1,
 		     'Image::Info' => 1.16,
 		     'Image::Magick' => 6,
+		     'File::Spec' => 0,
 		   },
    EXE_FILES    => [ map { "script/$_" } @scripts ],
-   PM		=> {},
  );
 
 sub checkexec {
