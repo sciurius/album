@@ -4,8 +4,8 @@ my $RCS_Id = '$Id$ ';
 # Author          : Johan Vromans
 # Created On      : Tue Sep 15 15:59:04 2002
 # Last Modified By: Johan Vromans
-# Last Modified On: Sat Sep 23 17:53:28 2006
-# Update Count    : 2765
+# Last Modified On: Fri Oct 20 16:43:57 2006
+# Update Count    : 2797
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -89,7 +89,11 @@ use constant DEFAULTS => { info       => "info.dat",
 
 my $TMPDIR = $ENV{TMPDIR} || $ENV{TEMP} || '/usr/tmp';
 
-my $suffixpat = qr{\.(?:jpe?g|png|gif|mpg)}i;
+my $picpat = qr{(?-i:jpe?g|png|gif)};
+my $movpat = qr{(?-i:mpe?g|mov|avi)};
+my $xtrpat = qw{(?-i:html?)};
+my $suffixpat = qr{\.$picpat|$movpat};
+my $xsuffixpat = qr{\.$picpat|$movpat|$xtrpat};
 
 my %capfun = ('c' => \&c_caption,
 	      'f' => \&f_caption,
@@ -350,7 +354,7 @@ sub set_defaults {
     setopt("icon",          DEFAULTS->{icon});
 
     $medium = DEFAULTS->{mediumsize} if defined($medium) && !$medium || $mediumonly;
-    $medium = 0 if $medium < 0;
+    $medium = 0 if defined($medium) && $medium < 0;
 
     # Caption values.
     setopt("caption", DEFAULTS->{( -s $info_file || $import_dir) ?
@@ -441,7 +445,8 @@ sub load_info {
 	    }
 	    next;
 	}
-	($file, my $a) = split(' ', $_, 2);
+
+	($file, $a) = $_ =~ /^(.+?$xsuffixpat)\s*(.*)/;
 
 	my $rotate;
 	my $type = T_JPG;
@@ -468,7 +473,7 @@ sub load_info {
 	$el->description($a) if $a;
 	$el->tag($tag) if $tag;
 	$el->_rotation($rotate) if defined($rotate);
-	if ( $file =~ /^(.+)\.mpg$/i ) {
+	if ( $file =~ /^(.+)\.$movpat$/i ) {
 	    $el->type(T_MPG);
 	    $el->assoc_name($1."s.jpg"); # associates still image
 	}
@@ -574,7 +579,8 @@ sub load_info_journal {
 	my @a = split(/\n/, $_);
 	$_ = shift(@a);
 	my $annotation = join(" ", @a);
-	my ($file, $a) = split(' ', $_, 2);
+
+	my ($file, $a) = $_ =~ /^(.+?)$xsuffixpat\s*(.*)/;
 
 	my $rotate;
 	my $type = T_JPG;
@@ -609,7 +615,7 @@ sub load_info_journal {
 	}
 
 	$el->_rotation($rotate) if defined($rotate);
-	if ( $file =~ /^(.+)\.mpg$/i ) {
+	if ( $file =~ /^(.+)\.$movpat$/i ) {
 	    $el->type(T_MPG);
 	    $el->assoc_name($1."s.jpg"); # associates still image
 	}
@@ -675,7 +681,7 @@ sub load_files {
 	next unless -f d_large($f);
 	my $el = new ImageInfo(d_large($f));
 	$el->type(T_JPG);
-	if ( $f =~ /^(.+)\.jpg$/ ) {
+	if ( $f =~ /^(.+)\.$picpat$/ ) {
 	    my $m = "$1.mp3";
 	    if ( -s d_large($m) ) {
 		$el->type(T_VOICE);
@@ -683,7 +689,7 @@ sub load_files {
 		warn(d_large($f).": Changed to VOICE\n") if $verbose;
 	    }
 	}
-	elsif ( $f =~ /^(.+)\.mpg$/ ) {
+	elsif ( $f =~ /^(.+)\.$movpat$/i ) {
 	    $el->type(T_MPG);
 	    my $assoc = $1."s.jpg";
 	    $el->assoc_name($assoc);
@@ -714,7 +720,7 @@ sub load_import {
 	}
 	else {
 	    $el->type(T_JPG);
-	    if ( $f =~ /^(.+)\.mpg$/i ) {
+	    if ( $f =~ /^(.+)\.$movpat$/i ) {
 		$el->type(T_MPG);
 		$el->assoc_name($1."s.jpg");
 	    }
@@ -739,7 +745,7 @@ sub handle_exif {
     # Files marked with * have a normal still image associated.
 
     # Normal still image.
-    if ( $file =~ /^(.{4})(\d{4})\.(jpg)$/i ) {
+    if ( $file =~ /^(.{4})(\d{4})\.($picpat)$/i ) {
 	my ($type, $seq, $ext) = ($1, $2, $3);
 	my $fd = $el->DateTime || "";
 	if ( $fd =~ /(\d\d\d\d):(\d\d):(\d\d) (\d\d):(\d\d):(\d\d)/ ) {
@@ -773,7 +779,7 @@ sub handle_exif {
     }
 
     # MPEG movie.
-    elsif ( $file =~ /^(mov0)(\d{4})\.(mpg)$/i ) {
+    elsif ( $file =~ /^(.{4})(\d{4})\.($movpat)$/i ) {
 	my ($type, $seq, $ext) = ($1, $2, $3);
 	# We have to trust the file date...
 	my $time = $el->timestamp;
@@ -793,9 +799,20 @@ sub handle_exif {
 	cache_entry($file, $el) unless $ii;
     }
 
-    # Assume ordinary JPEG.
-    else {
+    # Assume ordinary JPEG or some picture.
+    elsif ( $file =~ /^.*$picpat$/) {
 	$el->type(T_JPG);
+	$el->orig_name("$import_dir/$file");
+	$el->dest_name($file);
+	$implist->add($el, $file);
+    }
+
+    # Assume ordinary MPEG or some movie.
+    elsif ( $file =~ /^(.*)($movpat)$/) {
+	$el->type(T_MPG);
+	$el->orig_name("$import_dir/$file");
+	$el->dest_name($file);
+	$el->assoc_name($1."s.jpg");
 	$implist->add($el, $file);
     }
     return 0;
@@ -2105,8 +2122,9 @@ sub findexec {
 
 sub squote {
     my ($t) = @_;
-    $t =~ s/([\\\'])/\\$1/g;
-    "'".$t."'";
+    $t =~ s/([\\\"])/\\$1/g;
+    $t = '"'.$t.'"' if $t =~ /[^-\w.\/]/;
+    $t;
 }
 
 ################ Button Images ################
