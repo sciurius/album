@@ -51,6 +51,10 @@ B<Album> requires the following Perl modules, all available on CPAN:
 
 =item *
 
+File::Spec (Standard part of perl 5.8)
+
+=item *
+
 Image::Info
 
 =item *
