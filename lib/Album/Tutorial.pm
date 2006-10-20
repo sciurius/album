@@ -415,6 +415,15 @@ names. This can only happen if the pictures were taken at the exact
 same time (according to the camera's notion of time!), and have the
 same internal sequence number.
 
+When parsing C<info.dat>, Album treats anything up to a known file
+name extension to be part of the file name. In general, this means
+that you can safely enter file names with whitespace and other
+uglyness.
+
+Known file name extensions are C<jpg>, C<jpeg>, C<png>, and C<gif> for
+images, C<mpg>, C<mpeg>, C<mov>, and C<avi> for movies, and C<html>
+and C<htm> for links.
+
 =head1 AUTHOR AND CREDITS
 
 Johan Vromans (jvromans@squirrel.nl) wrote this module.
