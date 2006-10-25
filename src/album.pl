@@ -4,13 +4,13 @@ my $RCS_Id = '$Id$ ';
 # Author          : Johan Vromans
 # Created On      : Tue Sep 15 15:59:04 2002
 # Last Modified By: Johan Vromans
-# Last Modified On: Fri Oct 20 16:43:57 2006
-# Update Count    : 2797
+# Last Modified On: Wed Oct 25 10:24:04 2006
+# Update Count    : 2826
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
 
-$VERSION = "1.04";
+$VERSION = "1.05";
 
 use strict;
 
@@ -89,9 +89,9 @@ use constant DEFAULTS => { info       => "info.dat",
 
 my $TMPDIR = $ENV{TMPDIR} || $ENV{TEMP} || '/usr/tmp';
 
-my $picpat = qr{(?-i:jpe?g|png|gif)};
-my $movpat = qr{(?-i:mpe?g|mov|avi)};
-my $xtrpat = qw{(?-i:html?)};
+my $picpat = qr{(?i:jpe?g|png|gif)};
+my $movpat = qr{(?i:mpe?g|mov|avi)};
+my $xtrpat = qw{(?i:html?)};
 my $suffixpat = qr{\.$picpat|$movpat};
 my $xsuffixpat = qr{\.$picpat|$movpat|$xtrpat};
 
@@ -310,6 +310,7 @@ sub parse_line {
 	    setopt("locale", $1);
 	}
 	elsif ( /^depth\s+(\d+)/ ) {
+	    # lib_common is used in the HTML, don't use fjoin.
 	    setopt("lib_common", join("/", ("..") x $1));
 	}
 	else {
@@ -326,7 +327,11 @@ sub parse_line {
 
 sub set_defaults {
     # Load settings from user files.
-    my $sl = $ENV{ALBUMCONFIG} || ".albumrc:".$ENV{HOME}."/.albumrc";
+    my $sl;
+    unless ( $sl = $ENV{ALBUMCONFIG} ) {
+	$sl = ".albumrc";
+	$sl .= ":".$ENV{HOME}."/.albumrc" if $ENV{HOME};
+    }
     foreach my $cf ( split(/:/, $sl) ) {
 	unless ( -f $cf ) {
 	    warn("$cf: $!\n") if $ENV{ALBUMCONFIG};
@@ -456,7 +461,7 @@ sub load_info {
 		$rotate = 90 * ($2 % 4);
 	    }
 	    elsif ( lc($1) eq 'i' ) {
-		$assc = basename($file)."/".$2;
+		$assc = fjoin(basename($file), $2);
 		unless ( -s $assc && -r _ ) {
 		    warn("$file (info): $assc [$!]\n");
 		    undef $assc;
@@ -494,7 +499,7 @@ sub load_info {
 	    $el->type($type);
 	}
 	$filelist->add($el);
-	$dirs{$1} = 1 if $type != T_REF && $file =~ m;^(.+)/[^/]+$;;
+	$dirs{$1} = 1 if $type != T_REF && $file =~ m;^(.+)[/\\][^/\\]+$;;
     }
     close($fh);
     die("Aborted\n") if $err;
@@ -590,7 +595,7 @@ sub load_info_journal {
 		$rotate = 90 * ($2 % 4);
 	    }
 	    elsif ( lc($1) eq 'i' ) {
-		$assc = basename($file)."/".$2;
+		$assc = fjoin(basename($file), $2);
 		unless ( -s $assc && -r _ ) {
 		    warn("$file (info): $assc [$!]\n");
 		    undef $assc;
@@ -651,7 +656,7 @@ sub load_info_journal {
 	$filelist->add($el);
 	push(@journal, $el) if !$a || $a !~ /^--/;
 
-	$dirs{$1} = 1 if $type != T_REF && $file =~ m;^(.+)/[^/]+$;;
+	$dirs{$1} = 1 if $type != T_REF && $file =~ m;^(.+)[/\\][^/\\]+$;;
 
     }
     close($fh);
@@ -712,9 +717,9 @@ sub load_import {
 
     while ( @files ) {
 	my $f = shift(@files);
-	next unless -f "$import_dir/$f";
+	next unless -f fjoin($import_dir, $f);
 
-	my $el = new ImageInfo("$import_dir/$f");
+	my $el = new ImageInfo(fjoin($import_dir, $f));
 	if ( $import_exif ) {
 	    shift(@files) if handle_exif($f, $files[0], $el);
 	}
@@ -753,7 +758,7 @@ sub handle_exif {
 	    my $new = "$1$2$3$4$5$6$seq";
 	    my $ii = cache_entry("$new.$ext");
 	    if ( $ii && !$ii->orig_name ) {
-		$ii->orig_name("$import_dir/$file");
+		$ii->orig_name(fjoin($import_dir, $file));
 	    }
 
 	    $el->type(T_JPG);
@@ -763,12 +768,12 @@ sub handle_exif {
 	    cache_entry($file, $el) unless $ii;
 	}
 	else {
-	    warn("$import_dir/$file: Missing or unparsable file date [$fd]\n")
+	    warn(fjoin($import_dir, $file).": Missing or unparsable file date [$fd]\n")
 	      if $verbose;
 	    $el->type(T_JPG);
 	}
 	if ( $next && $next eq "$type$seq.mpg" ) {
-	    warn("$import_dir/$file: Changed to VOICE\n") if $verbose;
+	    warn(fjoin($import_dir, $file).": Changed to VOICE\n") if $verbose;
 	    $el->type(T_VOICE);
 	    (my $t = $file) =~ s/\.jpg$/.mp3/i;
 	    $el->assoc_name($t);
@@ -788,7 +793,7 @@ sub handle_exif {
 			  1900+$tm[5], 1+$tm[4], @tm[3,2,1,0]);
 	my $ii = cache_entry("$new.$ext");
 	if ( $ii && !$ii->orig_name ) {
-	    $ii->orig_name("$import_dir/$file");
+	    $ii->orig_name(fjoin($import_dir, $file));
 	}
 
 	$el->type(T_MPG);
@@ -802,7 +807,7 @@ sub handle_exif {
     # Assume ordinary JPEG or some picture.
     elsif ( $file =~ /^.*$picpat$/) {
 	$el->type(T_JPG);
-	$el->orig_name("$import_dir/$file");
+	$el->orig_name(fjoin($import_dir, $file));
 	$el->dest_name($file);
 	$implist->add($el, $file);
     }
@@ -810,7 +815,7 @@ sub handle_exif {
     # Assume ordinary MPEG or some movie.
     elsif ( $file =~ /^(.*)($movpat)$/) {
 	$el->type(T_MPG);
-	$el->orig_name("$import_dir/$file");
+	$el->orig_name(fjoin($import_dir, $file));
 	$el->dest_name($file);
 	$el->assoc_name($1."s.jpg");
 	$implist->add($el, $file);
@@ -1078,18 +1083,42 @@ sub prepare_images {
 	    my $time = $el->timestamp;
 
 	    if ( $movie ) {
-		$msg->("copy");
-		if ( $prog_mencoder ) {
-		    $msg->("/rotate (be patient)") if $el->rotation;
-		    $msg->(" ");
-		    # Currently. movies have a bad ugly copy routine...
-		    copy_mpg($i_src, $i_large, $time,
-			     $el->rotation, $el->mirror);
+
+		# Need copy?
+		my $copyit = !$linkthem
+		  || (($el->rotation || $el->mirror) && $prog_mencoder);
+
+		# Try to link.
+		if ( !$copyit ) {
+		    $msg->("link ");
+		    if ( link($i_src, $i_large) == 1 ) {
+			# Ok, done.
+		    }
+		    else {
+			# Need copy.
+			unlink($i_large); # just in case
+			$msg->("[copy] ");
+			$copyit = 1;
+		    }
 		}
 		else {
-		    $msg->(" [no rotation]") if $el->rotation;
-		    $msg->(" ");
-		    copy($i_src, $i_large, $time);
+		    $msg->("copy");
+		}
+
+		# Need copy?
+		if ( $copyit ) {
+		    if ( $prog_mencoder ) {
+			$msg->("/rotate (be patient)") if $el->rotation;
+			$msg->(" ");
+			# Currently. movies have a bad ugly copy routine...
+			copy_mpg($i_src, $i_large, $time,
+				 $el->rotation, $el->mirror);
+		    }
+		    else {
+			$msg->(" [no rotation]") if $el->rotation;
+			$msg->(" ");
+			copy($i_src, $i_large, $time);
+		    }
 		}
 	    }
 	    elsif ( $el->rotation || $el->mirror ) {
@@ -2695,9 +2724,14 @@ INIT {
 		};
 }
 
-sub basename {
+my $largepat;
+sub basename_nolarge {
     my ($f) = @_;
-    $f =~ s;^large/;;;
+    unless ( $largepat ) {
+	$largepat = quotemeta(::d_large());
+	$largepat = qr;^$largepat[/\\];;
+    }
+    $f =~ s;$largepat;;;
     $f;
 }
 
@@ -2707,7 +2741,7 @@ sub new {
 
     my $self = { $file ?
 		 (orig_name    => $file,
-		  dest_name    => basename($file)) : (),
+		  dest_name    => basename_nolarge($file)) : (),
 		 description  => "",
 		 annotation   => [],
 		 tag	      => "",
