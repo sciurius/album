@@ -2,8 +2,8 @@
 # Author          : Johan Vromans
 # Created On      : Fri Jul  9 15:45:48 2004
 # Last Modified By: Johan Vromans
-# Last Modified On: Sat Sep 23 17:45:29 2006
-# Update Count    : 24
+# Last Modified On: Wed Mar 21 10:22:21 2007
+# Update Count    : 25
 # Status          : Experimental
 
 use strict;
@@ -26,7 +26,7 @@ print STDERR <<EOD;
 
 This program requires some helper programs.
 
-  jpegtrans   will be used to rotate JPEG files loslessly.
+  jpegtran    will be used to rotate JPEG files loslessly.
 	      If missing, JPEG files will be rotated by ImageMagick,
 	      with possible loss of information.
 EOD

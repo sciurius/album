@@ -35,7 +35,7 @@ Helper programs
 
 This program requires some helper programs for certain tasks.
 
-  jpegtrans   will be used to rotate JPEG files loslessly.
+  jpegtran    will be used to rotate JPEG files loslessly.
 	      If missing, JPEG files will be rotated by ImageMagick,
 	      with possible loss of information.
   mencoder    is needed to manipulate MPEG files.
