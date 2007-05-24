@@ -4,8 +4,8 @@ my $RCS_Id = '$Id$ ';
 # Author          : Johan Vromans
 # Created On      : Tue Sep 15 15:59:04 2002
 # Last Modified By: Johan Vromans
-# Last Modified On: Mon Apr  2 11:07:05 2007
-# Update Count    : 2830
+# Last Modified On: Fri May 25 00:39:44 2007
+# Update Count    : 2831
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -585,7 +585,7 @@ sub load_info_journal {
 	$_ = shift(@a);
 	my $annotation = join(" ", @a);
 
-	my ($file, $a) = $_ =~ /^(.+?)$xsuffixpat\s*(.*)/;
+	my ($file, $a) = $_ =~ /^(.+?$xsuffixpat)\s*(.*)/;
 
 	my $rotate;
 	my $type = T_JPG;
