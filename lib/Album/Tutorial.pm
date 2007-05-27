@@ -53,7 +53,9 @@ created thumbnails, icons and css directories, created thumbnails by
 resizing the images, and finally created the HTML pages. You can
 inspect your first photo album by opening file 'index.html' with your
 favorite browser. You can click on any image to see the larger
-version. Navigation buttons are provided to the left of the image.
+version. Navigation buttons are provided to the left of the image. You
+can also navigate from the keyboard: space (next), backspace
+(previous), enter (larger image), and 'd' (index).
 
 It is interesting to run 'album' again:
 
@@ -97,7 +99,7 @@ B<--clobber> below);
 
 =item *
 
-any icons or stylesheets, so it is save to customize these;
+any icons, stylesheets, or formats, so it is safe to customize these;
 
 =back
 
@@ -397,6 +399,135 @@ be skipped.
 Note that when you click on an external reference thumbnail, a new
 browser window will be opened to show the referenced information.
 
+=head2 Journal mode
+
+I<Warning: Journal mode is still under development and may change in
+future versions.>
+
+Journal mode is enabled with the control B<!journal> in C<info.dat>.
+
+When journal mode is enabled, the data from C<info.dat> is considered
+to be a series of paragraphs. Paragraphs are separated using one or
+more empty lines.
+
+The first line of a paragraph may contain image info, preceeded by an
+asterisk and whitespace. For example:
+
+  !journal
+
+  !tag 2004/06/01
+
+  A bright, shiny day.
+
+  * im023.jpg  Sunrise
+  This morning, we were surprised by a fantastic sunrise like
+  we have never seen before.
+
+  * im024.jpg  Overview
+  This picture shows an overview of the area.
+
+This way it is possible to attach extended pieces of text to a images.
+
+An additional series of pages is generated, the journal pages. Each
+journal page contains the extended text and thumbnail images of all
+entries that belong to a single tag. The idea is that the tags are
+dates, and each journal page contains the text and images of a single
+day.
+
+If the extended text starts with C<< < >> it is assumed to be HTML and
+included literally.
+
+The medium and large image pages have an additional icon to jump to
+the journal entry for an image. The extended text can be also viewed
+on the medium and large image pages when the mouse is placed over the
+info at the right side above the image, e.g., C<My First Album: Image
+1 of 9>.
+
+Note that journal mode can not be mixed with normal mode.
+
+=head2 External formats
+
+I<Warning: External formats are still under development and may change
+in future versions.>
+
+When 'album' is run with B<--extformats> it will create a directory
+'formats' and, in this directory, the HTML templates for all types of
+pages that 'album' will generate. Any existing files in this directory
+will B<not> be overwritten, so it is safe to change the templates to
+your liking. When 'album' is run again to process images, it will use
+the templates from the 'formats' directory if they are available.
+
+The templates are plain HTML and contain variables that will be
+substituted with actual values. Some of the variables are:
+
+=over 12
+
+=item $title
+
+The title of the album.
+
+=item $ltop
+
+Index and image pages only: The text above each image, left.
+
+=item $rtop
+
+Index and image pages only: The text above each image, right.
+
+=item $vbuttons
+
+The navigation buttons, arranged vertically.
+
+=item $hbuttons
+
+The navigation buttons, arranged horizontally.
+
+=item $jscript
+
+The javascript for keyboard navigation.
+
+=item $image
+
+Image pages only: The actual image.
+
+=item $lbot
+
+Image pages only: The text below the image, left.
+
+=item $rbot
+
+Image pages only: The text below the image, right.
+
+=item $contents
+
+Index pages only: The table with all the images for this page.
+
+=item $tag
+
+Journal pages only: The tag for this page.
+
+=item $journal
+
+Journal pages only: The journal for this page.
+
+=back
+
+=head2 Keyboard navigation
+
+While browsing the album, some actions can be performed from the keyboard.
+
+The C<Enter> key will go to an enlarged version of the image, if available.
+
+The C<Space> key will advance to the next page.
+
+The C<Backspace> key will advance to the previous page.
+
+Key C<d> will go to the index page.
+
+Key C<u> will go up, i.e., the reverse of the C<Enter> key.
+
+Key C<j> will go to the journal entry of the current image.
+
 =head2 Additional notes
 
 The B<--clobber> command line option will force regeneration of all
@@ -430,7 +561,7 @@ Johan Vromans (jvromans@squirrel.nl) wrote this module.
 
 =head1 COPYRIGHT AND DISCLAIMER
 
-This program is Copyright 2004 by Squirrel Consultancy. All
+This program is Copyright 2004,2007 by Squirrel Consultancy. All
 rights reserved.
 
 This program is free software; you can redistribute it and/or modify
