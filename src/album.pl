@@ -4,8 +4,8 @@ my $RCS_Id = '$Id$ ';
 # Author          : Johan Vromans
 # Created On      : Tue Sep 15 15:59:04 2002
 # Last Modified By: Johan Vromans
-# Last Modified On: Fri May 25 01:08:23 2007
-# Update Count    : 2832
+# Last Modified On: Sun May 27 23:37:45 2007
+# Update Count    : 2834
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -1756,7 +1756,7 @@ sub write_image_page {
     my $next = ($el->next || $num_entries+1) - 1;
     my $prev = ($el->prev || 0) - 1;
     my %nav = (next => $next < $num_entries ? $htmllist[$next] : "",
-	       prev => $prev > 0 ? $htmllist[$prev] : "",
+	       prev => $prev >= 0 ? $htmllist[$prev] : "",
 	       idx  => "../".ixname(int($i/$entries_per_page)),
 	       up   => "../".ixname(int($i/$entries_per_page)));
 
@@ -2433,7 +2433,7 @@ sub copy_mpg {
     # I'm not sure what this does. The resultant file is about 10% of
     # the original, without missing something...
     my $cmd = "$prog_mencoder -of mpeg -oac copy -ovc ".
-	($rotate ? "lavc -lavcopts vcodec=mpeg1video -vop rotate=".int($rotate/90)." " : "copy ") .
+	($rotate ? "lavc -lavcopts vcodec=mpeg1video -vf rotate=".int($rotate/90)." " : "copy ") .
 	  squote($orig) . " -o ". squote($new);
     warn("\n+ $cmd\n") if $verbose > 2;
 
