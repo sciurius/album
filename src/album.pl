@@ -4,8 +4,8 @@ my $RCS_Id = '$Id$ ';
 # Author          : Johan Vromans
 # Created On      : Tue Sep 15 15:59:04 2002
 # Last Modified By: Johan Vromans
-# Last Modified On: Sun May 27 23:37:45 2007
-# Update Count    : 2834
+# Last Modified On: Tue May 29 23:01:22 2007
+# Update Count    : 2836
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -2052,10 +2052,10 @@ sub write_journal {
 		      $dst . "'></a>";
 
 	    $jnl .= "<tr>\n".
-	            "  <td valign='middle' align='left'>\n".
+	            "  <td class='jl'>\n".
 		    "    " . indent($t || "&nbsp;", 4) . "\n".
 		    "  </td>\n".
-		    "  <td valign='top' align='left'>\n".
+		    "  <td class='jr'>\n".
 		    "    " . indent($img, 4) . "\n".
 		    "  </td>\n".
 		    "</tr>\n";
@@ -2357,7 +2357,12 @@ sub add_stylesheets {
     tr.grey {
 	background: $DGREY;
     }
-    table.outer td {
+    table.outer td.jl {
+	vertical-align: top;
+	text-align: left;
+    }
+    table.outer td.jr {
+	vertical-align: top;
     }
     EOD
 
