@@ -4,8 +4,8 @@ my $RCS_Id = '$Id$ ';
 # Author          : Johan Vromans
 # Created On      : Tue Sep 15 15:59:04 2002
 # Last Modified By: Johan Vromans
-# Last Modified On: Thu May 31 22:22:27 2007
-# Update Count    : 2859
+# Last Modified On: Fri Jun  1 00:33:12 2007
+# Update Count    : 2914
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -106,6 +106,10 @@ my $br = br();
 
 # Max.number of clickable index numbers (should be odd).
 use constant IXLIST => 15;
+
+# Stylesheets version.
+my $css_major = 2;
+my $css_minor = 0;
 
 # Helper programs
 my $prog_jpegtran  = findexec("jpegtran");
@@ -1312,22 +1316,22 @@ sub init_formats {
 	<table>
 	  <tr>
 	    <td></td>
-	    <td align='left'>
+	    <td class='topleft'>
 	      <p class='hdl'>
 		$ltop
 	      </p>
 	    </td>
-	    <td align='right'>
+	    <td class='topright'>
 	      <p class='hdr'>
 		$rtop
 	      </p>
 	    </td>
 	  </tr>
 	  <tr>
-	    <td valign='top'>
+	    <td class='vbuttons'>
 	      $vbuttons
 	    </td>
-	    <td valign='top' colspan='2'>
+	    <td class='vimage' colspan='2'>
 	      $contents
 	    </td>
 	  </tr>
@@ -1362,33 +1366,33 @@ sub init_formats {
 	<table>
 	  <tr>
 	    <td></td>
-	    <td align='left' valign='top'>
+	    <td class='topleft'>
 	      <p class='hdl'>
 		$ltop
 	      </p>
 	    </td>
-	    <td align='right' valign='top'>
+	    <td class='topright'>
 	      <p class='hdr'>
 		$rtop
 	      </p>
 	    </td>
 	  </tr>
 	  <tr>
-	    <td valign='top'>
+	    <td class='vbuttons'>
 	      $vbuttons
 	    </td>
-	    <td align='center' valign='top' colspan='2'>
+	    <td class='image' colspan='2'>
 	      $image
 	    </td>
 	  </tr>
 	  <tr>
 	    <td></td>
-	    <td align='left' valign='top'>
+	    <td class='botleft'>
 	      <p class='ftl'>
 		$lbot
 	      </p>
 	    </td>
-	    <td align='right' valign='top'>
+	    <td class='botright'>
 	      <p class='ftr'>
 		$rbot
 	      </p>
@@ -1429,14 +1433,14 @@ sub init_formats {
 		$tag
 	      </p>
 	    </td>
-	    <td align='right'>
+	    <td class='buttons'>
 	      $hbuttons
 	    </td>
 	  </tr>
 	  $journal
 	  <tr class='grey'>
 	    <td>&nbsp;</td>
-	    <td align='right'>
+	    <td class='buttons'>
 	      $hbuttons
 	    </td>
 	  </tr>
@@ -1508,8 +1512,8 @@ sub button($$;$$) {
     $tag .= "-gr" unless $active;
     $level = "../" x $level;
     $level .= $lib_common . "/" if $lib_common ne "";
-    my $b = img("${level}icons/$tag.png", align => "top",
-		border => 0, alt => "[$Tag]");
+    my $b = img("${level}icons/$tag.png", class => "button",
+		alt => "[$Tag]");
     $active ? "<a class='info' href='$link' alt='[$Tag]'>$b</a>" : $b;
 }
 
@@ -1819,17 +1823,17 @@ sub write_image_page {
     my $imglink;
     if ( $dir eq "medium" ) {
 	if ( $mediumonly ) {
-	    $imglink = img($file, alt => "[Image]", border => 2);
+	    $imglink = img($file, alt => "[Image]", class => "image");
 	}
 	elsif ( $movie ) {
 	    $imglink = "<a href='../large/" . $el->dest_name . "'>" .
-	      img($file, alt => "[Click to play movie]", border => 2) .
+	      img($file, alt => "[Movie]", class => "image") .
 		"</a>";
 	    $nav{down} = "../large/" . $el->dest_name;
 	}
 	else {
 	    $imglink = "<a href='../large/".$htmllist[$i]."'>" .
-	      img($file, alt => "[Click for bigger image]", border => 2) .
+	      img($file, alt => "[Image]", class => "image") .
 		"</a>";
 	    $nav{down} = "../large/" . $htmllist[$i];
 	}
@@ -1837,11 +1841,11 @@ sub write_image_page {
     else {
 	if ( $movie ) {
 	    $imglink = "<a href='" . $el->dest_name . "'>" .
-	      img($file, alt => "[Click to play movie]", border => 2) .
+	      img($file, alt => "[Movie]", class => "image") .
 		"</a>";
 	}
 	else {
-	    $imglink = img($file, alt => "[Image]", border => 2);
+	    $imglink = img($file, alt => "[Image]", class => "image");
 	}
 	$nav{up} = "../medium/" . $htmllist[$i];
     }
@@ -2004,15 +2008,15 @@ sub write_index_page {
 		    }
 
 		    $cc .= heredoc(<<"                    EOD", 16);
-		    <td align='center' valign='bottom'>
+		    <td class='oimg'>
 		      <table class='inner'>
-			<tr>
-			  <td align='center'>
-			    <a href='$base'$target>@{[img($img, alt => "[Click for bigger image]", border => 0)]}</a>
+			<tr class='iimg'>
+			  <td class='iimg'>
+			    <a href='$base'$target>@{[img($img, alt => "[$img]", class => "thumb")]}</a>
 			  </td>
 			</tr>
-			<tr>
-			  <td align='center'>
+			<tr class='itxt'>
+			  <td class='itxt'>
 			    <p class='ft'>@{[join($br, map { $capfun{$_}->($el) } split(//, $caption))]}</p>
 			  </td>
 			</tr>
@@ -2069,7 +2073,7 @@ sub write_journal {
 	    $t = html($t) unless $t =~ /^</i;
 	    if ( $e->type == T_ANN ) {
 		$jnl .= "<tr>\n".
-			"  <td class='twocol' colspan='2' valign='middle' align='left'>\n".
+			"  <td class='twocol' colspan='2'>\n".
 			"    " . indent($t, 4) . "\n".
 			"  </td>\n".
 			"</tr>\n";
@@ -2252,10 +2256,12 @@ sub add_stylesheets {
     my $LGREY = "#E0E0E0";
     my $MGREY = "#D0D0D0";
     my $DGREY = "#C0C0C0";
+    my $BLUE  = "#0000FF";
 
     $add_stylesheet_msg = 0;
 
     add_stylesheet("common", heredoc(<<"    EOD", 4));
+    /* ALBUM-CSS-VERSION: ${css_major}.${css_minor} */
     body {
 	font-size:  80%; $css_fontfam;
 	text: $BLACK;
@@ -2271,6 +2277,29 @@ sub add_stylesheets {
     p.ftl, p.ftr {
 	font-size:  80%; $css_fontfam;
     }
+    td.topleft {
+	text-align: left;
+	vertical-align: top;
+    }
+    td.topright {
+	text-align: right;
+	vertical-align: top;
+    }
+    td.image {
+	text-align: center;
+	vertical-align: top;
+    }
+    td.botleft {
+	text-align: left;
+	vertical-align: top;
+    }
+    td.botright {
+	text-align: right;
+	vertical-align: top;
+    }
+    td.vbuttons {
+	vertical-align: top;
+    }
     a:link {
 	color: $BLACK; text-decoration: none;
     }
@@ -2280,9 +2309,17 @@ sub add_stylesheets {
     a:active {
 	color: $RED; text-decoration: none;
     }
+    img.image {
+	border: 2px solid $BLACK;
+    }
+    img.button {
+	border: 0;
+	vertical-align: top;
+    }
     EOD
 
     add_stylesheet("index", heredoc(<<"    EOD", 4));
+    /* ALBUM-CSS-VERSION: ${css_major}.${css_minor} */
     \@import "common.css";
     a.info {
 	position: relative; z-index: 24; background-color: $LGREY;
@@ -2335,9 +2372,26 @@ sub add_stylesheets {
     p.hdr a:hover {
 	color: #FF0000; text-decoration: underline;
     }
+    td.vimage {
+	vertical-align: top;
+    }
+    td.oimg {
+	text-align: center;
+	vertical-align: bottom;
+    }
+    td.iimg {
+	text-align: center;
+    }
+    td.itxt {
+	text-align: center;
+    }
+    img.thumb {
+	border: 0;
+    }
     EOD
 
     add_stylesheet("large", heredoc(<<"    EOD", 4));
+    /* ALBUM-CSS-VERSION: ${css_major}.${css_minor} */
     \@import "common.css";
     a.info {
 	position: relative; z-index: 24; background-color: $DGREY;
@@ -2358,6 +2412,7 @@ sub add_stylesheets {
     EOD
 
     add_stylesheet("medium", heredoc(<<"    EOD", 4));
+    /* ALBUM-CSS-VERSION: ${css_major}.${css_minor} */
     \@import "common.css";
     a.info {
 	position: relative; z-index: 24; background-color: $DGREY;
@@ -2378,6 +2433,7 @@ sub add_stylesheets {
     EOD
 
     add_stylesheet("journal", heredoc(<<"    EOD", 4));
+    /* ALBUM-CSS-VERSION: ${css_major}.${css_minor} */
     body {
 	font-size: 100%; $css_fontfam;
 	text: $BLACK;
@@ -2388,17 +2444,31 @@ sub add_stylesheets {
 	margin-left: 0.1in; margin-top: 0.1in; margin-bottom: 0.1in;
     }
     table.outer {
-	width: 500px;
+	width: 600px;
 	border-spacing: 10px;
     }
     tr.grey {
 	background: $DGREY;
+    }
+    table.outer td.twocol {
+	vertical-align: top;
+	text-align: left;
     }
     table.outer td.jl {
 	vertical-align: top;
 	text-align: left;
     }
     table.outer td.jr {
+        width: ${thumb}px;
+	vertical-align: top;
+    }
+    table.outer td.buttons {
+        width: ${thumb}px;
+	vertical-align: middle;
+	text-align: right;
+    }
+    img.button {
+	border: 0;
 	vertical-align: top;
     }
     EOD
@@ -2408,7 +2478,28 @@ sub add_stylesheets {
 
 sub add_stylesheet {
     my ($css, $data) = @_;
-    return if -e d_css("$css.css");
+
+    # Check if existing style sheets are compatible.
+    if ( -e d_css("$css.css") ) {
+	open(my $orig, "<", d_css("$css.css"));
+	my $line = <$orig>;
+	close($orig);
+	if ( $line =~ m;/\*\s*album-css-version:\s*(\d+)\.(\d+)\s*\*/;i ) {
+	    if ( $1 == $css_major ) {
+		unless ( $2 == $css_minor ) {
+		    print STDERR "\n" if $add_stylesheet_msg;
+		    warn("Modified style sheet for $css.css available.\n".
+			 "Please consider upgrading.\n");
+		    $add_stylesheet_msg = 0;
+		}
+		return;
+	    }
+	}
+	print STDERR "\n" if $add_stylesheet_msg;
+	die("Existing style sheet $css.css is not compatible with this version.\n".
+	    "Please upgrade before proceeding.\n");
+    }
+
     print STDERR ("Creating style sheets: ")
       unless $verbose <= 1 || $add_stylesheet_msg++;
     print STDERR ("$css.css ");
