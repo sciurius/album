@@ -4,8 +4,8 @@ my $RCS_Id = '$Id$ ';
 # Author          : Johan Vromans
 # Created On      : Tue Sep 15 15:59:04 2002
 # Last Modified By: Johan Vromans
-# Last Modified On: Thu May 31 21:44:18 2007
-# Update Count    : 2856
+# Last Modified On: Thu May 31 22:22:27 2007
+# Update Count    : 2859
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -1554,17 +1554,20 @@ sub fixquotes($) {
 sub html($) {
     eval {
 	require HTML::Entities;
-	# Apply Latin-9 instead of Latin-1.
-	no warnings 'once';
-	for ( \%HTML::Entities::char2entity ) {
-	    $_->{chr(0204)} = '&euro;';
-	    $_->{chr(0246)} = '&Scaron;';
-	    $_->{chr(0250)} = '&scaron;';
-	    $_->{chr(0264)} = '&Zcaron;';
-	    $_->{chr(0270)} = '&zcaron;';
-	    $_->{chr(0274)} = '&OE;';
-	    $_->{chr(0275)} = '&oe;';
-	    $_->{chr(0276)} = '&Yuml;';
+
+	if ( !$encoding or $encoding =~ /^(iso-?8859-?15|latin-?9)$/i ) {
+	    # Apply Latin-9 instead of Latin-1.
+	    no warnings 'once';
+	    for ( \%HTML::Entities::char2entity ) {
+		$_->{chr(0204)} = '&euro;';
+		$_->{chr(0246)} = '&Scaron;';
+		$_->{chr(0250)} = '&scaron;';
+		$_->{chr(0264)} = '&Zcaron;';
+		$_->{chr(0270)} = '&zcaron;';
+		$_->{chr(0274)} = '&OE;';
+		$_->{chr(0275)} = '&oe;';
+		$_->{chr(0276)} = '&Yuml;';
+	    }
 	}
 	no warnings 'redefine';
 	*html = sub($) {
@@ -1574,15 +1577,21 @@ sub html($) {
 	    fixquotes($t);
 	};
     };
-    no warnings 'redefine';
-    *html = sub($) {
-	my ($t) = @_;
-	return '' unless $t;
-	$t =~ s/&/&amp;/g;
-	$t =~ s/</&lt;/g;
-	$t =~ s/>/&gt;/g;
-	fixquotes($t);
-    } if $@;
+    if ( $@ ) {
+	if ( $encoding ) {
+	    warn("WARNING: Module HTML::Entities not found.\n".
+		 "Encoding of the HTML files may be incorrect!\n");
+	}
+	no warnings 'redefine';
+	*html = sub($) {
+	    my ($t) = @_;
+	    return '' unless $t;
+	    $t =~ s/&/&amp;/g;
+	    $t =~ s/</&lt;/g;
+	    $t =~ s/>/&gt;/g;
+	    fixquotes($t);
+	};
+    }
     goto &html;
 }
 
