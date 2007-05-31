@@ -224,6 +224,12 @@ what to do about that.
 
 =head2 Summary of 'info.dat' control commands
 
+The first line can be used to designate a coding system, in case the
+information needs to contain non-ASCII characters. For example, to
+designate that the data is in ISO 8895.1 (Latin-1) encoding, use:
+
+  #    -*- coding: iso8859-1 -*-
+
 Most settings can also obtained with command line options, as shown.
 
 =over
