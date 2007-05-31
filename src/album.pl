@@ -4,8 +4,8 @@ my $RCS_Id = '$Id$ ';
 # Author          : Johan Vromans
 # Created On      : Tue Sep 15 15:59:04 2002
 # Last Modified By: Johan Vromans
-# Last Modified On: Tue May 29 23:01:22 2007
-# Update Count    : 2836
+# Last Modified On: Thu May 31 21:44:18 2007
+# Update Count    : 2856
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -58,6 +58,7 @@ our $lib_common;
 
 # These are not command line options.
 my $journal;			# create journal
+my $encoding;			# info_file encoding
 
 # Development options (not shown with -help).
 my $debug = 0;			# debugging
@@ -337,7 +338,7 @@ sub set_defaults {
 	    warn("$cf: $!\n") if $ENV{ALBUMCONFIG};
 	    next;
 	}
-	open(my $fh, "<$cf") || next;
+	open(my $fh, "<", $cf) || next;
 	warn("parsing: $cf\n") if $trace;
 	my $err = 0;
 	while ( <$fh> ) {
@@ -408,7 +409,7 @@ sub load_info {
 
     my $fh = do { local *FH; *FH };
     die("$info_file: $!\n")
-      unless open($fh, $info_file);
+      unless open($fh, "<", $info_file);
     warn("parsing: $info_file\n") if $trace;
 
     my $el;
@@ -416,6 +417,33 @@ sub load_info {
 
     while ( <$fh> ) {
 	chomp;
+
+	# Detection of condig system for info_file.
+	# Uses GNU Emacs syntax, e.g.,
+	#  # blah        -*- mode: album; coding: utf-8 -*-
+	if ( $. == 1
+	     &&
+	     m/^\s*\#			# start with #
+	      .*			# arb
+	      -\*-			# -*-
+	      (?:.*?;)*			# things, must be ; terminated
+	      \s*			# ws
+	      coding\s*:\s*([\w\d-]+)	# coding: utf-8
+	      \s*			# ws
+	      (?:;.*)*			# things, must be ; started
+	      -\*-			# -*-
+	      /x ) {
+	    $encoding = $1;
+	    warn("using encoding $encoding for $info_file\n") if $trace;
+
+	    # Remember position, reopen and restart IO.
+	    my $pos = tell($fh);
+	    close($fh);
+	    open($fh, "<:encoding($encoding)", $info_file)
+	      or die("$info_file: $!\n");
+	    seek($fh, $pos, 0);
+	    next;
+	}
 
 	next if /^\s*#/;
 	next unless /\S/;
@@ -973,7 +1001,7 @@ sub update_filelist {
     # Append new info.
     warn("Updating $info_file\n") if $verbose > 1;
     my $fh = do { local *F; *F };
-    open($fh, ">>", $info_file) || die("$info_file: $!\n");
+    open($fh, $encoding ? ">>:$encoding" : ">>", $info_file) || die("$info_file: $!\n");
     unless ( $infosize ) {
 	print $fh ("# album control file created by Album $::VERSION, ".
 	       localtime(time), "\n\n");
@@ -1691,14 +1719,14 @@ sub update_if_needed($$) {
 	local($/);
 	my $hh = do { local *F; *F };
 	my $old;
-	open($hh, $fname) && ($old = <$hh>) && close($hh);
+	open($hh, "<", $fname) && ($old = <$hh>) && close($hh);
 	if ( $old eq $new ) {
 	    return 0;
 	}
     }
 
     my $fh = do { local *F; *F };
-    open($fh, ">$fname")
+    open($fh, ">", $fname)
       or die("$fname (create): $!\n");
     print $fh $new;
     close($fh);
@@ -2191,7 +2219,7 @@ sub add_button_images {
 	    $did++;
             $name = d_icons($1);
 	    print STDERR ("$1 ") if $verbose > 1;
-            open($out, ">$name");
+            open($out, ">", $name);
 	    binmode($out);
             $doing = 1;         # Doing
             next;
@@ -2376,7 +2404,7 @@ sub add_stylesheet {
       unless $verbose <= 1 || $add_stylesheet_msg++;
     print STDERR ("$css.css ");
     $css = d_css("$css.css");
-    open(my $out, ">".$css) or die("$css: $!\n");
+    open(my $out, ">", $css) or die("$css: $!\n");
     binmode($out);
     print {$out} ($data);
     close($out) or die("$css: $!\n");
@@ -2900,7 +2928,7 @@ sub store {
     $Data::Dumper::Sortkeys = 1; # avoid warnings
     $Data::Dumper::Purity = 1;
     my $cache = do { local *C; *C };
-    open($cache, ">$file")
+    open($cache, ">", $file)
       and print $cache (Data::Dumper->Dump([$self],[qw(info)]), "\n1;\n")
 	and close($cache);
 }
