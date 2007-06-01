@@ -4,8 +4,8 @@ my $RCS_Id = '$Id$ ';
 # Author          : Johan Vromans
 # Created On      : Tue Sep 15 15:59:04 2002
 # Last Modified By: Johan Vromans
-# Last Modified On: Fri Jun  1 21:10:42 2007
-# Update Count    : 2915
+# Last Modified On: Fri Jun  1 22:52:52 2007
+# Update Count    : 2937
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -39,7 +39,8 @@ my $update = 0;			# add new from large/import
 my $dest_dir = ".";
 my $info_file;
 my $linkthem = 1;		# link orig to large, if possible
-my $clobber = 0;
+my $clobber = 0;		# overwrite medium/thumbnails
+my $clobber_css = 0;		# overwrite style sheets
 my $mediumonly = 0;		# only medium size (for web export)
 my $externalize_formats = 0;	# create external format files
 my $verbose = 1;		# verbose processing
@@ -2480,7 +2481,7 @@ sub add_stylesheet {
     my ($css, $data) = @_;
 
     # Check if existing style sheets are compatible.
-    if ( -e d_css("$css.css") ) {
+    if ( !$clobber_css && -e d_css("$css.css") ) {
 	open(my $orig, "<", d_css("$css.css"));
 	my $line = <$orig>;
 	close($orig);
@@ -2488,7 +2489,7 @@ sub add_stylesheet {
 	    if ( $1 == $css_major ) {
 		unless ( $2 == $css_minor ) {
 		    print STDERR "\n" if $add_stylesheet_msg;
-		    warn("Modified style sheet for $css.css available.\n".
+		    warn("A modified version of style sheet $css.css is available.\n".
 			 "Please consider upgrading.\n");
 		    $add_stylesheet_msg = 0;
 		}
@@ -2496,8 +2497,21 @@ sub add_stylesheet {
 	    }
 	}
 	print STDERR "\n" if $add_stylesheet_msg;
-	die("Existing style sheet $css.css is not compatible with this version.\n".
-	    "Please upgrade before proceeding.\n");
+	die(heredoc(<<"        EOD", 8));
+	*************************************************************************
+	Existing style sheet $css.css is not compatible with this version.
+	It has probably been created by an older version of this program, or it
+	has been modified manually.
+
+	If you did not change any style sheets, just remove the css directory and
+        try again. New style sheets will be created as usual.
+	Alternatively, you can use command line option `--clobbercss' to
+	overwrite any existing style sheets.
+
+	If you did modify the style sheets move them away to a backup location,
+	run the program again, and apply your changes to the new style sheets.
+	*************************************************************************
+        EOD
     }
 
     print STDERR ("Creating style sheets: ")
@@ -2514,6 +2528,7 @@ sub add_stylesheet {
 
 sub detab {
     my ($line) = @_;
+    return $line unless $line;
     my $orig = $line;
     my (@l) = split(/\t/, $line, -1);
 
@@ -2742,6 +2757,7 @@ sub app_options {
     if ( !GetOptions(
 	# Run time options.
 	'clobber'        => \$clobber,
+	'clobbercss'     => \$clobber_css,
 	'dcim=s'         => sub { $import_dir = $_[1]; $import_exif++ },
 	'exif'           => \$import_exif,
 	'import=s'       => \$import_dir,
@@ -2818,6 +2834,7 @@ sub app_usage {
 	--[no]link          [do not] link to original, instead of copying. Default is link.
       Miscellaneous:
 	--clobber           recreate everything (except large)
+	--clobbercss        recreate (overwrite) style sheets
 	--test              verify only
 	--help              this message
 	--ident             show identification
@@ -3090,11 +3107,11 @@ For a description how to use the program, see L<Album::Tutorial>.
 
 Johan Vromans (jvromans@squirrel.nl) wrote this module.
 
-Web site: http://www.squirrel.nl/people/jvromans/Album/index.html
+Web site: http://johan.vromans.org/Album/index.html
 
 =head1 COPYRIGHT AND DISCLAIMER
 
-This program is Copyright 2004 by Squirrel Consultancy. All
+This program is Copyright 2004,2007 by Squirrel Consultancy. All
 rights reserved.
 
 This program is free software; you can redistribute it and/or modify
