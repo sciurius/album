@@ -4,8 +4,8 @@ my $RCS_Id = '$Id$ ';
 # Author          : Johan Vromans
 # Created On      : Tue Sep 15 15:59:04 2002
 # Last Modified By: Johan Vromans
-# Last Modified On: Fri Jun  1 00:33:12 2007
-# Update Count    : 2914
+# Last Modified On: Fri Jun  1 21:10:42 2007
+# Update Count    : 2915
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -1005,7 +1005,7 @@ sub update_filelist {
     # Append new info.
     warn("Updating $info_file\n") if $verbose > 1;
     my $fh = do { local *F; *F };
-    open($fh, $encoding ? ">>:$encoding" : ">>", $info_file) || die("$info_file: $!\n");
+    open($fh, $encoding ? ">>:encoding($encoding)" : ">>", $info_file) || die("$info_file: $!\n");
     unless ( $infosize ) {
 	print $fh ("# album control file created by Album $::VERSION, ".
 	       localtime(time), "\n\n");
