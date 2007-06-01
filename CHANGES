@@ -7,7 +7,7 @@ Version 1.07
   they should if you have style sheets from a previous version of
   album.
 
-  Album now verifies that an existing style sheet starts with a line:
+  Album now verifies that existing style sheets start with a line:
 
     /* ALBUM-CSS-VERSION: 2.0 */
 
