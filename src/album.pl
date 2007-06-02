@@ -4,8 +4,8 @@ my $RCS_Id = '$Id$ ';
 # Author          : Johan Vromans
 # Created On      : Tue Sep 15 15:59:04 2002
 # Last Modified By: Johan Vromans
-# Last Modified On: Fri Jun  1 22:52:52 2007
-# Update Count    : 2937
+# Last Modified On: Sun Jun  3 00:00:45 2007
+# Update Count    : 2940
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -1793,7 +1793,7 @@ sub write_image_page {
     my $tt = "$album_title: Image " . ($i+1);
     $tt .= " of " . $num_entries if $num_entries > 1;
     $tt = htmln($tt);
-    my $it = htmln($el->description) || " ";
+    my $it = htmln($el->description) || "";
 
     my $next = ($el->next || $num_entries+1) - 1;
     my $prev = ($el->prev || 0) - 1;
@@ -1859,7 +1859,7 @@ sub write_image_page {
 
     my $it2 = $it;
     if ( $el->Make ) {		# EXIF info
-	$it2 = "<a href='#' class='info'>" . $it .
+	$it2 = "<a href='#' class='info'>" . ($it || "&nbsp;") .
 	  "<span>" .
 	    "<table border='1' width='100%'>\n" .
 	      restyle_exif($el) . "</table>\n" .
@@ -1890,7 +1890,7 @@ sub write_image_page {
 		     process_fmt($dir eq "medium" ?
 				   $fmt_medium_page :
 				   $fmt_large_page,
-				 title	  => $it,
+				 title	  => $it || $tt,
 				 dir	  => $dir,
 				 ltop	  => $it2,
 				 rtop	  => $tt2,
