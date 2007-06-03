@@ -4,8 +4,8 @@ my $RCS_Id = '$Id$ ';
 # Author          : Johan Vromans
 # Created On      : Tue Sep 15 15:59:04 2002
 # Last Modified By: Johan Vromans
-# Last Modified On: Sun Jun  3 18:09:16 2007
-# Update Count    : 2941
+# Last Modified On: Mon Jun  4 00:13:53 2007
+# Update Count    : 2973
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -1430,7 +1430,7 @@ sub init_formats {
 	<table class='outer'>
 	  <tr class='grey'>
 	    <td>
-	      <p class='hd'>
+	      <p class='hdl'>
 		$tag
 	      </p>
 	    </td>
@@ -1440,7 +1440,7 @@ sub init_formats {
 	  </tr>
 	  $journal
 	  <tr class='grey'>
-	    <td>&nbsp;</td>
+	    <td></td>
 	    <td class='buttons'>
 	      $hbuttons
 	    </td>
@@ -1516,6 +1516,22 @@ sub button($$;$$) {
     my $b = img("${level}icons/$tag.png", class => "button",
 		alt => "[$Tag]");
     $active ? "<a class='info' href='$link' alt='[$Tag]'>$b</a>" : $b;
+}
+
+sub hbuttons {
+    my (@b) = @_;
+    "<table class='hb'>".
+    "<tr>".
+    join("", map { "<td>$_</td>"} @b).
+    "</tr>".
+    "</table>";
+}
+
+sub vbuttons {
+    my (@b) = @_;
+    "<table class='vb'>".
+    join("", map { "<tr><td>$_</td></tr>"} @b).
+    "</table>";
 }
 
 sub ixname($) {
@@ -1894,8 +1910,8 @@ sub write_image_page {
 				 dir	  => $dir,
 				 ltop	  => $it2,
 				 rtop	  => $tt2,
-				 hbuttons => join("", @b),
-				 vbuttons => join("$br\n", @b),
+				 hbuttons => hbuttons(@b),
+				 vbuttons => vbuttons(@b),
 				 jscript  => jscript(%nav),
 				 image	  => $imglink,
 				 lbot	  => $auxleft,
@@ -2026,7 +2042,7 @@ sub write_index_page {
                     EOD
 		}
 		else {
-		    $cc .= "    <td width='$thumb'>&nbsp</td>\n";
+		    $cc .= "    <td width='$thumb'></td>\n";
 		}
 	    }
 	    $cc .= "  </tr>\n";
@@ -2039,8 +2055,8 @@ sub write_index_page {
 				 title    => $tt,
 				 ltop     => $tt,
 				 rtop     => $t,
-				 hbuttons => join("", @b),
-				 vbuttons => join("$br\n", @b),
+				 hbuttons => hbuttons(@b),
+				 vbuttons => vbuttons(@b),
 				 jscript  => jscript(%nav),
 				 contents => $cc,
 				));
@@ -2120,8 +2136,8 @@ sub write_journal {
 			 process_fmt($fmt_journal_page,
 				     title    => "Journal: " . htmln($tag),
 				     tag      => htmln($tag),
-				     hbuttons => join("", @b),
-				     vbuttons => join("$br\n", @b),
+				     hbuttons => hbuttons(@b),
+				     vbuttons => vbuttons(@b),
 				     journal  => $jnl,
 				     jscript  => jscript(%nav),
 				    ));
@@ -2264,19 +2280,60 @@ sub add_stylesheets {
     add_stylesheet("common", heredoc(<<"    EOD", 4));
     /* ALBUM-CSS-VERSION: ${css_major}.${css_minor} */
     body {
-	font-size:  80%; $css_fontfam;
-	text: $BLACK;
+	$css_fontfam;
+	font-size:  80%;
+	text: #000000;
+    }
+
+    a:link {
+	color: $BLACK; text-decoration: none;
+    }
+    a:visited {
+	color: $BLACK; text-decoration: none;
+    }
+    a:active {
+	color: $RED; text-decoration: none;
+    }
+
+    img.image {
+	border: 2px solid $BLACK;
+    }
+
+    img.button {
+	border: 0;
+	vertical-align: top;
+    }
+
+    table.vb {
+	border: 0;
+	border-spacing: 0 0;
+    }
+    table.vb td {
+	padding: 0 0 0 0;
+    }
+    table.hb {
+	border: 0;
+	border-spacing: 0 0;
+    }
+    table.hb td {
+	padding: 0 0 0 0;
+    }
+    EOD
+
+    add_stylesheet("ipage", heredoc(<<"    EOD", 4));
+    /* ALBUM-CSS-VERSION: ${css_major}.${css_minor} */
+    \@import "common.css";
+    body {
 	background: $DGREY;
     }
     td {
-	font-size:  80%; $css_fontfam;
+	font-size:  80%;
     }
     p.hdl, p.hdr {
 	font-size: 140%; font-weight: bold;
-	$css_fontfam;
     }
     p.ftl, p.ftr {
-	font-size:  80%; $css_fontfam;
+	font-size:  80%;
     }
     td.topleft {
 	text-align: left;
@@ -2301,27 +2358,11 @@ sub add_stylesheets {
     td.vbuttons {
 	vertical-align: top;
     }
-    a:link {
-	color: $BLACK; text-decoration: none;
-    }
-    a:visited {
-	color: $BLACK; text-decoration: none;
-    }
-    a:active {
-	color: $RED; text-decoration: none;
-    }
-    img.image {
-	border: 2px solid $BLACK;
-    }
-    img.button {
-	border: 0;
-	vertical-align: top;
-    }
     EOD
 
     add_stylesheet("index", heredoc(<<"    EOD", 4));
     /* ALBUM-CSS-VERSION: ${css_major}.${css_minor} */
-    \@import "common.css";
+    \@import "ipage.css";
     a.info {
 	position: relative; z-index: 24; background-color: $LGREY;
 	color: $BLACK; text-decoration:none;
@@ -2359,10 +2400,10 @@ sub add_stylesheets {
     }
     table.inner td {
 	border: inset 0px;
+        padding: 0 0 0 0;
     }
     p.hdr {
 	font-size: 140%; font-weight: bold;
-	font-family: Verdana, Arial, Helvetica;
     }
     p.hdr a:link {
 	color: #000000; text-decoration: underline;
@@ -2393,7 +2434,7 @@ sub add_stylesheets {
 
     add_stylesheet("large", heredoc(<<"    EOD", 4));
     /* ALBUM-CSS-VERSION: ${css_major}.${css_minor} */
-    \@import "common.css";
+    \@import "ipage.css";
     a.info {
 	position: relative; z-index: 24; background-color: $DGREY;
 	color: $BLACK; text-decoration: none;
@@ -2414,7 +2455,7 @@ sub add_stylesheets {
 
     add_stylesheet("medium", heredoc(<<"    EOD", 4));
     /* ALBUM-CSS-VERSION: ${css_major}.${css_minor} */
-    \@import "common.css";
+    \@import "ipage.css";
     a.info {
 	position: relative; z-index: 24; background-color: $DGREY;
 	color:$BLACK; text-decoration:none;
@@ -2435,15 +2476,20 @@ sub add_stylesheets {
 
     add_stylesheet("journal", heredoc(<<"    EOD", 4));
     /* ALBUM-CSS-VERSION: ${css_major}.${css_minor} */
+    \@import "common.css";
+
     body {
-	font-size: 100%; $css_fontfam;
-	text: $BLACK;
+	font-size: 100%;
 	background: $WHITE;
     }
-    p.hd {
+    td {
+	font-size:  100%;
+    }
+    p.hdl {
 	font-size: 140%; font-weight: bold;
 	margin-left: 0.1in; margin-top: 0.1in; margin-bottom: 0.1in;
     }
+
     table.outer {
 	width: 600px;
 	border-spacing: 10px;
@@ -2460,17 +2506,15 @@ sub add_stylesheets {
 	text-align: left;
     }
     table.outer td.jr {
-        width: ${thumb}px;
+	width: ${thumb}px;
 	vertical-align: top;
+        text-align: center;
+        background: $LGREY;
     }
     table.outer td.buttons {
-        width: ${thumb}px;
+	width: ${thumb}px;
 	vertical-align: middle;
 	text-align: right;
-    }
-    img.button {
-	border: 0;
-	vertical-align: top;
     }
     EOD
 
