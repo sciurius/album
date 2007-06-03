@@ -4,8 +4,8 @@ my $RCS_Id = '$Id$ ';
 # Author          : Johan Vromans
 # Created On      : Tue Sep 15 15:59:04 2002
 # Last Modified By: Johan Vromans
-# Last Modified On: Sun Jun  3 00:00:45 2007
-# Update Count    : 2940
+# Last Modified On: Sun Jun  3 18:09:16 2007
+# Update Count    : 2941
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -1023,7 +1023,7 @@ sub update_filelist {
 	print $fh ("!caption $caption\n")
 	  if !$optcfg{"caption"} && $caption ne DEFAULTS->{caption};
     }
-    print $fh ("\n# New entries added by $my_name $my_version, ".
+    print $fh ("\n# New entries added by Album $::VERSION, ".
 	       localtime(time), "\n",
 	       $newinfo,
 	       "\n");
