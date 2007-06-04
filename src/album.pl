@@ -4,8 +4,8 @@ my $RCS_Id = '$Id$ ';
 # Author          : Johan Vromans
 # Created On      : Tue Sep 15 15:59:04 2002
 # Last Modified By: Johan Vromans
-# Last Modified On: Mon Jun  4 00:13:53 2007
-# Update Count    : 2973
+# Last Modified On: Tue Jun  5 00:22:35 2007
+# Update Count    : 2977
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -111,6 +111,10 @@ use constant IXLIST => 15;
 # Stylesheets version.
 my $css_major = 2;
 my $css_minor = 0;
+
+# Formats version.
+my $fmt_major = 2;
+my $fmt_minor = 0;
 
 # Helper programs
 my $prog_jpegtran  = findexec("jpegtran");
@@ -1307,6 +1311,7 @@ sub init_formats {
     $fmt_index_page = $load->("index.fmt", heredoc(<<'    EOD', 4));
     <?xml version="1.0" encoding="iso-8859-15"?>
     <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+    <!-- ALBUM-FMT-VERSION: 2.0 -->
     <html>
       <head>
 	<link rel="stylesheet" href="${lib_common}css/index.css">
@@ -1357,6 +1362,7 @@ sub init_formats {
     $fmt_image_page = $load->("image.fmt", heredoc(<<'    EOD', 4));
     <?xml version="1.0" encoding="iso-8859-15"?>
     <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+    <!-- ALBUM-FMT-VERSION: 2.0 -->
     <html>
       <head>
 	<title>$title</title>
@@ -1420,6 +1426,7 @@ sub init_formats {
     $fmt_journal_page = $load->("journal.fmt", heredoc(<<'    EOD', 4));
     <?xml version="1.0" encoding="iso-8859-15"?>
     <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+    <!-- ALBUM-FMT-VERSION: 2.0 -->
     <html>
       <head>
 	<link rel='stylesheet' href='../${lib_common}css/journal.css'>
@@ -2274,6 +2281,11 @@ sub add_stylesheets {
     my $MGREY = "#D0D0D0";
     my $DGREY = "#C0C0C0";
     my $BLUE  = "#0000FF";
+    # Grey variants for index table borders.
+    my $GR245 = "#F5F5F5";
+    my $GR232 = "#E8E8E8";
+    my $GR124 = "#7C7C7C";
+    my $GR114 = "#727272";
 
     $add_stylesheet_msg = 0;
 
@@ -2282,7 +2294,7 @@ sub add_stylesheets {
     body {
 	$css_fontfam;
 	font-size:  80%;
-	text: #000000;
+	text: $BLACK;
     }
 
     a:link {
@@ -2380,20 +2392,20 @@ sub add_stylesheets {
 	text-align: center;
     }
     table.outer {
-	background: #d0d0d0;
+	background: $MGREY;
 	border-collapse: separate;
 	border-width: 2px;           /* border=2 */
 	border-style: solid;
-	border-color: #e8e8e8 #727272 #727272 #e8e8e8;
+	border-color: $GR232 $GR114 $GR114 $GR232;
 	border-spacing: 3px;        /* cellspacing = 3 */
     }
     table.outer tr {
-	background: #e0e0e0;
+	background: $LGREY;
     }
     table.outer td {
 	border-width: 1px;
 	border-style: solid;
-	border-color: #7c7c7c #f5f5f5 #f5f5f5 #7c7c7c;
+	border-color: $GR124 $GR245 $GR245 $GR124;
     }
     table.inner {
 	border: outset 0px;
@@ -2406,13 +2418,13 @@ sub add_stylesheets {
 	font-size: 140%; font-weight: bold;
     }
     p.hdr a:link {
-	color: #000000; text-decoration: underline;
+	color: $BLACK; text-decoration: underline;
     }
     p.hdr a:visited {
-	color: #000000; text-decoration: underline;
+	color: $BLACK; text-decoration: underline;
     }
     p.hdr a:hover {
-	color: #FF0000; text-decoration: underline;
+	color: $RED; text-decoration: underline;
     }
     td.vimage {
 	vertical-align: top;
