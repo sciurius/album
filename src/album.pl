@@ -4,8 +4,8 @@ my $RCS_Id = '$Id$ ';
 # Author          : Johan Vromans
 # Created On      : Tue Sep 15 15:59:04 2002
 # Last Modified By: Johan Vromans
-# Last Modified On: Tue Jun  5 00:22:35 2007
-# Update Count    : 2977
+# Last Modified On: Tue Jun  5 18:31:56 2007
+# Update Count    : 2978
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -3143,6 +3143,7 @@ generated as well. The album will be organised as follows:
   index.html       first or only index page
   indexN.html      subsequent index pages (N = 1, 2, ...)
   icons/           directory with navigation icons
+  css/             directory with style sheets
   large/           original (large) images, with HTML pages
   medium/          optional medium sized images, with HTML pages
   thumbnail/       thumbnail images
