@@ -4,8 +4,8 @@ my $RCS_Id = '$Id$ ';
 # Author          : Johan Vromans
 # Created On      : Tue Sep 15 15:59:04 2002
 # Last Modified By: Johan Vromans
-# Last Modified On: Tue Jun  5 18:31:56 2007
-# Update Count    : 2978
+# Last Modified On: Tue Jun  5 22:51:01 2007
+# Update Count    : 2980
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -43,6 +43,7 @@ my $clobber = 0;		# overwrite medium/thumbnails
 my $clobber_css = 0;		# overwrite style sheets
 my $mediumonly = 0;		# only medium size (for web export)
 my $externalize_formats = 0;	# create external format files
+my $incall = 0;			# include ignored images
 my $verbose = 1;		# verbose processing
 
 # These are left undefined, for set_defaults. Note: our, not my.
@@ -884,7 +885,7 @@ sub update_filelist {
 	    print STDERR (" -- ref") if $trace;
 	}
 	if ( $entry ) {
-	    unless ( $el->description =~ /^--($|\s)/ ) {
+	    unless ( !$incall && $el->description =~ /^--($|\s)/ ) {
 		# Copy properties from info.
 		$entry->tag($el->tag);
 		$entry->description($el->description);
@@ -2821,6 +2822,7 @@ sub app_options {
 	'link!'          => \$linkthem,
 	'update'         => \$update,
 	'mediumonly'     => \$mediumonly,
+	'all'            => \$incall,
 	'extformats'	 => \$externalize_formats,
 
         # Album options. Can also be set in info/config files.
@@ -2891,6 +2893,7 @@ sub app_usage {
       Miscellaneous:
 	--clobber           recreate everything (except large)
 	--clobbercss        recreate (overwrite) style sheets
+        --all               include hidden images
 	--test              verify only
 	--help              this message
 	--ident             show identification
