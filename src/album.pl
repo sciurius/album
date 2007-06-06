@@ -4,8 +4,8 @@ my $RCS_Id = '$Id$ ';
 # Author          : Johan Vromans
 # Created On      : Tue Sep 15 15:59:04 2002
 # Last Modified By: Johan Vromans
-# Last Modified On: Tue Jun  5 22:51:01 2007
-# Update Count    : 2980
+# Last Modified On: Thu Jun  7 00:17:21 2007
+# Update Count    : 3004
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -171,6 +171,11 @@ set_defaults();
 
 # Verify and update the file list.
 my $added = update_filelist();
+
+# Perform selection. Normally, hidden entries are ignored.
+# Option --all ($incall) overrides this.
+$filelist = $filelist->filter(sub { $incall || ! $_[0]->hidden });
+
 #print STDERR Data::Dumper->Dump([$filelist],[qw(filelist)]);
 
 my $num_entries = $filelist->tally;
@@ -884,24 +889,27 @@ sub update_filelist {
 	    $entry = $el;
 	    print STDERR (" -- ref") if $trace;
 	}
+
 	if ( $entry ) {
-	    unless ( !$incall && $el->description =~ /^--($|\s)/ ) {
-		# Copy properties from info.
-		$entry->tag($el->tag);
-		$entry->description($el->description);
-		$entry->annotation($el->annotation);
-		$entry->_rotation($el->_rotation);
-		# Add and create prev/next links.
-		$entry->prev($prev->seq) if $prev;
-		$todo->add($entry);
-		$prev->next($entry->seq) if $prev;
-		print STDERR ("\n") if $trace;
+	    if ( $el->description =~ /^--(?:$|\s+)(.*)/ ) {
+		$entry->description($1);
+		$entry->hidden(1);
+		print STDERR (" (hidden)") if $trace;
 	    }
 	    else {
-		print STDERR (" (ignored)\n") if $trace;
-		undef $entry;
+		$entry->description($el->description);
 	    }
+	    # Copy properties from info.
+	    $entry->tag($el->tag);
+	    $entry->annotation($el->annotation);
+	    $entry->_rotation($el->_rotation);
+	    # Add and create prev/next links.
+	    $entry->prev($prev->seq) if $prev;
+	    $todo->add($entry);
+	    $prev->next($entry->seq) if $prev;
+	    print STDERR ("\n") if $trace;
 	}
+
 	else {
 	    if ( $trace ) {
 		print STDERR ("\n");
@@ -2911,7 +2919,7 @@ my @exif_fields;
 my $exif_rot;
 
 INIT {
-    @std_fields  = qw(type seq next prev
+    @std_fields  = qw(type seq next prev hidden
 		      dest_name orig_name assoc_name
 		      timestamp file_size medium_size
 		      tag description annotation
@@ -2956,6 +2964,7 @@ sub new {
 		 description  => "",
 		 annotation   => [],
 		 tag	      => "",
+		 hidden       => 0,
 	       };
 
     if ( $file && -f $file ) {
@@ -3059,6 +3068,21 @@ sub tally {
 sub byseq {
     my ($self, $seq) = @_;
     $self->_data ? $self->_data->[$seq-1] : undef;
+}
+
+sub filter {
+    my ($self, $filter) = @_;
+    my $new = FileList->new;
+    my $prev;
+    foreach my $el ( @{$self->entries} ) {
+	next unless $filter->($el);
+	my $e = bless { %$el }, 'ImageInfo';	# one level copy
+	$e->prev($prev->seq) if $prev;
+	$new->add($e);
+	$prev->next($e->seq) if $prev;
+	$prev = $e;
+    }
+    return $new;
 }
 
 #### Cache maintenance.
