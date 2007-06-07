@@ -26,6 +26,18 @@ Version 1.07
 
   # -*- coding: utf-8 -*-
 
+* It is now possible to select which images are included. Command line
+  option --select. Possible values are:
+
+    default   (all except hidden)
+    all       (all)
+    hidden    (only the hidden images)
+    tag:XXX   (substring search on tag)
+    tag:/XXX/ (pattern search on tag).
+
+  Note that selection applies to the image pages only. The journal is
+  (currently?) not affected by a selection.
+
 * Fix problem where file names in info were not found in journal mode.
 
 * Fix problem with 'backspace' key on 2nd large/medium pages.
