@@ -4,8 +4,8 @@ my $RCS_Id = '$Id$ ';
 # Author          : Johan Vromans
 # Created On      : Tue Sep 15 15:59:04 2002
 # Last Modified By: Johan Vromans
-# Last Modified On: Thu Jun  7 00:17:21 2007
-# Update Count    : 3004
+# Last Modified On: Thu Jun  7 23:22:01 2007
+# Update Count    : 3035
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -43,7 +43,7 @@ my $clobber = 0;		# overwrite medium/thumbnails
 my $clobber_css = 0;		# overwrite style sheets
 my $mediumonly = 0;		# only medium size (for web export)
 my $externalize_formats = 0;	# create external format files
-my $incall = 0;			# include ignored images
+my $select = 'default';		# select images
 my $verbose = 1;		# verbose processing
 
 # These are left undefined, for set_defaults. Note: our, not my.
@@ -173,8 +173,8 @@ set_defaults();
 my $added = update_filelist();
 
 # Perform selection. Normally, hidden entries are ignored.
-# Option --all ($incall) overrides this.
-$filelist = $filelist->filter(sub { $incall || ! $_[0]->hidden });
+# Option --select=all overrides this.
+$filelist = $filelist->filter($select);
 
 #print STDERR Data::Dumper->Dump([$filelist],[qw(filelist)]);
 
@@ -2814,6 +2814,7 @@ sub indexicon {
 sub app_options {
     my $help = 0;		# handled locally
     my $ident = 0;		# handled locally
+    my $sel;			# handled locally;
 
     # Process options, if any.
     # Make sure defaults are set before returning!
@@ -2830,7 +2831,7 @@ sub app_options {
 	'link!'          => \$linkthem,
 	'update'         => \$update,
 	'mediumonly'     => \$mediumonly,
-	'all'            => \$incall,
+	'select=s'       => \$sel,
 	'extformats'	 => \$externalize_formats,
 
         # Album options. Can also be set in info/config files.
@@ -2868,6 +2869,7 @@ sub app_options {
 	  unless -d $import_dir;
 	$import_dir =~ s;^\./;;;
     }
+    set_selector($sel);
 }
 
 sub app_ident {
@@ -2901,13 +2903,38 @@ sub app_usage {
       Miscellaneous:
 	--clobber           recreate everything (except large)
 	--clobbercss        recreate (overwrite) style sheets
-        --all               include hidden images
+        --select=XXX        select images (default, all, hidden, tag:...)
 	--test              verify only
 	--help              this message
 	--ident             show identification
 	--verbose           verbose information
     EndOfUsage
     exit $exit if defined $exit && $exit != 0;
+}
+
+sub set_selector {
+    my $sel = shift || 'default';
+    my $tag;
+    if ( $sel =~ /^(tag):(.+)/i ) {
+	$sel = 'tag:...';
+	if ( $2 =~ /^\/(.+?)\/?$/ ) {
+	    $tag = $1;
+	}
+	else {
+	    $tag = quotemeta($2);
+	    $tag =~ s/(\\ )+/\\s+/g;
+	}
+	warn("tag = \"$tag\"\n");
+    }
+    my %selectors =
+      ( default    => sub { ! $_[0]->hidden },
+	all        => sub { 1 },
+	hidden     => sub { $_[0]->hidden },
+	'tag:...'  => sub { $_[0]->tag =~ $tag }
+      );
+    die("Unknown selection: $sel\n".
+	"Possible values are: ", join(", ", sort keys %selectors), ".\n")
+      unless $select = $selectors{lc($sel)};
 }
 
 ################ Modules ################
