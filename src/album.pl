@@ -4,8 +4,8 @@ my $RCS_Id = '$Id$ ';
 # Author          : Johan Vromans
 # Created On      : Tue Sep 15 15:59:04 2002
 # Last Modified By: Johan Vromans
-# Last Modified On: Thu Jun  7 23:22:01 2007
-# Update Count    : 3035
+# Last Modified On: Fri Jun  8 23:20:16 2007
+# Update Count    : 3042
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -1536,11 +1536,14 @@ sub button($$;$$) {
 
 sub hbuttons {
     my (@b) = @_;
-    "<table class='hb'>".
-    "<tr>".
-    join("", map { "<td>$_</td>"} @b).
-    "</tr>".
-    "</table>";
+
+    # When using a <table>, it seems to be impossible to get it
+    # aligned properly on the journal pages. Apparently,
+    # <td align=right> semantics cannot be implemented using CSS.
+
+    "<div class='hb'>".
+    join("", map { $_ } @b).
+    "</div>";
 }
 
 sub vbuttons {
@@ -2381,6 +2384,7 @@ sub add_stylesheets {
     }
     EOD
 
+    my $helper = $thumb + 4;
     add_stylesheet("index", heredoc(<<"    EOD", 4));
     /* ALBUM-CSS-VERSION: ${css_major}.${css_minor} */
     \@import "ipage.css";
@@ -2417,6 +2421,8 @@ sub add_stylesheets {
 	border-color: $GR124 $GR245 $GR245 $GR124;
     }
     table.inner {
+	/* need a width otherwise we cannot center it */
+	width: ${helper}px;
 	border: outset 0px;
     }
     table.inner td {
@@ -2533,9 +2539,9 @@ sub add_stylesheets {
         background: $LGREY;
     }
     table.outer td.buttons {
-	width: ${thumb}px;
 	vertical-align: middle;
 	text-align: right;
+	padding-right: 0.1in;
     }
     EOD
 
