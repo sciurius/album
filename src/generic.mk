@@ -26,6 +26,7 @@ _fetch :
 
 umountc :
 	-umount $(CAMERA)
+	-eject $(CAMERA)
 
 update :
 	$(PERL) -w $(TOOLS)/album.pl $(OPTS) --verbose --update $(IMPORT) $(HERE)
