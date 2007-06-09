@@ -4,13 +4,13 @@ my $RCS_Id = '$Id$ ';
 # Author          : Johan Vromans
 # Created On      : Tue Sep 15 15:59:04 2002
 # Last Modified By: Johan Vromans
-# Last Modified On: Fri Jun  8 23:20:16 2007
-# Update Count    : 3042
+# Last Modified On: Sat Jun  9 22:16:41 2007
+# Update Count    : 3044
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
 
-$VERSION = "1.07";
+$VERSION = "1.50_01";
 
 use strict;
 
@@ -110,11 +110,11 @@ my $br = br();
 use constant IXLIST => 15;
 
 # Stylesheets version.
-my $css_major = 2;
+my $css_major = 1;
 my $css_minor = 0;
 
 # Formats version.
-my $fmt_major = 2;
+my $fmt_major = 1;
 my $fmt_minor = 0;
 
 # Helper programs
