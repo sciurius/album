@@ -4,8 +4,8 @@ my $RCS_Id = '$Id$ ';
 # Author          : Johan Vromans
 # Created On      : Tue Sep 15 15:59:04 2002
 # Last Modified By: Johan Vromans
-# Last Modified On: Sat Jun  9 22:16:41 2007
-# Update Count    : 3044
+# Last Modified On: Sat Jun 16 14:36:05 2007
+# Update Count    : 3046
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -1531,7 +1531,7 @@ sub button($$;$$) {
     $level .= $lib_common . "/" if $lib_common ne "";
     my $b = img("${level}icons/$tag.png", class => "button",
 		alt => "[$Tag]");
-    $active ? "<a class='info' href='$link' alt='[$Tag]'>$b</a>" : $b;
+    $active ? "<a class='info' href='$link' title='$Tag'>$b</a>" : $b;
 }
 
 sub hbuttons {
