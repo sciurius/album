@@ -1,13 +1,10 @@
 #!/usr/bin/perl -w
-my $RCS_Id = '$Id$ ';
-
-# Skeleton for Getopt::Long.
 
 # Author          : Johan Vromans
 # Created On      : Tue Sep 15 15:59:04 1992
 # Last Modified By: Johan Vromans
-# Last Modified On: Fri Aug 26 15:55:05 2005
-# Update Count    : 143
+# Last Modified On: Mon Aug 27 10:22:41 2018
+# Update Count    : 162
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -22,9 +19,7 @@ use strict;
 # Package name.
 my $my_package = 'Sciurix';
 # Program name and version.
-my ($my_name, $my_version) = $RCS_Id =~ /: (.+).pl,v ([\d.]+)/;
-# Tack '*' if it is not checked in into RCS.
-$my_version .= '*' if length('$Locker$ ') > 12;
+my ($my_name, $my_version) = qw( frame 1.2 );
 
 ################ Command line parameters ################
 
@@ -35,6 +30,10 @@ my $theyear = 0;
 my $thisyear = 1900 + (localtime(time))[5];
 my $cprcolor = "grey";
 my $verbose = 0;		# verbose processing
+my $d_medium = 500;
+my $d_small = 138;
+my $d_frame = 10;
+my $strat = "normal";
 
 # Development options (not shown with -help).
 my $debug = 0;			# debugging
@@ -43,6 +42,13 @@ my $test = 0;			# test mode.
 
 # Process command line options.
 app_options();
+
+if ( $d_medium ) {
+    $d_medium -= 2 * $d_frame;
+}
+if ( $d_small ) {
+    $d_small -= 2 * 0.6 * $d_frame;
+}
 
 # Post-processing.
 $trace |= ($debug || $test);
@@ -75,7 +81,7 @@ foreach my $file ( @ARGV ) {
 
     if ( $dir =~ m;^(.*/)?large$; ) {
 	$med = ($1||"") . "medium/$base.jpg";
-	$sml = ($1||"") . "thumbnails/$base.jpg";
+	$sml = ($1||"") . "index/$base.jpg";
     }
     else {
 	$med = $dir . "/" . $base . "-med.jpg";
@@ -93,11 +99,15 @@ foreach my $file ( @ARGV ) {
     }
     $cpr =~ s/YEAR/$year/g;
 
-    my $im = new Image($file);
-    warn ("$file -> $med\n") if $verbose;
-    $im->resize(500)->clone->overlay($olay)->frame->write($med);
-    warn ("$file -> $sml\n") if $verbose;
-    $im->resize(138)->frame(6)->write($sml);
+    my $im = new Image($file, strategy => $strat);
+    if ( $d_medium ) {
+	warn ("$file -> $med\n") if $verbose;
+	$im->resize($d_medium)->clone->overlay($olay)->frame($d_frame)->write($med);
+    }
+    if ( $d_small ) {
+	warn ("$file -> $sml\n") if $verbose;
+	$im->resize($d_small)->frame(int($d_frame*0.6))->write($sml);
+    }
 }
 
 exit 0;
@@ -107,17 +117,23 @@ exit 0;
 package Image;
 
 sub new {
-    my ($pkg, $file) = (@_);
+    my ($pkg, $file, %props) = (@_);
     my $image = new Image::Magick;
     my $t = $image->Read($file);
     warn("read($file): $t\n") if $t;
     $image->Profile(name => "*", profile => '');
     $image->Comment($cpr);
+    *resize = \&normal_resize;
+    if ( $props{strategy} eq "alt" ) {
+	*resize = \&alt_resize;
+    }
     bless \$image;
 }
 
-sub resize {
+sub normal_resize {
     my ($self, $n) = @_;
+    return $self if $n < 0;
+
     # height may not exceed n.
     # width may not exceed 4/3 x n.
 
@@ -132,8 +148,10 @@ sub resize {
     $self;
 }
 
-sub xxresize {
+sub alt_resize {
     my ($self, $n) = @_;
+    return $self if $n < 0;
+
     # max(width, height) may not exceed n.
     my ($origx, $origy) = $$self->Get(qw(width height));
     my $ratio = $origx > $origy ? $origx / $n : $origy / $n;
@@ -152,6 +170,7 @@ sub clone {
 
 sub frame {
     my ($self, $sz) = @_;
+    return $self if defined($sz) && !$sz;
     $sz ||= 10;
     my $is = int($sz/2);
     warn("frame: width => $sz, height => $sz, inner => $is, outer => $is\n")
@@ -211,6 +230,10 @@ sub app_options {
     if ( !GetOptions(
 		     'year=i'   => \$theyear,
 		     'anncolor=s' => \$cprcolor,
+		     'small=i'  => \$d_small,
+		     'medium=i' => \$d_medium,
+		     'frame=i'  => \$d_frame,
+		     'strategy=s' => \$strat,
 		     'ident'	=> \$ident,
 		     'verbose'	=> \$verbose,
 		     'trace'	=> \$trace,
@@ -232,9 +255,15 @@ sub app_usage {
     app_ident();
     print STDERR <<EndOfUsage;
 Usage: $0 [options] [file ...]
-    -help		this message
-    -ident		show identification
-    -verbose		verbose information
+    --year=YYYY         year (for copyright)
+    --anncolor=NNNN     colour for annotation
+    --small=NN          max dim of small image
+    --medium=NN         max dim of medium image
+    --frame=N           width of frame (small gets 60%)
+    --strategy=XXX	resize strategty to use (normal / alt)
+    --help		this message
+    --ident		show identification
+    --verbose		verbose information
 EndOfUsage
     exit $exit if defined $exit && $exit != 0;
 }
