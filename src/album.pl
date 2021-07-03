@@ -4,13 +4,13 @@ my $RCS_Id = '$Id: album.pl,v 1.106 2007/06/16 12:37:56 jv Exp $ ';
 # Author          : Johan Vromans
 # Created On      : Tue Sep 15 15:59:04 2002
 # Last Modified By: Johan Vromans
-# Last Modified On: Tue Sep  1 14:19:41 2015
-# Update Count    : 3330
+# Last Modified On: Mon Jul 23 12:03:46 2018
+# Update Count    : 3342
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
 
-$VERSION = "1.50_08";
+$VERSION = "1.50_11";
 
 use strict;
 
@@ -22,9 +22,8 @@ use strict;
 # Package name.
 my $my_package = 'Sciurix';
 # Program name and version.
-my ($my_name, $my_version) = $RCS_Id =~ /: (.+).pl,v ([\d.]+)/;
-# Tack '*' if it is not checked in into RCS.
-$my_version .= '*' if length('$Locker:  $ ') > 12;
+my $my_name = "album";
+my $my_version = $::VERSION;
 
 my $creator = qq{Created with <a href="http://search.cpan.org/~jv/Album/">Album</a> $::VERSION};
 
@@ -1232,6 +1231,8 @@ sub prepare_images {
 			$image->Flip if $el->mirror eq 'h';
 			$image->Flop if $el->mirror eq 'v';
 		    }
+		    # After rotation, the orientation is top_left.
+		    $image->Set(orientation => 1);
 		    my $t = $image->Write($i_large);
 		    $msg->($t) if $t;
 		    utime($time, $time, $i_large);
@@ -2126,7 +2127,7 @@ sub restyle_exif($) {
 #    }
     $app->("Exposure",
 	   join(" ", $el->ExposureMode || "",
-		$el->ExposureProgram || "", $t));
+		$el->ExposureProgram || "", $t)) if $t;
     $app->("Aperture", sprintf("%.1f", $v))
       if $v = $el->FNumber;
     if ( $v = $el->FocalLength ) {
@@ -3328,6 +3329,7 @@ sub load {
     our $info;
     $info = undef;
     eval {
+	use lib '.';
 	require $file;
     };
     if ( $@ ) {
