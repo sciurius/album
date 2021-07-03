@@ -4,13 +4,13 @@ my $RCS_Id = '$Id: album.pl,v 1.106 2007/06/16 12:37:56 jv Exp $ ';
 # Author          : Johan Vromans
 # Created On      : Tue Sep 15 15:59:04 2002
 # Last Modified By: Johan Vromans
-# Last Modified On: Mon Jul 23 12:03:46 2018
-# Update Count    : 3342
+# Last Modified On: Sat Jul  3 14:27:16 2021
+# Update Count    : 3367
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
 
-$VERSION = "1.50_11";
+$VERSION = "1.50_12";
 
 use strict;
 
@@ -2131,22 +2131,19 @@ sub restyle_exif($) {
     $app->("Aperture", sprintf("%.1f", $v))
       if $v = $el->FNumber;
     if ( $v = $el->FocalLength ) {
-	if ( $el->Model eq "DSC-V1" ) {
-#	    $v .= sprintf("mm  (%.1fmm equiv.)", $v*4.857);
-	}
-	else {
-#	    $v .= "mm";
+	if ( my $v2 = $el->FocalLengthIn35mmFormat ) {
+	    $v .= " ($v2 eqv.)";
 	}
 	$app->("Focal length", $v);
     }
     $app->("ISO", $v) if $v = $el->ISOSpeedRatings;
     $app->("Flash", $v)
-      if ($v = $el->Flash) && $v ne "Flash did not fire";
+      if ($v = $el->Flash) && $v !~ /did not fire/i;
     $app->("Metering", $v) if $v = $el->MeteringMode;
-    $app->("Scene", $v) if $v = $el->SceneCaptureType;
-    $app->("Camera",
-	   join(" ", $v, $el->Model))
-      if $v = $el->Make;
+    $app->("FocusMode", $v) if ($v = $el->FocusMode) && $v ne 'Auto';
+    $app->("WhiteBalance", $v) if ($v = $el->WhiteBalance) && $v ne 'Auto';
+    $app->("Scene", $v) if ($v = $el->SceneCaptureType) && $v ne 'Standard';
+    $app->("Camera", join(" ", $v, $el->Model)) if $v = $el->Make;
 }
 
 #### Caption helpers.
@@ -3113,10 +3110,12 @@ INIT {
 
     @exif_fields = qw(DateTime DateTimeOriginal ExifImageLength ExifImageWidth
 		      ExposureMode ExposureProgram ExposureTime
-		      FNumber Flash FocalLength ISOSpeedRatings
+		      FNumber Flash FocalLength FocalLengthIn35mmFormat
+		      FocusMode ISOSpeedRatings
 		      ImageDescription Make Model
 		      MeteringMode SceneCaptureType Orientation
 		      CreateDate MediaCreateDate TimeZone
+		      WhiteBalance
 		      height width file_ext);
 
     $exif_rot = { top_left   => [   0, ''  ],    # 1: no corr. needed
