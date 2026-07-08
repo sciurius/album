@@ -3,13 +3,13 @@
 # Author          : Johan Vromans
 # Created On      : Tue Sep 15 15:59:04 2002
 # Last Modified By: Johan Vromans
-# Last Modified On: Wed Jul  8 10:36:27 2026
-# Update Count    : 3371
+# Last Modified On: Wed Jul  8 10:48:16 2026
+# Update Count    : 3372
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
 
-$VERSION = "1.60";
+$VERSION = "1.7.0";
 
 use strict;
 
