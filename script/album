@@ -1,16 +1,15 @@
 #!/usr/bin/perl -w
-my $RCS_Id = '$Id: album.pl,v 1.106 2007/06/16 12:37:56 jv Exp $ ';
 
 # Author          : Johan Vromans
 # Created On      : Tue Sep 15 15:59:04 2002
 # Last Modified By: Johan Vromans
-# Last Modified On: Wed Jul  8 08:05:32 2026
-# Update Count    : 3369
+# Last Modified On: Wed Jul  8 10:36:27 2026
+# Update Count    : 3371
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
 
-$VERSION = "2.00";
+$VERSION = "1.60";
 
 use strict;
 
@@ -25,7 +24,7 @@ my $my_package = 'Sciurix';
 my $my_name = "album";
 my $my_version = $::VERSION;
 
-my $creator = qq{Created with <a href="http://search.cpan.org/~jv/Album/">Album</a> $::VERSION};
+my $creator = qq{Created with <a href="https://metacpan.org/dist/Album">Album</a> $::VERSION};
 
 ################ Command line parameters ################
 
@@ -3409,6 +3408,7 @@ Web site: http://johan.vromans.org/Album/index.html
 
 =head1 COPYRIGHT AND DISCLAIMER
 
+This program is Copyright 2026 by Johan Vromans. All rights reserved.
 This program is Copyright 2004,2007 by Squirrel Consultancy. All
 rights reserved.
 

@@ -2,8 +2,8 @@
 # Author          : Johan Vromans
 # Created On      : Fri Jul  9 15:45:48 2004
 # Last Modified By: Johan Vromans
-# Last Modified On: Wed Mar 21 10:22:21 2007
-# Update Count    : 25
+# Last Modified On: Wed Jul  8 10:28:08 2026
+# Update Count    : 27
 # Status          : Experimental
 
 use strict;
@@ -48,6 +48,14 @@ print STDERR <<EOD;
 EOD
 checkexec("mplayer");
 
+print STDERR <<EOD;
+
+  Image::Magick  is used for various image manipulations.
+              Please make sure you have it installed.
+
+EOD
+
+
 print STDERR ("\n");
 
 WriteMakefile
@@ -59,7 +67,7 @@ WriteMakefile
      ABSTRACT	=> 'Creates HTML based photo albums' ) : (),
    PREREQ_PM	=> { 'Getopt::Long' => 2.1,
 		     'Image::Info' => 1.16,
-		     'Image::Magick' => 6,
+#		     'Image::Magick' => 6,
 		     'File::Spec' => 0,
 		   },
    EXE_FILES    => [ map { "script/$_" } @scripts ],
