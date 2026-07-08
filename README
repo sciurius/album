@@ -12,13 +12,10 @@ A photo album consists of a number of (large) pictures, small thumbnail
 images, and index pages. Optionally, medium sized images can be
 generated as well. The album will be organised as follows:
 
-  index.html       first or only index page
-  indexN.html      subsequent index pages (N = 1, 2, ...)
-  css/		   direcotry with style sheets
+  index/           index pages and thumbnails
   icons/           directory with navigation icons
   large/           original (large) images, with HTML pages
   medium/          optional medium sized images, with HTML pages
-  thumbnail/       thumbnail images
 
 Each image can be labeled with a description, a tag (applies to a
 group of images, e.g. a date), the image name, and some
@@ -46,3 +43,26 @@ This program requires some helper programs for certain tasks.
 	      extract audio from VOICE files.
 	      If missing, no stills will be produced, and VOICE files
 	      will remain silent.
+
+Migrating from Version 1
+========================
+
+The structure and content of the files have changed from version 1 in
+an INCOMPATIBLE way. Hopefully, the version 2 approach will be
+flexible enough to last longer.
+
+If you didn't change any style sheets, migration is easy:
+
+   - remove all index*.html files
+   - remove the css directory, with contents
+   - rename the thumbnails directory to index
+
+If you did change style sheets:
+
+   - remove all index*.html files
+   - move the css directory, with contents, to a backup location
+   - rename the thumbnails directory to index
+   - run album with --extcss once
+   - apply your style sheet changes to the new style sheets
+
+

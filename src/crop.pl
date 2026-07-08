@@ -1,7 +1,7 @@
 #!/usr/bin/perl -w
 
 # crop.pl -- calculate cropping for some familiar print formats
-# RCS Info        : $Id$
+# RCS Info        : $Id: crop.pl,v 1.1 2004/06/27 09:43:09 jv Exp $
 # Author          : Johan Vromans
 # Created On      : Sat Jun 26 10:30:58 2004
 # Last Modified By: Johan Vromans

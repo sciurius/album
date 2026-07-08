@@ -1,5 +1,5 @@
 #!/bin/sh
 
-cd /spare1/Albums
+cd `resinfo media.albums.root`
 
 perl tools/mkindex.pl > index.html

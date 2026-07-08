@@ -4,13 +4,13 @@ my $RCS_Id = '$Id: album.pl,v 1.106 2007/06/16 12:37:56 jv Exp $ ';
 # Author          : Johan Vromans
 # Created On      : Tue Sep 15 15:59:04 2002
 # Last Modified By: Johan Vromans
-# Last Modified On: Sat Jul  3 14:27:16 2021
-# Update Count    : 3367
+# Last Modified On: Wed Jul  8 08:05:32 2026
+# Update Count    : 3369
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
 
-$VERSION = "1.50_12";
+$VERSION = "2.00";
 
 use strict;
 
@@ -94,7 +94,7 @@ use constant DEFAULTS => { info       => "info.dat",
 
 my $TMPDIR = $ENV{TMPDIR} || $ENV{TEMP} || '/usr/tmp';
 
-my $picpat = qr{(?i:jpe?g|png|gif|nef)};
+my $picpat = qr{(?i:jpe?g|png|gif|nef|webp)};
 my $movpat = qr{(?i:mpe?g|mov|avi|mp4|mts)};
 my $xtrpat = qw{(?i:html?)};
 my $suffixpat = qr{\.$picpat|$movpat};

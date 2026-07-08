@@ -1,10 +1,10 @@
 package Album::Tutorial;
 
-( $VERSION ) = '$Revision$ ' =~ /\$Revision:\s+([^\s]+)/;
-
 # NOTE: This is a documentation-only module.
 
 use strict;
+
+our $VERSION = "1.50_03";
 
 =pod
 
@@ -30,11 +30,9 @@ it as follows:
   No info.dat, adding images from large
   info.dat: Cannot update (does not exist)
   Number of entries = 7 (7 added)
-  mkdir thumbnails
+  mkdir index
   mkdir icons
-  mkdir css
   Creating icons: first-gr.png first.png ... sound.png movie.jpg
-  Creating style sheets: common.css index.css ... journal.css
   im023.jpg: thumbnail OK
   im024.jpg: thumbnail OK
   im025.jpg: thumbnail OK
@@ -49,9 +47,9 @@ it as follows:
 
 Your results will vary, but be similar to this example run. What you
 can see is that 'album' found 7 images in the 'large' directory,
-created thumbnails, icons and css directories, created thumbnails by
+created index and icons directories, created thumbnails by
 resizing the images, and finally created the HTML pages. You can
-inspect your first photo album by opening file 'index.html' with your
+inspect your first photo album by opening file 'index/index001.html' with your
 favorite browser. You can click on any image to see the larger
 version. Navigation buttons are provided to the left of the image. You
 can also navigate from the keyboard: space (next), backspace
@@ -94,12 +92,12 @@ any images in the 'large' directory (which is considered 'original work');
 
 =item *
 
-any images in the 'medium' and 'thumbnails' directories (but see
+any images in the 'medium' and 'index' directories (but see
 B<--clobber> below);
 
 =item *
 
-any icons, stylesheets, or formats, so it is safe to customize these;
+any icons, so it is safe to customize these;
 
 =back
 
@@ -238,6 +236,11 @@ Most settings can also obtained with command line options, as shown.
 
 Sets the title to I<XXX>, override with B<--title>.
 
+=item B<!home> I<XXX>
+
+Provides an 'up' link on the index pages. Override with B<--home>.
+Note that this link is relative to the location of the index directory.
+
 =item B<!page> I<N>B<x>I<M>
 
 Sets the layout to I<N> rows (B<--rows>) and I<M> columns (B<--columns>).
@@ -253,6 +256,8 @@ Includes medium sized images (B<--medium>) of default size.
 =item B<!mediumsize> I<NNN>
 
 Specifies the desired width for medium sized images (B<--mediumsize>).
+To enforce this width, even if the original image is smaller, specify
+C<!> after the size.
 
 =item B<!tag> I<XXX>
 
@@ -451,14 +456,23 @@ info at the right side above the image, e.g., C<My First Album: Image
 
 Note that journal mode can not be mixed with normal mode.
 
-=head2 External formats
+=head2 External formats and style sheets
 
-I<Warning: External formats are still under development and may change
-in future versions.>
+I<Warning: External formats and style sheets are still under
+development and may change in future versions.>
+
+Internally, 'album' uses formats (templates) to build the generated
+HTML pages, and cascading style sheets (CSS) to specify how the
+browser should show the pages. Formats and style sheets can be
+exported (written to external directories), and 'album' will then use
+the external information. So you can have ultimate control over how
+pages must look like.
+
+=head2 External formats
 
 When 'album' is run with B<--extformats> it will create a directory
 'formats' and, in this directory, the HTML templates for all types of
-pages that 'album' will generate. Any existing files in this directory
+pages that 'album' will generate. Existing files in this directory
 will B<not> be overwritten, so it is safe to change the templates to
 your liking. When 'album' is run again to process images, it will use
 the templates from the 'formats' directory if they are available.
@@ -471,6 +485,11 @@ substituted with actual values. Some of the variables are:
 =item $title
 
 The title of the album.
+
+=item $css
+
+The code to get the style sheet of this page. This can be in-line
+specifications, or a link to an external stylesheet.
 
 =item $ltop
 
@@ -517,6 +536,45 @@ Journal pages only: The tag for this page.
 Journal pages only: The journal for this page.
 
 =back
+
+=head3 External style sheets
+
+When 'album' is run with B<--extcss> it will create a directory 'css'
+and, in this directory, the css style sheets for all types of pages
+that 'album' will generate. Existing files in this directory will
+B<not> be overwritten, so it is safe to change the templates to your
+liking. When 'album' is run again to process images, it will use the
+external style sheets if they are available.
+
+To obtain good results, the style sheets must match the formats.
+'album' will try to verify this by reading the first line of the style
+sheets and the formats, and verify that it contains a version
+indication of the form
+
+  ALBUM-FMT-VERSION: <major>.<minor>   (for formats)
+  ALBUM-CSS-VERSION: <major>.<minor>   (for style sheets)
+
+For all style sheet - format pairs, the major numbers must be the
+same.
+
+Older versions of 'album' always created external style sheets. As a
+consequence, if you upgrade to the newer version, you'll get a fatal
+error the first time you run 'album'.
+
+ *************************************************************************
+ Existing style sheet ... is not compatible with this version.
+ It has probably been created by an older version of this program, or it
+ has been modified manually.
+
+ If you did not change any style sheets, just remove the css directory and
+ try again.
+
+ If you did modify the style sheets move them away to a backup location,
+ run the program with '--extcss', and apply your changes to the new style
+ sheets.
+ *************************************************************************
+
+We apologise for the inconvenience.
 
 =head2 Keyboard navigation
 
@@ -585,4 +643,4 @@ GNU General Public License or the Artistic License for more details.
 
 1;
 
-# $Id$
+# $Id: Tutorial.pm,v 1.12 2007/05/31 21:01:34 jv Exp $

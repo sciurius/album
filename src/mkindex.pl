@@ -1,13 +1,13 @@
 #!/usr/bin/perl -w
-my $RCS_Id = '$Id$ ';
+my $RCS_Id = '$Id: mkindex.pl,v 1.5 2006/09/07 16:13:19 jv Exp $ ';
 
 # Skeleton for Getopt::Long.
 
 # Author          : Johan Vromans
 # Created On      : Tue Sep 15 15:59:04 1992
 # Last Modified By: Johan Vromans
-# Last Modified On: Sat Dec 24 11:36:42 2005
-# Update Count    : 67
+# Last Modified On: Fri Jun 29 18:23:25 2007
+# Update Count    : 68
 # Status          : Unknown, Use with caution!
 
 ################ Common stuff ################
@@ -24,7 +24,7 @@ my $my_package = 'Sciurix';
 # Program name and version.
 my ($my_name, $my_version) = $RCS_Id =~ /: (.+).pl,v ([\d.]+)/;
 # Tack '*' if it is not checked in into RCS.
-$my_version .= '*' if length('$Locker$ ') > 12;
+$my_version .= '*' if length('$Locker:  $ ') > 12;
 
 ################ Command line parameters ################
 
@@ -59,7 +59,7 @@ use File::Find;
 my %index;
 
 find(sub {
-	 return unless $_ eq "index.html";
+	 return unless $_ =~ /^index(?:0001)?\.html$/;
 	 open(I, $_) or die("$File::Find::name: $!\n");
 	 while ( <I>) {
 	     if ( /^\s*\<title\>(.*?): Index/ ) {

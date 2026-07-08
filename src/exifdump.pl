@@ -1,6 +1,6 @@
 #!/usr/bin/perl -w
 # exifdump.pl -- dump EXIF info
-# RCS Info        : $Id$
+# RCS Info        : $Id: exifdump.pl,v 1.3 2006/09/07 16:14:41 jv Exp $
 # Author          : Johan Vromans
 # Created On      : Fri Jun 11 11:24:27 2004
 # Last Modified By: Johan Vromans
