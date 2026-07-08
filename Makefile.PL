@@ -2,8 +2,8 @@
 # Author          : Johan Vromans
 # Created On      : Fri Jul  9 15:45:48 2004
 # Last Modified By: Johan Vromans
-# Last Modified On: Wed Jul  8 10:28:08 2026
-# Update Count    : 27
+# Last Modified On: Wed Jul  8 10:55:59 2026
+# Update Count    : 28
 # Status          : Experimental
 
 use strict;
@@ -71,6 +71,17 @@ WriteMakefile
 		     'File::Spec' => 0,
 		   },
    EXE_FILES    => [ map { "script/$_" } @scripts ],
+   META_MERGE => {
+    resources    => {
+      repository => 'https://github.com/sciurius/album',
+      bugtracker => "https://github.com/sciurius/album/issues",
+      license    => "https://dev.perl.org/licenses/",
+    },
+    'meta-spec' => {
+      version => '2',
+      url     => 'https://metacpan.org/pod/CPAN::Meta::Spec',
+    },
+  },
  );
 
 sub checkexec {
